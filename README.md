@@ -2,14 +2,14 @@
 
 Bring-up em PlatformIO/ESP-IDF para a **Waveshare ESP32-S3-Touch-LCD-1.46**. A placa é uma ESP32-S3R8 com 16 MB de Flash e 8 MB de PSRAM OPI; portanto não é compatível com a definição genérica `esp32-s3-devkitc-1` N8.
 
-O firmware atual inicializa o barramento I2C, o expansor de GPIO, a tela redonda SPD2010 por QSPI e o touch. Em seguida, mostra o padrão de cores do driver e registra no monitor serial os periféricos internos e os toques detectados.
+O firmware atual inicializa o barramento I2C, o expansor de GPIO, a tela redonda SPD2010 por QSPI e o touch. Em seguida, mostra um mostrador digital com hora, segundos e data lidos diretamente do RTC PCF85063. Um traço laranja na base confirma um toque ativo; as coordenadas continuam registradas no monitor serial.
 
 ## Estado validado
 
 - Compilação com PlatformIO `espressif32 @ 6.9.0` e ESP-IDF 5.3.1.
 - Configuração correta: ESP32-S3R8, 16 MB Flash e 8 MB OPI PSRAM.
 - I2C detectado: TCA9554 (`0x20`), PCF85063 RTC (`0x51`), touch SPD2010 (`0x53`) e QMI8658 (`0x6B`).
-- A tela recebe comandos QSPI e exibe o padrão de cores.
+- A tela recebe comandos QSPI e exibe o mostrador de relógio.
 - O QMI8658 em `0x6A` sem resposta é esperado nesta unidade: o endereço ativo é `0x6B`.
 
 ## Pinagem interna confirmada
@@ -59,6 +59,12 @@ pio device monitor -p COM3 -b 115200
 ```
 
 Se a COM3 desaparecer, desconecte e reconecte o USB. Para entrar no bootloader, mantenha **BOOT** pressionado enquanto conecta o cabo ou pressione **BOOT** e depois **RESET**. Confirme a nova porta em Gerenciador de Dispositivos e substitua `COM3` no comando.
+
+## Mostrador inicial
+
+O mostrador é intencionalmente desenhado sem uma biblioteca gráfica adicional: usa uma faixa DMA de 16 linhas e transfere as 412 linhas ao SPD2010 a cada segundo. Isso mantém o uso de RAM baixo e torna visíveis a hora (`HH:MM`), segundos e a data (`DD-MM-20YY`) enquanto a base gráfica do projeto é validada.
+
+O RTC é somente lido nesta etapa. Se a data/hora ainda não tiver sido ajustada — por exemplo, na primeira alimentação sem bateria de RTC — a tela exibirá os valores armazenados pelo chip. A próxima etapa é implementar o ajuste inicial e a sincronização por NTP via Wi-Fi.
 
 ## Decisões técnicas e observações
 

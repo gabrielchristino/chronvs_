@@ -64,6 +64,25 @@ O catálogo registra todos os apps durante o boot. O app `apps` fornece uma
 lista curva, com ícone à esquerda e nome ao lado, e pode ser aberto com
 `chronvs_app_open("apps")`.
 
+## Navegação e apps instalados
+
+`watch` e `apps` são apps internos de navegação e usam
+`.launcher_visible = false`; portanto, não aparecem na própria lista. Os apps
+instaláveis usam `.launcher_visible = true` e entram na lista automaticamente.
+
+- No mostrador, arrastar para a esquerda revela a lista de apps e acompanha o
+  dedo durante o gesto.
+- Na lista, tocar uma linha abre o app. Arrastar 70 px para a direita retorna
+  ao mostrador; a tela acompanha esse movimento antes de concluir a navegação.
+- O primeiro app incluído é `Aion`, o cronômetro. Ele atualiza décimos de
+  segundo apenas enquanto está visível e volta à lista com um arraste para a
+  direita.
+
+`create_icon` recebe um objeto LVGL de 44 × 44 pixels, sem estilo próprio. O
+ícone deve desenhar todos os elementos dentro desse objeto; `Aion` usa
+`LV_EVENT_DRAW_MAIN` para desenhar o corpo, coroa, aro e ponteiro do
+cronômetro sem depender de uma imagem bitmap.
+
 Abra o app a partir de um launcher ou atalho:
 
 ```c

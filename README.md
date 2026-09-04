@@ -7,7 +7,9 @@ O firmware atual inicializa o barramento I2C, o expansor de GPIO, a tela redonda
 O código é organizado como um runtime de aplicativos: o núcleo registra e troca
 apps, serviços isolam RTC e bateria, a camada de plataforma inicializa a placa e
 o mostrador vive em `src/apps/watch_app.c` como o primeiro app. Consulte
-[`docs/apps.md`](docs/apps.md) para criar e registrar novas telas.
+[`docs/apps.md`](docs/apps.md) para criar e registrar novas telas e
+[`docs/interface.md`](docs/interface.md) para a navegação, energia e limites
+de renderização do painel.
 
 ## Estado validado
 
@@ -113,13 +115,18 @@ No boot validado, o scanner confirmou o RTC em `0x51`, o touch em `0x53` e o QMI
 
 ## Controles por toque e energia
 
+O comportamento completo de navegação, atalhos, temporizadores de energia e
+parâmetros de renderização está em [`docs/interface.md`](docs/interface.md).
+O resumo abaixo descreve os controles persistentes.
+
 O mostrador inteiro funciona como superfície de toque:
 
-- Arrastar a partir da borda superior para baixo revela um painel circular de acessos rápidos sobre o mostrador. O painel acompanha o dedo e completa ou cancela a abertura conforme a distância percorrida.
+- Arrastar a partir da borda superior para baixo revela um painel retangular de acessos rápidos sobre o mostrador. O painel acompanha o dedo e completa ou cancela a abertura conforme a distância percorrida.
 - O arco externo do painel controla continuamente o brilho entre 10% e 100%.
-- Os atalhos ocupam uma grade circular 2–3–2. O primeiro botão mostra `15s`, `30s` ou `ON` e alterna entre `AUTO 15s / 45s`, `AUTO 30s / 2min` e `SEMPRE LIGADA`. O segundo reúne bateria e economia: exibe o percentual de carga e alterna o modo `ECO` ao ser tocado. Os cinco slots restantes continuam reservados para funções futuras.
+- Os atalhos ocupam uma grade 2–3–2. O primeiro botão mostra `15s`, `30s` ou `ON` e alterna entre `AUTO 15s / 45s`, `AUTO 30s / 2min` e `SEMPRE LIGADA`. O segundo reúne bateria e economia: exibe o percentual de carga e alterna o modo `ECO` ao ser tocado. O botão central abre a lista de apps e os quatro slots restantes continuam reservados para funções futuras.
 - O modo `ECO`, indicado pela borda amarela e pelo texto no botão da bateria, preserva a preferência normal, mas limita temporariamente o brilho e o indicador do arco a 35%, reduz para 5% após 5 segundos e apaga a iluminação após 15 segundos — inclusive quando o perfil normal está em `ON`.
-- Arrastar o painel para cima acompanha o dedo e fecha os acessos rápidos.
+- Arrastar o painel para cima acompanha o dedo e fecha os acessos rápidos,
+  inclusive quando o gesto começa sobre o arco de brilho.
 - Toques curtos e longos sobre o mostrador não alteram configurações.
 - Um toque com a tela reduzida ou apagada apenas reativa o mostrador, evitando também alterar o brilho por acidente.
 - Brilho, perfil e estado do modo econômico são salvos na NVS e restaurados após reiniciar o relógio.

@@ -2,7 +2,8 @@
 
 O runtime mantém uma camada de conteúdo abaixo da interface global e cria cada
 aplicativo apenas na primeira abertura. Um app é uma definição estática com ID,
-nome, função de criação e callbacks opcionais de entrada e saída.
+nome, desenho de ícone, visibilidade no launcher, função de criação e
+callbacks opcionais de entrada e saída.
 
 ## Estrutura
 
@@ -23,7 +24,7 @@ filhos do `parent` recebido e usados somente na tarefa que executa o loop LVGL.
 ## App mínimo
 
 ```c
-#include "core/app_manager.h"
+#include "apps/app_catalog.h"
 
 static lv_obj_t *create_timer_app(lv_obj_t *parent) {
     lv_obj_t *root = lv_obj_create(parent);
@@ -39,23 +40,29 @@ static lv_obj_t *create_timer_app(lv_obj_t *parent) {
 const chronvs_app_t chronvs_timer_app = {
     .id = "timer",
     .name = "Timer",
+    .create_icon = create_timer_icon,
+    .launcher_visible = true,
     .create = create_timer_app,
     .on_show = NULL,
     .on_hide = NULL,
 };
 ```
 
-Inclua a definição no vetor de `apps/app_catalog.c`:
+Registre a definição com `CHRONVS_REGISTER_APP` após sua declaração. O runtime
+descobre automaticamente os descritores, sem um vetor central:
 
 ```c
-const chronvs_app_t *const apps[] = {
-    &chronvs_watch_app,
-    &chronvs_timer_app,
+const chronvs_app_t chronvs_timer_app = {
+    .id = "timer", .name = "Timer", .create_icon = create_timer_icon,
+    .launcher_visible = true,
+    .create = create_timer_app, .on_show = NULL, .on_hide = NULL,
 };
+CHRONVS_REGISTER_APP(chronvs_timer_app)
 ```
 
-O catálogo registra todos os apps durante o boot. Dessa forma, adicionar um
-aplicativo não exige alterar o `main.c`.
+O catálogo registra todos os apps durante o boot. O app `apps` fornece uma
+lista curva, com ícone à esquerda e nome ao lado, e pode ser aberto com
+`chronvs_app_open("apps")`.
 
 Abra o app a partir de um launcher ou atalho:
 

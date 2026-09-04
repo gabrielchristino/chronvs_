@@ -6,6 +6,7 @@
 #include "lvgl.h"
 
 #include "apps/watch_app.h"
+#include "apps/app_catalog.h"
 #include "core/app_manager.h"
 #include "ui/system_ui.h"
 
@@ -35,8 +36,8 @@ static lv_obj_t *clock_face;
 
 /* A useful fallback also makes the visual testable before the RTC is set. */
 static chronvs_time_t displayed_time = {
-    .second = 36, .minute = 9, .hour = 10, .day = 18,
-    .weekday = 5, .month = 9, .year = 26, .valid = true,
+    .second = 0, .minute = 0, .hour = 12, .day = 18,
+    .weekday = 3, .month = 11, .year = 26, .valid = true,
 };
 static uint32_t displayed_time_tick;
 static float ambient_temperature_c = 24.0f;
@@ -422,7 +423,11 @@ static void show_watch_app(void) {
 const chronvs_app_t chronvs_watch_app = {
     .id = "watch",
     .name = "Relogio",
+    .create_icon = NULL,
+    .launcher_visible = false,
     .create = create_watch_app,
     .on_show = show_watch_app,
     .on_hide = NULL,
 };
+
+CHRONVS_REGISTER_APP(chronvs_watch_app)

@@ -10,6 +10,7 @@
 #include "nvs_flash.h"
 
 #include "Display_SPD2010.h"
+#include "core/app_manager.h"
 
 #define COLOR_PANEL       0x26302B
 #define COLOR_PANEL_EDGE  0x748173
@@ -27,8 +28,10 @@
 #define CLOCK_REDRAW_PERIOD_MS 1000
 #define MENU_EDGE_START_Y 90
 #define MENU_DRAG_SLOP 8
-#define MENU_DRAG_FRAME_MS 40
+#define MENU_DRAG_FRAME_MS 20
 #define MENU_ANIMATION_MS 220
+#define APP_SWIPE_COMMIT_DISTANCE 120
+#define APP_SWIPE_FOLLOW_GAIN 2
 
 typedef enum {
     DISPLAY_ACTIVE,
@@ -58,6 +61,7 @@ static lv_obj_t *profile_label;
 static lv_obj_t *brightness_arc;
 static lv_obj_t *profile_button;
 static lv_obj_t *battery_button;
+static lv_obj_t *app_launcher_button;
 static lv_obj_t *battery_label;
 static lv_obj_t *battery_eco_label;
 static lv_timer_t *clock_animation_timer;
@@ -74,10 +78,14 @@ static bool menu_open;
 static bool menu_dragging;
 static bool menu_suppress_click;
 static bool clock_swipe_candidate;
+static bool app_swipe_dragging;
 static int16_t gesture_start_x;
 static int16_t gesture_start_y;
 static int16_t menu_gesture_start_y;
 static uint32_t last_menu_drag_tick;
+static uint32_t last_app_drag_tick;
+
+static void animate_menu(bool open);
 
 static void mark_activity(void) {
     last_activity_tick = lv_tick_get();
@@ -224,6 +232,11 @@ static void profile_event(lv_event_t *event) {
     mark_activity();
 }
 
+static void app_launcher_event(lv_event_t *event) {
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || menu_suppress_click) return;
+    if (chronvs_app_open("apps")) animate_menu(false);
+}
+
 static void style_button(lv_obj_t *button) {
     lv_obj_set_style_bg_color(button, lv_color_hex(COLOR_PANEL_EDGE), 0);
     lv_obj_set_style_bg_opa(button, LV_OPA_COVER, 0);
@@ -279,7 +292,9 @@ static void menu_animation_ready(lv_anim_t *animation) {
 }
 
 static void set_menu_interactive(bool interactive) {
-    lv_obj_t *objects[] = {settings_panel, brightness_arc, profile_button, battery_button};
+    lv_obj_t *objects[] = {
+        settings_panel, brightness_arc, profile_button, battery_button, app_launcher_button,
+    };
     for (size_t index = 0; index < sizeof(objects) / sizeof(objects[0]); ++index) {
         if (interactive) lv_obj_add_flag(objects[index], LV_OBJ_FLAG_CLICKABLE);
         else lv_obj_clear_flag(objects[index], LV_OBJ_FLAG_CLICKABLE);
@@ -326,6 +341,16 @@ static void place_menu_at(int16_t y) {
     }
     last_menu_drag_tick = now;
     lv_obj_set_y(settings_panel, clamp_menu_y(y));
+}
+
+static void place_app_preview_at(lv_coord_t x) {
+    const uint32_t now = lv_tick_get();
+    if (last_app_drag_tick != 0 &&
+        lv_tick_elaps(last_app_drag_tick) < MENU_DRAG_FRAME_MS) {
+        return;
+    }
+    last_app_drag_tick = now;
+    chronvs_app_preview("apps", x);
 }
 
 static void menu_touch_event(lv_event_t *event) {
@@ -422,8 +447,17 @@ static void create_quick_settings(void) {
     update_battery_eco_button();
     update_brightness_control();
 
+    app_launcher_button = create_round_slot(settings_panel, 0, 5, true);
+    lv_obj_add_flag(app_launcher_button, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_add_event_cb(app_launcher_button, app_launcher_event, LV_EVENT_CLICKED, NULL);
+    lv_obj_t *app_launcher_label = lv_label_create(app_launcher_button);
+    lv_label_set_text(app_launcher_label, "APPS");
+    lv_obj_set_style_text_font(app_launcher_label, &lv_font_montserrat_12, 0);
+    lv_obj_set_style_text_color(app_launcher_label, lv_color_hex(COLOR_TEXT), 0);
+    lv_obj_center(app_launcher_label);
+
     static const int16_t placeholder_positions[][2] = {
-        {-78, 5}, {0, 5}, {78, 5},
+        {-78, 5}, {78, 5},
         {-45, 85}, {45, 85},
     };
     for (size_t index = 0;
@@ -433,12 +467,6 @@ static void create_quick_settings(void) {
                           placeholder_positions[index][0],
                           placeholder_positions[index][1], false);
     }
-
-    lv_obj_t *close_hint = lv_label_create(settings_panel);
-    lv_label_set_text(close_hint, "DESLIZE PARA CIMA");
-    lv_obj_set_style_text_font(close_hint, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(close_hint, lv_color_hex(COLOR_TEXT_DIM), 0);
-    lv_obj_align(close_hint, LV_ALIGN_BOTTOM_MID, 0, -36);
 
     lv_obj_add_flag(settings_panel, LV_OBJ_FLAG_HIDDEN);
 }
@@ -455,17 +483,40 @@ static void clock_touch_event(lv_event_t *event) {
         lv_indev_get_point(lv_indev_get_act(), &point);
         gesture_start_x = point.x;
         gesture_start_y = point.y;
-        clock_swipe_candidate = !wake_only_contact && point.y <= MENU_EDGE_START_Y;
+        clock_swipe_candidate = !wake_only_contact;
         if (wake_only_contact) {
             mark_activity();
             set_display_state(DISPLAY_ACTIVE);
         }
     }
+    else if (code == LV_EVENT_PRESSING && app_swipe_dragging) {
+        lv_indev_get_point(lv_indev_get_act(), &point);
+        int16_t distance = gesture_start_x - point.x;
+        if (distance < 0) distance = 0;
+        const int16_t width = lv_disp_get_hor_res(NULL);
+        if (distance > width / APP_SWIPE_FOLLOW_GAIN) {
+            distance = width / APP_SWIPE_FOLLOW_GAIN;
+        }
+        place_app_preview_at(width - distance * APP_SWIPE_FOLLOW_GAIN);
+        mark_activity();
+    }
     else if (code == LV_EVENT_PRESSING && clock_swipe_candidate) {
         lv_indev_get_point(lv_indev_get_act(), &point);
         const int16_t dx = point.x - gesture_start_x;
         const int16_t dy = point.y - gesture_start_y;
-        if (dy > MENU_DRAG_SLOP && dx < dy + 30 && dx > -dy - 30) {
+        if (dx < -MENU_DRAG_SLOP && -dx > (dy < 0 ? -dy : dy) + 12) {
+            const int16_t width = lv_disp_get_hor_res(NULL);
+            int16_t distance = -dx;
+            if (distance > width / APP_SWIPE_FOLLOW_GAIN) {
+                distance = width / APP_SWIPE_FOLLOW_GAIN;
+            }
+            last_app_drag_tick = 0;
+            app_swipe_dragging = chronvs_app_preview(
+                "apps", width - distance * APP_SWIPE_FOLLOW_GAIN);
+            mark_activity();
+        }
+        else if (gesture_start_y <= MENU_EDGE_START_Y &&
+                 dy > MENU_DRAG_SLOP && dx < dy + 30 && dx > -dy - 30) {
             if (!menu_dragging) begin_menu_drag(true);
             menu_dragging = true;
             menu_open = true;
@@ -477,7 +528,17 @@ static void clock_touch_event(lv_event_t *event) {
         }
     }
     else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
-        if (menu_dragging) {
+        if (app_swipe_dragging) {
+            lv_indev_get_point(lv_indev_get_act(), &point);
+            if (gesture_start_x - point.x >= APP_SWIPE_COMMIT_DISTANCE) {
+                chronvs_app_open("apps");
+            }
+            else {
+                chronvs_app_cancel_preview();
+            }
+            app_swipe_dragging = false;
+        }
+        else if (menu_dragging) {
             lv_indev_get_point(lv_indev_get_act(), &point);
             lv_obj_set_y(settings_panel,
                          clamp_menu_y(point.y - menu_height()));
@@ -527,6 +588,11 @@ void chronvs_system_ui_init(lv_obj_t *touch_surface,
 
 bool chronvs_system_ui_display_is_off(void) {
     return display_state == DISPLAY_OFF;
+}
+
+void chronvs_system_ui_notify_activity(void) {
+    mark_activity();
+    if (display_state != DISPLAY_ACTIVE) set_display_state(DISPLAY_ACTIVE);
 }
 
 void chronvs_system_ui_set_battery(uint8_t percent, float voltage) {

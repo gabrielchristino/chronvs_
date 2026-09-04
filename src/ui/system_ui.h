@@ -12,5 +12,8 @@ void chronvs_system_ui_init(lv_obj_t *touch_surface,
 /* True while the backlight is off and the clock should not be rendered. */
 bool chronvs_system_ui_display_is_off(void);
 
+/* Lets apps reset the inactivity timer and wake a dimmed display. */
+void chronvs_system_ui_notify_activity(void);
+
 /* Updates the battery percentage shown in the quick-settings panel. */
 void chronvs_system_ui_set_battery(uint8_t percent, float voltage);

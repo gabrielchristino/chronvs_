@@ -80,6 +80,45 @@ lvgl_source = join(driver_dir, "LVGL_Driver", "LVGL_Driver.c")
 with open(lvgl_source, "r", encoding="utf-8") as source_file:
     lvgl_text = source_file.read()
 
+# Keep the proven vendor flush flow.  Larger draw buffers and an asynchronous
+# completion callback caused the SPD2010 panel to stall in practice.
+vendor_flush = '''void example_lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
+{
+    esp_lcd_panel_handle_t panel_handle = (esp_lcd_panel_handle_t) drv->user_data;
+    int offsetx1 = area->x1;
+    int offsetx2 = area->x2;
+    int offsety1 = area->y1;
+    int offsety2 = area->y2;
+    // copy a buffer's content to a specific area of the display
+    esp_lcd_panel_draw_bitmap(panel_handle, offsetx1, offsety1, offsetx2 +1, offsety2 + 1, color_map);
+    lv_disp_flush_ready(drv);
+}'''
+
+async_flush = '''bool example_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io,
+                             esp_lcd_panel_io_event_data_t *edata,
+                             void *user_ctx)
+{
+    (void)panel_io;
+    (void)edata;
+    lv_disp_drv_t *driver = (lv_disp_drv_t *)user_ctx;
+    if (driver != NULL && driver->flush_cb != NULL) {
+        lv_disp_flush_ready(driver);
+    }
+    return false;
+}
+
+void example_lvgl_flush_cb(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *color_map)
+{
+    esp_lcd_panel_handle_t panel_handle = (esp_lcd_panel_handle_t) drv->user_data;
+    esp_lcd_panel_draw_bitmap(panel_handle, area->x1, area->y1,
+                              area->x2 + 1, area->y2 + 1, color_map);
+}'''
+
+if async_flush in lvgl_text:
+    lvgl_text = lvgl_text.replace(async_flush, vendor_flush)
+elif vendor_flush not in lvgl_text:
+    raise RuntimeError("Could not restore Waveshare LVGL flush callback")
+
 old_touch_read = '''void example_touchpad_read( lv_indev_drv_t * drv, lv_indev_data_t * data )
 {
     uint16_t touchpad_x[5] = {0};
@@ -174,10 +213,55 @@ known_touch_read = current_touch_read == old_touch_read or "static bool candidat
 if current_touch_read != new_touch_read and known_touch_read:
     lvgl_text = (lvgl_text[:touch_read_start] + new_touch_read +
                  lvgl_text[touch_read_end + 2:])
-    with open(lvgl_source, "w", encoding="utf-8", newline="") as source_file:
-        source_file.write(lvgl_text)
 elif current_touch_read != new_touch_read:
     raise RuntimeError("Could not apply Chronvs touch debounce patch")
+
+with open(lvgl_source, "w", encoding="utf-8", newline="") as source_file:
+    source_file.write(lvgl_text)
+
+lvgl_header = join(driver_dir, "LVGL_Driver", "LVGL_Driver.h")
+with open(lvgl_header, "r", encoding="utf-8") as header_file:
+    header_text = header_file.read()
+
+# The vendor's original buffer size is required by this SPD2010 QSPI driver.
+# Larger buffers produce black bands on the physical display.
+header_text = header_text.replace(
+    "#define LVGL_BUF_LEN  (EXAMPLE_LCD_WIDTH * EXAMPLE_LCD_HEIGHT)",
+    "#define LVGL_BUF_LEN  (EXAMPLE_LCD_WIDTH * EXAMPLE_LCD_HEIGHT / 20)")
+header_text = header_text.replace(
+    "#define LVGL_BUF_LEN  (EXAMPLE_LCD_WIDTH * EXAMPLE_LCD_HEIGHT / 4)",
+    "#define LVGL_BUF_LEN  (EXAMPLE_LCD_WIDTH * EXAMPLE_LCD_HEIGHT / 20)")
+header_text = header_text.replace(
+    "#define LVGL_BUF_LEN  (EXAMPLE_LCD_WIDTH * EXAMPLE_LCD_HEIGHT / 10)",
+    "#define LVGL_BUF_LEN  (EXAMPLE_LCD_WIDTH * EXAMPLE_LCD_HEIGHT / 20)")
+async_flush_prototype = '''bool example_lvgl_flush_ready(esp_lcd_panel_io_handle_t panel_io,
+                             esp_lcd_panel_io_event_data_t *edata,
+                             void *user_ctx);
+'''
+header_text = header_text.replace(async_flush_prototype, "")
+with open(lvgl_header, "w", encoding="utf-8", newline="") as header_file:
+    header_file.write(header_text)
+
+with open(display_source, "r", encoding="utf-8") as source_file:
+    display_text = source_file.read()
+
+display_text = display_text.replace('#include "Display_SPD2010.h"\n#include "LVGL_Driver.h"',
+                                    '#include "Display_SPD2010.h"')
+async_io_callback = ".on_color_trans_done = example_lvgl_flush_ready,         \n    .user_ctx = &disp_drv,"
+vendor_io_callback = ".on_color_trans_done = NULL,                            \n    .user_ctx = NULL,"
+display_text = display_text.replace(async_io_callback, vendor_io_callback)
+with open(display_source, "w", encoding="utf-8", newline="") as source_file:
+    source_file.write(display_text)
+
+display_header = join(driver_dir, "LCD_Driver", "Display_SPD2010.h")
+with open(display_header, "r", encoding="utf-8") as header_file:
+    display_header_text = header_file.read()
+
+display_header_text = display_header_text.replace(
+    "#define ESP_PANEL_HOST_SPI_MAX_TRANSFER_SIZE   (8192)",
+    "#define ESP_PANEL_HOST_SPI_MAX_TRANSFER_SIZE   (2048)")
+with open(display_header, "w", encoding="utf-8", newline="") as header_file:
+    header_file.write(display_header_text)
 
 env.Append(CPPPATH=[
     join(driver_dir, "I2C_Driver"),

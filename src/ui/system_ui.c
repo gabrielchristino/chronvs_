@@ -1,4 +1,4 @@
-#include "watch_controls.h"
+#include "ui/system_ui.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -508,8 +508,8 @@ static void power_timer_event(lv_timer_t *timer) {
     }
 }
 
-void chronvs_watch_controls_init(lv_obj_t *touch_surface,
-                                 lv_timer_t *animation_timer) {
+void chronvs_system_ui_init(lv_obj_t *touch_surface,
+                            lv_timer_t *animation_timer) {
     clock_surface = touch_surface;
     clock_animation_timer = animation_timer;
     load_settings();
@@ -525,11 +525,11 @@ void chronvs_watch_controls_init(lv_obj_t *touch_surface,
              selected_brightness, power_profiles[selected_profile].label);
 }
 
-bool chronvs_watch_display_is_off(void) {
+bool chronvs_system_ui_display_is_off(void) {
     return display_state == DISPLAY_OFF;
 }
 
-void chronvs_watch_set_battery(uint8_t percent, float voltage) {
+void chronvs_system_ui_set_battery(uint8_t percent, float voltage) {
     if (battery_label == NULL) return;
     if (percent > 100) percent = 100;
     lv_label_set_text_fmt(battery_label, "%u%%", percent);

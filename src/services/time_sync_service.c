@@ -1,4 +1,4 @@
-#include "time_sync.h"
+#include "services/time_sync_service.h"
 
 #include <stdbool.h>
 #include <stdint.h>

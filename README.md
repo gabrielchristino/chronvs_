@@ -4,6 +4,11 @@ Bring-up em PlatformIO/ESP-IDF para a **Waveshare ESP32-S3-Touch-LCD-1.46**. A p
 
 O firmware atual inicializa o barramento I2C, o expansor de GPIO, a tela redonda SPD2010 por QSPI e o touch. Em seguida, apresenta um mostrador orbital inspirado no Ressence Type 3, com hora, data, dia da semana e segundos lidos diretamente do RTC PCF85063.
 
+O código é organizado como um runtime de aplicativos: o núcleo registra e troca
+apps, serviços isolam RTC e bateria, a camada de plataforma inicializa a placa e
+o mostrador vive em `src/apps/watch_app.c` como o primeiro app. Consulte
+[`docs/apps.md`](docs/apps.md) para criar e registrar novas telas.
+
 ## Estado validado
 
 - Compilação com PlatformIO `espressif32 @ 6.9.0` e ESP-IDF 5.3.1.

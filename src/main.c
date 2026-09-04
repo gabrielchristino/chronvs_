@@ -11,6 +11,7 @@
 #include "lvgl.h"
 
 #include "Display_SPD2010.h"
+#include "BAT_Driver.h"
 #include "I2C_Driver.h"
 #include "LVGL_Driver.h"
 #include "TCA9554PWR.h"
@@ -55,6 +56,55 @@ static clock_time_t displayed_time = {
 };
 static uint32_t displayed_time_tick;
 static float ambient_temperature_c = 24.0f;
+#define BATTERY_UPDATE_PERIOD_MS 60000
+
+typedef struct {
+    float voltage;
+    uint8_t percent;
+} battery_level_t;
+
+static uint8_t battery_voltage_to_percent(float voltage) {
+    static const battery_level_t levels[] = {
+        {3.30f, 0}, {3.45f, 3}, {3.60f, 10}, {3.70f, 25},
+        {3.80f, 45}, {3.90f, 65}, {4.00f, 80}, {4.10f, 90},
+        {4.20f, 100},
+    };
+
+    if (voltage <= levels[0].voltage) return levels[0].percent;
+    const size_t count = sizeof(levels) / sizeof(levels[0]);
+    if (voltage >= levels[count - 1].voltage) return levels[count - 1].percent;
+
+    for (size_t index = 1; index < count; ++index) {
+        if (voltage <= levels[index].voltage) {
+            const battery_level_t low = levels[index - 1];
+            const battery_level_t high = levels[index];
+            const float position = (voltage - low.voltage) /
+                                   (high.voltage - low.voltage);
+            return (uint8_t)(low.percent +
+                position * (float)(high.percent - low.percent) + 0.5f);
+        }
+    }
+    return 0;
+}
+
+static void update_battery_status(void) {
+    float total_voltage = 0.0f;
+    unsigned valid_samples = 0;
+    for (unsigned sample = 0; sample < 8; ++sample) {
+        const float voltage = BAT_Get_Volts();
+        if (voltage >= 2.5f && voltage <= 5.0f) {
+            total_voltage += voltage;
+            ++valid_samples;
+        }
+    }
+    if (valid_samples == 0) {
+        ESP_LOGW(TAG, "Battery ADC did not return a valid voltage");
+        return;
+    }
+
+    const float voltage = total_voltage / valid_samples;
+    chronvs_watch_set_battery(battery_voltage_to_percent(voltage), voltage);
+}
 
 static uint8_t bcd_to_decimal(uint8_t value) {
     return ((value >> 4) * 10) + (value & 0x0F);
@@ -459,9 +509,8 @@ void chronvs_set_ambient_temperature(float temperature_c) {
 static void update_clock_screen(const clock_time_t *time) {
     if (!time->valid) return; /* Keep the animated fallback instead of a blank face. */
 
-    /* The RTC has one-second precision but is polled four times per second.
-     * Resetting the interpolation clock on every identical read made each hand
-     * move for only 250 ms, then jump back to its previous position. */
+    /* Keep the interpolation origin stable when the RTC returns the same
+     * second, including after an early refresh caused by waking the screen. */
     if (time->second == displayed_time.second &&
         time->minute == displayed_time.minute &&
         time->hour == displayed_time.hour &&
@@ -482,23 +531,31 @@ void app_main(void) {
     I2C_Init();
     EXIO_Init();
     scan_onboard_i2c();
+    BAT_Init();
     LCD_Init();
     LVGL_Init();
     create_clock_screen();
     chronvs_time_sync_start();
 
     TickType_t next_rtc_update = 0;
+    TickType_t next_battery_update = 0;
     bool display_was_off = false;
     while (true) {
         const TickType_t now = xTaskGetTickCount();
         const bool display_is_off = chronvs_watch_display_is_off();
         if (display_is_off) {
             display_was_off = true;
-        }
-        else if (display_was_off || now >= next_rtc_update) {
-            const clock_time_t time = read_rtc();
-            update_clock_screen(&time);
-            next_rtc_update = now + pdMS_TO_TICKS(1000);
+        } else {
+            const bool refresh_after_wake = display_was_off;
+            if (refresh_after_wake || now >= next_rtc_update) {
+                const clock_time_t time = read_rtc();
+                update_clock_screen(&time);
+                next_rtc_update = now + pdMS_TO_TICKS(1000);
+            }
+            if (refresh_after_wake || now >= next_battery_update) {
+                update_battery_status();
+                next_battery_update = now + pdMS_TO_TICKS(BATTERY_UPDATE_PERIOD_MS);
+            }
             display_was_off = false;
         }
         lv_timer_handler();

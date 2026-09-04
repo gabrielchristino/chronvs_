@@ -108,30 +108,33 @@ new_touch_read = '''void example_touchpad_read( lv_indev_drv_t * drv, lv_indev_d
 {
     uint16_t touchpad_x[5] = {0};
     uint16_t touchpad_y[5] = {0};
+    uint16_t touchpad_strength[5] = {0};
     uint8_t touchpad_cnt = 0;
     static bool candidate_active;
+    static bool contact_confirmed;
     static uint16_t candidate_x;
     static uint16_t candidate_y;
     static uint8_t stable_samples;
 
     (void)drv;
-    const bool touchpad_pressed = Touch_Get_xy(touchpad_x, touchpad_y, NULL,
+    const bool touchpad_pressed = Touch_Get_xy(touchpad_x, touchpad_y,
+                                               touchpad_strength,
                                                &touchpad_cnt,
                                                CONFIG_ESP_LCD_TOUCH_MAX_POINTS);
     const bool valid_point = touchpad_pressed && touchpad_cnt > 0 &&
+                             touchpad_strength[0] > 0 &&
                              touchpad_x[0] < EXAMPLE_LCD_WIDTH &&
                              touchpad_y[0] < EXAMPLE_LCD_HEIGHT;
 
     if (!valid_point) {
         candidate_active = false;
+        contact_confirmed = false;
         stable_samples = 0;
         data->state = LV_INDEV_STATE_REL;
         return;
     }
 
-    const int dx = (int)touchpad_x[0] - (int)candidate_x;
-    const int dy = (int)touchpad_y[0] - (int)candidate_y;
-    if (!candidate_active || dx > 24 || dx < -24 || dy > 24 || dy < -24) {
+    if (!candidate_active) {
         candidate_active = true;
         candidate_x = touchpad_x[0];
         candidate_y = touchpad_y[0];
@@ -140,17 +143,40 @@ new_touch_read = '''void example_touchpad_read( lv_indev_drv_t * drv, lv_indev_d
         return;
     }
 
-    if (stable_samples < 2) ++stable_samples;
+    const int dx = (int)touchpad_x[0] - (int)candidate_x;
+    const int dy = (int)touchpad_y[0] - (int)candidate_y;
+    candidate_x = touchpad_x[0];
+    candidate_y = touchpad_y[0];
+
+    if (!contact_confirmed) {
+        if (dx > 24 || dx < -24 || dy > 24 || dy < -24) {
+            stable_samples = 1;
+            data->state = LV_INDEV_STATE_REL;
+            return;
+        }
+        if (stable_samples < 2) ++stable_samples;
+        contact_confirmed = stable_samples == 2;
+    }
+
     data->point.x = touchpad_x[0];
     data->point.y = touchpad_y[0];
-    data->state = stable_samples == 2 ? LV_INDEV_STATE_PR : LV_INDEV_STATE_REL;
+    data->state = contact_confirmed ? LV_INDEV_STATE_PR : LV_INDEV_STATE_REL;
 }'''
 
-if old_touch_read in lvgl_text:
-    lvgl_text = lvgl_text.replace(old_touch_read, new_touch_read)
+touch_read_start = lvgl_text.find("void example_touchpad_read( lv_indev_drv_t * drv, lv_indev_data_t * data )")
+touch_read_end_marker = "\n}\n/* Rotate display and touch"
+touch_read_end = lvgl_text.find(touch_read_end_marker, touch_read_start)
+if touch_read_start < 0 or touch_read_end < 0:
+    raise RuntimeError("Could not locate Waveshare touch callback")
+
+current_touch_read = lvgl_text[touch_read_start:touch_read_end + 2]
+known_touch_read = current_touch_read == old_touch_read or "static bool candidate_active;" in current_touch_read
+if current_touch_read != new_touch_read and known_touch_read:
+    lvgl_text = (lvgl_text[:touch_read_start] + new_touch_read +
+                 lvgl_text[touch_read_end + 2:])
     with open(lvgl_source, "w", encoding="utf-8", newline="") as source_file:
         source_file.write(lvgl_text)
-elif new_touch_read not in lvgl_text:
+elif current_touch_read != new_touch_read:
     raise RuntimeError("Could not apply Chronvs touch debounce patch")
 
 env.Append(CPPPATH=[
@@ -160,6 +186,7 @@ env.Append(CPPPATH=[
     join(driver_dir, "LCD_Driver"),
     join(driver_dir, "LCD_Driver", "esp_lcd_spd2010"),
     join(driver_dir, "LVGL_Driver"),
+    join(driver_dir, "BAT_Driver"),
     lvgl_dir,
     join(lvgl_dir, "src"),
     join(env["PROJECT_DIR"], "src"),
@@ -175,6 +202,7 @@ env.BuildSources(
         "+<LCD_Driver/Display_SPD2010.c>",
         "+<LCD_Driver/esp_lcd_spd2010/esp_lcd_spd2010.c>",
         "+<LVGL_Driver/LVGL_Driver.c>",
+        "+<BAT_Driver/BAT_Driver.c>",
     ]),
 )
 

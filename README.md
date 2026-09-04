@@ -27,6 +27,7 @@ O firmware atual inicializa o barramento I2C, o expansor de GPIO, a tela redonda
 | Expansor TCA9554 | I2C | endereço 0x20; controla resets da tela/touch |
 | Microfone | I2S | WS 2, SCK 15, SD 39 |
 | Speaker PCM5101 | I2S | DIN 47, LRCK 38, BCK 48 |
+| Bateria | ADC1 | GPIO 8, divisor resistivo 3:1 |
 
 ## Preparação em outra máquina
 
@@ -68,7 +69,7 @@ Se a COM3 desaparecer, desconecte e reconecte o USB. Para entrar no bootloader, 
 
 ## Mostrador orbital
 
-O mostrador usa o LVGL 8.3.11 distribuído pela própria Waveshare e é renderizado por primitivas vetoriais em um único objeto de 412 × 412 pixels. Essa abordagem evita um framebuffer permanente e permite atualizar a animação a cada 100 ms usando os buffers parciais da porta oficial.
+O mostrador usa o LVGL 8.3.11 distribuído pela própria Waveshare e é renderizado por primitivas vetoriais em um único objeto de 412 × 412 pixels. Essa abordagem evita um framebuffer permanente e atualiza o desenho uma vez por segundo usando os buffers parciais da porta oficial.
 
 A composição segue estas relações:
 
@@ -109,11 +110,16 @@ No boot validado, o scanner confirmou o RTC em `0x51`, o touch em `0x53` e o QMI
 
 O mostrador inteiro funciona como superfície de toque:
 
-- Um toque curto alterna o brilho entre 40%, 70% e 100%.
-- Um toque longo abre o painel `AJUSTES`, com controle contínuo de brilho entre 10% e 100%.
-- O botão de perfil alterna entre `AUTO 15s / 45s`, `AUTO 30s / 2min` e `SEMPRE LIGADA`. No nome de cada perfil, o primeiro tempo reduz o brilho e o segundo apaga a iluminação.
+- Arrastar a partir da borda superior para baixo revela um painel circular de acessos rápidos sobre o mostrador. O painel acompanha o dedo e completa ou cancela a abertura conforme a distância percorrida.
+- O arco externo do painel controla continuamente o brilho entre 10% e 100%.
+- Os atalhos ocupam uma grade circular 2–3–2. O primeiro botão mostra `15s`, `30s` ou `ON` e alterna entre `AUTO 15s / 45s`, `AUTO 30s / 2min` e `SEMPRE LIGADA`. O segundo reúne bateria e economia: exibe o percentual de carga e alterna o modo `ECO` ao ser tocado. Os cinco slots restantes continuam reservados para funções futuras.
+- O modo `ECO`, indicado pela borda amarela e pelo texto no botão da bateria, preserva a preferência normal, mas limita temporariamente o brilho e o indicador do arco a 35%, reduz para 5% após 5 segundos e apaga a iluminação após 15 segundos — inclusive quando o perfil normal está em `ON`.
+- Arrastar o painel para cima acompanha o dedo e fecha os acessos rápidos.
+- Toques curtos e longos sobre o mostrador não alteram configurações.
 - Um toque com a tela reduzida ou apagada apenas reativa o mostrador, evitando também alterar o brilho por acidente.
-- Brilho e perfil são salvos na NVS e restaurados após reiniciar o relógio.
+- Brilho, perfil e estado do modo econômico são salvos na NVS e restaurados após reiniciar o relógio.
+
+A tensão da bateria é lida pelo ADC1 no GPIO 8, usando o divisor 3:1 da placa e a calibração do ESP-IDF. O firmware tira oito amostras, calcula uma estimativa por curva de descarga de uma célula Li-ion e atualiza o percentual uma vez por minuto ou imediatamente ao reativar a tela. A leitura fica suspensa enquanto a tela está apagada e o valor aparece somente no botão superior direito do painel.
 
 O mostrador é redesenhado uma vez por segundo, tanto em brilho normal quanto reduzido. Quando a iluminação é apagada, o PWM do backlight é colocado em 0%, o timer de animação é pausado e as leituras do RTC e invalidações do mostrador são suspensas. No toque que reativa a tela, o RTC é lido imediatamente para desenhar a hora atual. O loop mínimo de LVGL e touch permanece ativo para detectar esse toque; colocar o ESP32-S3 em light sleep ou deep sleep exige uma política separada de despertar e fica reservado para uma etapa futura.
 

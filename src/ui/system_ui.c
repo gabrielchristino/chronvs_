@@ -27,7 +27,7 @@
 #define POWER_TIMER_PERIOD_MS 500
 #define CLOCK_REDRAW_PERIOD_MS 1000
 #define MENU_EDGE_START_Y 90
-#define MENU_DRAG_SLOP 8
+#define MENU_DRAG_SLOP 5
 #define MENU_DRAG_FRAME_MS 20
 #define MENU_ANIMATION_MS 220
 #define APP_SWIPE_COMMIT_DISTANCE 120
@@ -403,6 +403,7 @@ static void create_quick_settings(void) {
     lv_obj_set_size(brightness_arc, width - 24, height - 24);
     lv_obj_center(brightness_arc);
     lv_obj_add_flag(brightness_arc, LV_OBJ_FLAG_ADV_HITTEST);
+    
     lv_arc_set_range(brightness_arc, 10, 100);
     lv_arc_set_bg_angles(brightness_arc, 135, 45);
     lv_arc_set_value(brightness_arc, selected_brightness);

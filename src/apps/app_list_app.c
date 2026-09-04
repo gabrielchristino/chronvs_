@@ -16,7 +16,7 @@
 #define LIST_TOP 72
 #define ROW_HEIGHT 74
 #define SCREEN_SIZE 412
-#define BACK_SWIPE_COMMIT_DISTANCE 120
+#define BACK_SWIPE_COMMIT_DISTANCE 70
 #define DRAG_FRAME_MS 20
 
 typedef struct {

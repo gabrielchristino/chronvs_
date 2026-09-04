@@ -57,9 +57,20 @@ new_test = """  uint8_t byte_per_pixel = EXAMPLE_LCD_COLOR_BITS / 8;
   }
   free(color);"""
 
-if old_test in display_text:
+patched_display_text = display_text
+if old_test in patched_display_text:
+    patched_display_text = patched_display_text.replace(old_test, new_test)
+
+# The vendor demo paints 16 coloured startup bands. Pixels at the extreme
+# circular aperture can survive later clipping and appear as a noisy halo.
+# Initialise the whole GRAM uniformly black instead.
+rainbow_pixel = "color[i * byte_per_pixel + k] = (SPI_SWAP_DATA_TX(BIT(j), EXAMPLE_LCD_COLOR_BITS) >> (k * 8)) & 0xff;"
+black_pixel = "color[i * byte_per_pixel + k] = 0;"
+patched_display_text = patched_display_text.replace(rainbow_pixel, black_pixel)
+
+if patched_display_text != display_text:
     with open(display_source, "w", encoding="utf-8", newline="") as source_file:
-        source_file.write(display_text.replace(old_test, new_test))
+        source_file.write(patched_display_text)
 
 env.Append(CPPPATH=[
     join(driver_dir, "I2C_Driver"),

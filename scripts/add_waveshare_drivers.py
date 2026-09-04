@@ -72,6 +72,87 @@ if patched_display_text != display_text:
     with open(display_source, "w", encoding="utf-8", newline="") as source_file:
         source_file.write(patched_display_text)
 
+# The controller occasionally reports one isolated point while the panel is
+# untouched.  Do the debounce at the LVGL input boundary: a contact must occur
+# in two consecutive samples and remain in roughly the same place before it is
+# allowed to generate a press.  Releasing remains immediate.
+lvgl_source = join(driver_dir, "LVGL_Driver", "LVGL_Driver.c")
+with open(lvgl_source, "r", encoding="utf-8") as source_file:
+    lvgl_text = source_file.read()
+
+old_touch_read = '''void example_touchpad_read( lv_indev_drv_t * drv, lv_indev_data_t * data )
+{
+    uint16_t touchpad_x[5] = {0};
+    uint16_t touchpad_y[5] = {0};
+    uint8_t touchpad_cnt = 0;
+
+    /* Get coordinates */
+    bool touchpad_pressed = Touch_Get_xy( touchpad_x, touchpad_y, NULL, &touchpad_cnt, CONFIG_ESP_LCD_TOUCH_MAX_POINTS);
+
+    // printf("CCCCCCCCCCCCC=%d  \\r\\n",touchpad_cnt);
+    if (touchpad_pressed && touchpad_cnt > 0) {
+        data->point.x = touchpad_x[0];
+        data->point.y = touchpad_y[0];
+        data->state = LV_INDEV_STATE_PR;
+        // printf("X=%u Y=%u num=%d \\r\\n", data->point.x, data->point.y,touchpad_cnt);
+    } else {
+        data->state = LV_INDEV_STATE_REL;
+    }
+
+}'''
+old_touch_read = old_touch_read.replace(
+    "uint8_t touchpad_cnt = 0;\n\n", "uint8_t touchpad_cnt = 0;\n   \n"
+).replace("    }\n\n}", "    }\n   \n}")
+
+new_touch_read = '''void example_touchpad_read( lv_indev_drv_t * drv, lv_indev_data_t * data )
+{
+    uint16_t touchpad_x[5] = {0};
+    uint16_t touchpad_y[5] = {0};
+    uint8_t touchpad_cnt = 0;
+    static bool candidate_active;
+    static uint16_t candidate_x;
+    static uint16_t candidate_y;
+    static uint8_t stable_samples;
+
+    (void)drv;
+    const bool touchpad_pressed = Touch_Get_xy(touchpad_x, touchpad_y, NULL,
+                                               &touchpad_cnt,
+                                               CONFIG_ESP_LCD_TOUCH_MAX_POINTS);
+    const bool valid_point = touchpad_pressed && touchpad_cnt > 0 &&
+                             touchpad_x[0] < EXAMPLE_LCD_WIDTH &&
+                             touchpad_y[0] < EXAMPLE_LCD_HEIGHT;
+
+    if (!valid_point) {
+        candidate_active = false;
+        stable_samples = 0;
+        data->state = LV_INDEV_STATE_REL;
+        return;
+    }
+
+    const int dx = (int)touchpad_x[0] - (int)candidate_x;
+    const int dy = (int)touchpad_y[0] - (int)candidate_y;
+    if (!candidate_active || dx > 24 || dx < -24 || dy > 24 || dy < -24) {
+        candidate_active = true;
+        candidate_x = touchpad_x[0];
+        candidate_y = touchpad_y[0];
+        stable_samples = 1;
+        data->state = LV_INDEV_STATE_REL;
+        return;
+    }
+
+    if (stable_samples < 2) ++stable_samples;
+    data->point.x = touchpad_x[0];
+    data->point.y = touchpad_y[0];
+    data->state = stable_samples == 2 ? LV_INDEV_STATE_PR : LV_INDEV_STATE_REL;
+}'''
+
+if old_touch_read in lvgl_text:
+    lvgl_text = lvgl_text.replace(old_touch_read, new_touch_read)
+    with open(lvgl_source, "w", encoding="utf-8", newline="") as source_file:
+        source_file.write(lvgl_text)
+elif new_touch_read not in lvgl_text:
+    raise RuntimeError("Could not apply Chronvs touch debounce patch")
+
 env.Append(CPPPATH=[
     join(driver_dir, "I2C_Driver"),
     join(driver_dir, "EXIO"),

@@ -14,6 +14,8 @@
 #include "I2C_Driver.h"
 #include "LVGL_Driver.h"
 #include "TCA9554PWR.h"
+#include "time_sync.h"
+#include "watch_controls.h"
 
 static const char *TAG = "chronvs";
 
@@ -63,10 +65,11 @@ static void scan_onboard_i2c(void) {
     static const char *names[] = {
         "TCA9554", "PCF85063 RTC", "SPD2010 touch", "QMI8658 IMU", "QMI8658 IMU"
     };
+    const uint8_t probe = 0;
 
     for (size_t i = 0; i < sizeof(addresses); ++i) {
         esp_err_t result = i2c_master_write_to_device(
-            I2C_MASTER_NUM, addresses[i], NULL, 0, pdMS_TO_TICKS(100));
+            I2C_MASTER_NUM, addresses[i], &probe, 0, pdMS_TO_TICKS(100));
         ESP_LOGI(TAG, "I2C 0x%02X %-14s %s", addresses[i], names[i],
                  result == ESP_OK ? "OK" : "no response");
     }
@@ -441,17 +444,34 @@ static void create_clock_screen(void) {
     lv_obj_add_event_cb(clock_face, clock_draw_event, LV_EVENT_DRAW_MAIN, NULL);
 
     displayed_time_tick = lv_tick_get();
-    lv_timer_create(animation_timer_cb, 100, clock_face);
+    lv_timer_t *animation_timer = lv_timer_create(animation_timer_cb, 1000, clock_face);
+    chronvs_watch_controls_init(clock_face, animation_timer);
 }
 
 /* Public hook for the future ambient-temperature sensor. */
 void chronvs_set_ambient_temperature(float temperature_c) {
     ambient_temperature_c = clampf(temperature_c, -20.0f, 60.0f);
-    if (clock_face != NULL) lv_obj_invalidate(clock_face);
+    if (clock_face != NULL && !chronvs_watch_display_is_off()) {
+        lv_obj_invalidate(clock_face);
+    }
 }
 
 static void update_clock_screen(const clock_time_t *time) {
     if (!time->valid) return; /* Keep the animated fallback instead of a blank face. */
+
+    /* The RTC has one-second precision but is polled four times per second.
+     * Resetting the interpolation clock on every identical read made each hand
+     * move for only 250 ms, then jump back to its previous position. */
+    if (time->second == displayed_time.second &&
+        time->minute == displayed_time.minute &&
+        time->hour == displayed_time.hour &&
+        time->day == displayed_time.day &&
+        time->weekday == displayed_time.weekday &&
+        time->month == displayed_time.month &&
+        time->year == displayed_time.year) {
+        return;
+    }
+
     displayed_time = *time;
     displayed_time_tick = lv_tick_get();
     lv_obj_invalidate(clock_face);
@@ -465,14 +485,21 @@ void app_main(void) {
     LCD_Init();
     LVGL_Init();
     create_clock_screen();
+    chronvs_time_sync_start();
 
     TickType_t next_rtc_update = 0;
+    bool display_was_off = false;
     while (true) {
         const TickType_t now = xTaskGetTickCount();
-        if (now >= next_rtc_update) {
+        const bool display_is_off = chronvs_watch_display_is_off();
+        if (display_is_off) {
+            display_was_off = true;
+        }
+        else if (display_was_off || now >= next_rtc_update) {
             const clock_time_t time = read_rtc();
             update_clock_screen(&time);
-            next_rtc_update = now + pdMS_TO_TICKS(250);
+            next_rtc_update = now + pdMS_TO_TICKS(1000);
+            display_was_off = false;
         }
         lv_timer_handler();
         vTaskDelay(pdMS_TO_TICKS(5));

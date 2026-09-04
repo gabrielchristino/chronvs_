@@ -11,6 +11,8 @@ O firmware atual inicializa o barramento I2C, o expansor de GPIO, a tela redonda
 - I2C detectado: TCA9554 (`0x20`), PCF85063 RTC (`0x51`), touch SPD2010 (`0x53`) e QMI8658 (`0x6B`).
 - A tela recebe comandos QSPI e exibe o mostrador de relógio.
 - Interface vetorial LVGL validada no painel circular de 412 × 412 pixels, incluindo animação contínua, submostradores orbitais e contra-rotação da tipografia.
+- Sincronização NTP validada em hardware: conexão WPA2, horário local UTC−3 gravado no PCF85063 e rádio Wi-Fi desligado em seguida.
+- Partição de aplicação ampliada de 1 MiB para 4 MiB; o firmware com Wi-Fi ocupa aproximadamente 1,10 MiB.
 - O target padrão `pio run -t upload` grava as três imagens no mapa correto e reinicia a placa automaticamente; o conteúdo gravado foi confirmado por checksum.
 - O QMI8658 em `0x6A` sem resposta é esperado nesta unidade: o endereço ativo é `0x6B`.
 
@@ -82,7 +84,38 @@ A composição segue estas relações:
 
 As fontes Montserrat 12, 18, 24 e 48 estão habilitadas. O heap interno do LVGL foi ampliado para 128 KiB para comportar o mostrador e futuras extensões. A configuração `LV_COLOR_16_SWAP=1`, também presente no exemplo oficial, é obrigatória para o RGB565 transmitido ao SPD2010; sem ela, cores e pixels das fontes ficam corrompidos.
 
-O RTC é somente lido nesta etapa. Se a data/hora ainda não tiver sido ajustada — por exemplo, na primeira alimentação sem bateria de RTC — a tela exibirá os valores armazenados pelo chip. A próxima etapa é implementar o ajuste inicial e a sincronização por NTP via Wi-Fi.
+## Sincronização de hora por Wi-Fi
+
+O relógio pode acertar automaticamente o PCF85063 por NTP. As credenciais ficam em um arquivo local ignorado pelo Git:
+
+```powershell
+Copy-Item src/chronvs_secrets.example.h src/chronvs_secrets.h
+```
+
+Edite `src/chronvs_secrets.h` e informe a rede:
+
+```c
+#define CHRONVS_WIFI_SSID "nome-da-rede"
+#define CHRONVS_WIFI_PASSWORD "senha-da-rede"
+```
+
+Quando há credenciais, uma tarefa em segundo plano conecta ao Wi-Fi na inicialização, obtém a hora de `pool.ntp.org`, converte para o horário de São Paulo (UTC−3) e grava segundos, minutos, horas, data, dia da semana, mês e ano no PCF85063. O rádio Wi-Fi é desligado após a tentativa e só volta a ligar na próxima sincronização, a cada 12 horas.
+
+Sem `src/chronvs_secrets.h`, ou com o SSID vazio, o firmware continua funcionando exclusivamente com o RTC e registra essa condição no monitor serial. A senha nunca deve ser adicionada ao repositório.
+
+No boot validado, o scanner confirmou o RTC em `0x51`, o touch em `0x53` e o QMI8658 em `0x6B`; a sincronização ocorreu poucos segundos depois de a interface receber um endereço IP.
+
+## Controles por toque e energia
+
+O mostrador inteiro funciona como superfície de toque:
+
+- Um toque curto alterna o brilho entre 40%, 70% e 100%.
+- Um toque longo abre o painel `AJUSTES`, com controle contínuo de brilho entre 10% e 100%.
+- O botão de perfil alterna entre `AUTO 15s / 45s`, `AUTO 30s / 2min` e `SEMPRE LIGADA`. No nome de cada perfil, o primeiro tempo reduz o brilho e o segundo apaga a iluminação.
+- Um toque com a tela reduzida ou apagada apenas reativa o mostrador, evitando também alterar o brilho por acidente.
+- Brilho e perfil são salvos na NVS e restaurados após reiniciar o relógio.
+
+O mostrador é redesenhado uma vez por segundo, tanto em brilho normal quanto reduzido. Quando a iluminação é apagada, o PWM do backlight é colocado em 0%, o timer de animação é pausado e as leituras do RTC e invalidações do mostrador são suspensas. No toque que reativa a tela, o RTC é lido imediatamente para desenhar a hora atual. O loop mínimo de LVGL e touch permanece ativo para detectar esse toque; colocar o ESP32-S3 em light sleep ou deep sleep exige uma política separada de despertar e fica reservado para uma etapa futura.
 
 ### Halo de pixels na borda
 
@@ -104,3 +137,4 @@ Não reintroduza o padrão colorido de `test_draw_bitmap()` sem garantir que tod
 - `CONFIG_SPIRAM_USE_CAPS_ALLOC=y` permite que os buffers LVGL sejam alocados corretamente na PSRAM OPI.
 - A partição e o Flash são explicitamente configurados para 16 MB; a mensagem de “Expected 16MB, found 2MB” deixa de ocorrer com `sdkconfig.defaults` aplicado.
 - A fonte de referência da Waveshare está em `.vendor-reference/`, ignorada pelo Git. Não a remova enquanto quiser compilar localmente.
+- `partitions.csv` mantém NVS em `0x11000`, dados PHY em `0x17000` e a aplicação em `0x20000`, agora com 4 MiB disponíveis dentro da Flash física de 16 MB.

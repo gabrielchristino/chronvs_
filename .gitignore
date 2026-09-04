@@ -5,3 +5,4 @@ sdkconfig.waveshare_esp32_s3_touch_lcd_146
 .vscode/c_cpp_properties.json
 .vscode/launch.json
 .vscode/ipch
+src/chronvs_secrets.h

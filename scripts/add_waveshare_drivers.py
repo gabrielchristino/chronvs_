@@ -15,6 +15,10 @@ driver_dir = join(
     env["PROJECT_DIR"],
     ".vendor-reference", "example", "ESP-IDF-5.3.2", "ESP32-S3-Touch-LCD-1.46-Test", "main"
 )
+lvgl_dir = join(
+    env["PROJECT_DIR"], ".vendor-reference", "example", "ESP-IDF-5.3.2",
+    "ESP32-S3-Touch-LCD-1.46-Test", "components", "lvgl__lvgl"
+)
 
 # The stock colour test uses 16 bands of 25 px (400 px total), leaving the
 # final 12 rows of the 412 px panel unchanged. Keep the correction here rather
@@ -63,6 +67,10 @@ env.Append(CPPPATH=[
     join(driver_dir, "Touch_Driver"),
     join(driver_dir, "LCD_Driver"),
     join(driver_dir, "LCD_Driver", "esp_lcd_spd2010"),
+    join(driver_dir, "LVGL_Driver"),
+    lvgl_dir,
+    join(lvgl_dir, "src"),
+    join(env["PROJECT_DIR"], "src"),
 ])
 
 env.BuildSources(
@@ -74,5 +82,15 @@ env.BuildSources(
         "+<Touch_Driver/Touch_SPD2010.c>",
         "+<LCD_Driver/Display_SPD2010.c>",
         "+<LCD_Driver/esp_lcd_spd2010/esp_lcd_spd2010.c>",
+        "+<LVGL_Driver/LVGL_Driver.c>",
     ]),
+)
+
+# Use the exact LVGL 8.3.11 component distributed in the Waveshare ESP-IDF
+# example. It provides correct text rasterisation and the vendor's flush/touch
+# callbacks for this QSPI panel.
+env.BuildSources(
+    join("$BUILD_DIR", "waveshare_lvgl"),
+    lvgl_dir,
+    src_filter="+<src/>",
 )

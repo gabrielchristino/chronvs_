@@ -2,7 +2,7 @@
 
 Bring-up em PlatformIO/ESP-IDF para a **Waveshare ESP32-S3-Touch-LCD-1.46**. A placa é uma ESP32-S3R8 com 16 MB de Flash e 8 MB de PSRAM OPI; portanto não é compatível com a definição genérica `esp32-s3-devkitc-1` N8.
 
-O firmware atual inicializa o barramento I2C, o expansor de GPIO, a tela redonda SPD2010 por QSPI e o touch. Em seguida, mostra um mostrador digital com hora, segundos e data lidos diretamente do RTC PCF85063. Um traço laranja na base confirma um toque ativo; as coordenadas continuam registradas no monitor serial.
+O firmware atual inicializa o barramento I2C, o expansor de GPIO, a tela redonda SPD2010 por QSPI e o touch. Em seguida, apresenta um mostrador LVGL com hora, data e segundos lidos diretamente do RTC PCF85063.
 
 ## Estado validado
 
@@ -10,6 +10,8 @@ O firmware atual inicializa o barramento I2C, o expansor de GPIO, a tela redonda
 - Configuração correta: ESP32-S3R8, 16 MB Flash e 8 MB OPI PSRAM.
 - I2C detectado: TCA9554 (`0x20`), PCF85063 RTC (`0x51`), touch SPD2010 (`0x53`) e QMI8658 (`0x6B`).
 - A tela recebe comandos QSPI e exibe o mostrador de relógio.
+- Tipografia, cor e atualização da interface validadas na placa: fundo preto, `CHRONVS` azul, hora branca, data amarela e segundos em azul escuro.
+- O target padrão `pio run -t upload` grava as três imagens no mapa correto e reinicia a placa automaticamente; o conteúdo gravado foi confirmado por checksum.
 - O QMI8658 em `0x6A` sem resposta é esperado nesta unidade: o endereço ativo é `0x6B`.
 
 ## Pinagem interna confirmada
@@ -34,7 +36,7 @@ Na raiz do projeto, obtenha a referência oficial antes de compilar:
 git clone --depth 1 https://github.com/waveshareteam/ESP32-S3-Touch-LCD-1.46.git .vendor-reference
 ```
 
-O arquivo `scripts/add_waveshare_drivers.py` compila somente os fontes indispensáveis dessa referência: I2C, TCA9554, touch, inicialização da tela e o painel SPD2010. A alteração local em `Display_SPD2010.c` faz o padrão de 16 cores ocupar os 412 pixels de altura completos; antes ela preenchia 400 linhas e deixava as 12 linhas inferiores com pixels residuais.
+O arquivo `scripts/add_waveshare_drivers.py` compila somente os fontes indispensáveis dessa referência: I2C, TCA9554, touch, inicialização da tela, painel SPD2010 e LVGL 8.3.11. A alteração local em `Display_SPD2010.c` faz o padrão de 16 cores ocupar os 412 pixels de altura completos; antes ela preenchia 400 linhas e deixava as 12 linhas inferiores com pixels residuais.
 
 ## Build, upload e monitor serial
 
@@ -46,11 +48,13 @@ pio run
 
 O `platformio.ini` deixa o ambiente configurado para `COM3` e 460800 baud. Atualize `upload_port` se o Windows atribuir outra porta.
 
-No momento, o target genérico `pio run -t upload` pode falhar porque o bootloader ESP-IDF desta configuração ultrapassa o offset padrão de partições. A tabela foi movida para `0x10000` em `sdkconfig.defaults`, com a aplicação em `0x20000`. Use este upload explícito após o build:
+Use o Upload do PlatformIO normalmente:
 
 ```powershell
-& "$env:USERPROFILE\.platformio\penv\Scripts\python.exe" "$env:USERPROFILE\.platformio\packages\tool-esptoolpy\esptool.py" --chip esp32s3 --port COM3 --baud 460800 write_flash --flash_mode dio --flash_freq 80m --flash_size 16MB 0x0 .pio\build\waveshare_esp32_s3_touch_lcd_146\bootloader.bin 0x10000 .pio\build\waveshare_esp32_s3_touch_lcd_146\partitions.bin 0x20000 .pio\build\waveshare_esp32_s3_touch_lcd_146\firmware.bin
+pio run -t upload
 ```
+
+`scripts/upload_waveshare.py` configura esse comando para gravar bootloader em `0x0`, tabela de partições em `0x10000` e firmware em `0x20000`. Assim, o esptool controla automaticamente o reset antes/depois do upload; não é necessário usar o botão `BOOT`, o botão `PWR` ou reconectar o USB em condições normais.
 
 Abra o monitor serial com:
 
@@ -62,7 +66,7 @@ Se a COM3 desaparecer, desconecte e reconecte o USB. Para entrar no bootloader, 
 
 ## Mostrador inicial
 
-O mostrador é intencionalmente desenhado sem uma biblioteca gráfica adicional: usa uma faixa DMA de 16 linhas e transfere as 412 linhas ao SPD2010 a cada segundo. Isso mantém o uso de RAM baixo e torna visíveis a hora (`HH:MM`), segundos e a data (`DD-MM-20YY`) enquanto a base gráfica do projeto é validada.
+O mostrador usa o LVGL 8.3.11 distribuído pela própria Waveshare. A porta LVGL oficial fornece os callbacks de QSPI e touch, e fontes Montserrat 18, 24 e 48 px. A configuração `LV_COLOR_16_SWAP=y`, também presente no exemplo oficial, é obrigatória para o formato RGB565 transmitido ao SPD2010; sem ela, as cores e os pixels das fontes ficam corrompidos.
 
 O RTC é somente lido nesta etapa. Se a data/hora ainda não tiver sido ajustada — por exemplo, na primeira alimentação sem bateria de RTC — a tela exibirá os valores armazenados pelo chip. A próxima etapa é implementar o ajuste inicial e a sincronização por NTP via Wi-Fi.
 
@@ -70,7 +74,7 @@ O RTC é somente lido nesta etapa. Se a data/hora ainda não tiver sido ajustada
 
 - O driver Arduino-ESP32 distribuído com esta versão do PlatformIO não expõe o modo QSPI de quatro linhas necessário ao SPD2010. Por isso o projeto usa ESP-IDF e o driver oficial, que define `quad_mode = 1`.
 - `build_flags = -O0` é intencional: evita um erro interno do compilador observado com otimização ao compilar esta combinação de ESP-IDF/toolchain.
+- `build_type = debug` reforça o workaround do compilador durante a compilação dos componentes ESP-IDF.
+- `CONFIG_SPIRAM_USE_CAPS_ALLOC=y` permite que os buffers LVGL sejam alocados corretamente na PSRAM OPI.
 - A partição e o Flash são explicitamente configurados para 16 MB; a mensagem de “Expected 16MB, found 2MB” deixa de ocorrer com `sdkconfig.defaults` aplicado.
 - A fonte de referência da Waveshare está em `.vendor-reference/`, ignorada pelo Git. Não a remova enquanto quiser compilar localmente.
-
-O diretório `.vendor-reference` é o checkout do exemplo oficial da Waveshare. O projeto compila apenas os arquivos de driver indispensáveis a partir dele, preservando a sequência de inicialização específica do display. Pequenas adaptações no driver fazem a API Arduino 3.1.1 do exemplo funcionar com Arduino-ESP32 2.0.17, que é a versão distribuída pelo PlatformIO.

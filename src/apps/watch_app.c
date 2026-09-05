@@ -41,6 +41,48 @@ static chronvs_time_t displayed_time = {
 };
 static uint32_t displayed_time_tick;
 static float ambient_temperature_c = 24.0f;
+static uint32_t render_time_tick;
+
+/* Trim opaque, rectangular siblings entering from an edge. LVGL's normal
+ * cover test only skips this custom drawing when a whole buffer is covered.
+ * Walking up also finds the quick panel above the app content layer. */
+static bool visible_clock_clip(lv_obj_t *object, lv_area_t *clip) {
+    for (lv_obj_t *node = object; lv_obj_get_parent(node) != NULL;
+         node = lv_obj_get_parent(node)) {
+        lv_obj_t *parent = lv_obj_get_parent(node);
+        const uint32_t count = lv_obj_get_child_cnt(parent);
+        for (uint32_t i = lv_obj_get_index(node) + 1; i < count; ++i) {
+            lv_obj_t *cover = lv_obj_get_child(parent, i);
+            if (lv_obj_has_flag(cover, LV_OBJ_FLAG_HIDDEN) ||
+                lv_obj_get_style_opa(cover, 0) != LV_OPA_COVER ||
+                lv_obj_get_style_bg_opa(cover, 0) != LV_OPA_COVER ||
+                lv_obj_get_style_radius(cover, 0) != 0 ||
+                lv_obj_get_style_transform_angle(cover, 0) != 0 ||
+                lv_obj_get_style_transform_zoom(cover, 0) != 256) continue;
+            lv_area_t area;
+            if (!_lv_area_intersect(&area, &cover->coords, &parent->coords) ||
+                !_lv_area_intersect(&area, &area, clip)) continue;
+            if (area.x1 == clip->x1 && area.x2 == clip->x2) {
+                if (area.y1 == clip->y1) clip->y1 = area.y2 + 1;
+                else if (area.y2 == clip->y2) clip->y2 = area.y1 - 1;
+            } else if (area.y1 == clip->y1 && area.y2 == clip->y2) {
+                if (area.x1 == clip->x1) clip->x1 = area.x2 + 1;
+                else if (area.x2 == clip->x2) clip->x2 = area.x1 - 1;
+            }
+            if (clip->x1 > clip->x2 || clip->y1 > clip->y2) return false;
+        }
+    }
+    return true;
+}
+
+static bool dial_visible(lv_draw_ctx_t *ctx, float cx, float cy, float radius) {
+    /* Include rounding and antialiasing beyond the nominal dial bounds. */
+    radius += 2;
+    return cx + radius >= ctx->clip_area->x1 &&
+           cx - radius <= ctx->clip_area->x2 &&
+           cy + radius >= ctx->clip_area->y1 &&
+           cy - radius <= ctx->clip_area->y2;
+}
 
 static float clampf(float value, float min_value, float max_value) {
     if (value < min_value) return min_value;
@@ -168,10 +210,8 @@ static void draw_fixed_case(lv_draw_ctx_t *ctx, float cx, float cy, uint8_t day)
     char text[4];
 
     /* Overscan hides the antialiased edge beyond the round panel aperture. */
-    draw_circle(ctx, cx, cy, 209, COLOR_BEZEL_DARK, COLOR_BEZEL_DARK, 0);
-    draw_circle(ctx, cx, cy, 201, COLOR_BEZEL_DARK, COLOR_BEZEL_DARK, 0);
-    draw_circle(ctx, cx, cy, 197, COLOR_DATE_RING, COLOR_TRACK, 1);
-    draw_circle(ctx, cx, cy, 174, COLOR_FACE_DARK, COLOR_TRACK, 2);
+    draw_circle(ctx, cx, cy, 206, COLOR_DATE_RING, COLOR_TRACK, 1);
+    draw_circle(ctx, cx, cy, 183, COLOR_FACE_DARK, COLOR_TRACK, 2);
 
     /* Independent date ring: today's number always meets the marker at 6. */
     const float date_step = 360.0f / 31.0f;
@@ -179,9 +219,8 @@ static void draw_fixed_case(lv_draw_ctx_t *ctx, float cx, float cy, uint8_t day)
     for (int date = 1; date <= 31; ++date) {
         const float angle = (date - 1) * date_step + date_rotation;
         snprintf(text, sizeof(text), "%d", date);
-        lv_point_t p = polar_point(cx, cy, 186, angle);
-        draw_text(ctx, p.x, p.y, text, &lv_font_montserrat_12,
-                  date == day ? COLOR_VOID : COLOR_INK_DIM, 24);
+        lv_point_t p = polar_point(cx, cy, 195, angle);
+        draw_text(ctx, p.x, p.y, text, &lv_font_montserrat_12, COLOR_INK_DIM, 24);
     }
 
 }
@@ -191,103 +230,110 @@ static void draw_minute_chapter(lv_draw_ctx_t *ctx, float cx, float cy) {
     char text[4];
 
     for (int minute = 0; minute < 60; ++minute) {
-        /* 5/15/25/... replace their radial mark instead of sitting on it. */
-        if (minute % 10 == 5) continue;
+        /* The 30-minute position is reserved for the fixed marker. */
+        if (minute == 30) continue;
+
         const float angle = minute * 6.0f;
-        const int major = minute % 5 == 0;
-        draw_radial_line(ctx, cx, cy, major ? 163 : 167, 171, angle,
-                         COLOR_INK, major ? 3 : 2);
-    }
-    for (int minute = 5; minute < 60; minute += 10) {
-        snprintf(text, sizeof(text), "%d", minute);
-        lv_point_t p = polar_point(cx, cy, 156, minute * 6.0f);
-        draw_text(ctx, p.x, p.y, text, &lv_font_montserrat_18,
-                  COLOR_INK, 34);
+        if (minute % 5 == 0) {
+            snprintf(text, sizeof(text), "%d", minute);
+            lv_point_t p = polar_point(cx, cy, 168, angle);
+            draw_text(ctx, p.x, p.y, text, &lv_font_montserrat_18,
+                      COLOR_INK, 34);
+        } else {
+            draw_radial_line(ctx, cx, cy, 160, 172, angle,
+                             COLOR_INK, 2);
+        }
     }
 }
 
 static void draw_mother_disk(lv_draw_ctx_t *ctx, float cx, float cy,
                              float minute_angle) {
-    draw_circle(ctx, cx, cy, 146, COLOR_FACE, COLOR_TRACK, 1);
+    draw_circle(ctx, cx, cy, 154, COLOR_FACE, COLOR_TRACK, 1);
 
     /* The dominant minute hand runs from the center to the disk edge. */
-    draw_hand(ctx, cx, cy, 0, 141, minute_angle, COLOR_INK, 8);
+    draw_hand(ctx, cx, cy, 0, 149, minute_angle, COLOR_INK, 8);
     draw_circle(ctx, cx, cy, 4, COLOR_FACE_DARK, COLOR_INK_DIM, 1);
 }
 
 static void draw_hour_dial(lv_draw_ctx_t *ctx, float cx, float cy,
                            float hour_angle) {
+    if (!dial_visible(ctx, cx, cy, 73)) return;
     static const char *numbers[] = {"", "1", "", "3", "", "5",
                                     "", "7", "", "9", "", "11"};
-    draw_circle(ctx, cx, cy, 73, COLOR_FACE, COLOR_TRACK, 2);
+    draw_circle(ctx, cx, cy, 75, COLOR_FACE, COLOR_TRACK, 2);
 
     for (int hour = 0; hour < 12; ++hour) {
         if (numbers[hour][0] != '\0') {
-            lv_point_t p = polar_point(cx, cy, 52, hour * 30.0f);
+            lv_point_t p = polar_point(cx, cy, 63, hour * 30.0f);
             draw_text(ctx, p.x, p.y, numbers[hour], &lv_font_montserrat_18,
                       COLOR_INK, 28);
         }
         else if (hour != 0) {
             /* Even hours use bars; odd hours use numerals, like the original. */
-            draw_radial_line(ctx, cx, cy, 60, 67, hour * 30.0f,
+            draw_radial_line(ctx, cx, cy, 60, 70, hour * 30.0f,
                              COLOR_INK_DIM, 4);
+        }
+        else {
+            lv_point_t p = polar_point(cx, cy, 63, hour * 30.0f);
+            draw_text(ctx, p.x, p.y, "P", &lv_font_montserrat_18,
+                      COLOR_INK_DIM, 28);
         }
     }
 
-    /* Three horizontal strokes stand in for the Ressence hand logo at 12. */
-    for (int i = 0; i < 3; ++i) {
-        lv_point_t a = {.x = (lv_coord_t)(cx - 8 + i * 2),
-                        .y = (lv_coord_t)(cy - 50 + i * 4)};
-        lv_point_t b = {.x = (lv_coord_t)(cx + 8 - i * 2), .y = a.y};
-        draw_line(ctx, a, b, COLOR_INK_DIM, 2, true);
-    }
+    draw_circle(ctx, cx, cy, 55, COLOR_FACE, COLOR_TRACK, 2);
 
-    draw_hand(ctx, cx, cy, 10, 46, hour_angle, COLOR_INK, 8);
-    draw_circle(ctx, cx, cy, 4, COLOR_FACE_DARK, COLOR_INK, 1);
+    draw_hand(ctx, cx, cy, 0, 46, hour_angle, COLOR_INK, 8);
 }
 
 static void draw_weekday_dial(lv_draw_ctx_t *ctx, float cx, float cy,
                               float weekday_angle, uint8_t weekday,
                               uint8_t hour) {
-    draw_circle(ctx, cx, cy, 42, COLOR_FACE, COLOR_TRACK, 2);
+    if (!dial_visible(ctx, cx, cy, 48)) return;
+    draw_circle(ctx, cx, cy, 48, COLOR_FACE, COLOR_TRACK, 2);
+    draw_circle(ctx, cx, cy, 33, COLOR_FACE, COLOR_TRACK, 2);
 
     for (int day = 0; day < 7; ++day) {
         const float center_angle = day * (360.0f / 7.0f);
-        const uint32_t color = day == weekday ? COLOR_RED : COLOR_INK_DIM;
-        draw_arc(ctx, cx, cy, 33, center_angle - 16.0f,
-                 center_angle + 16.0f, color, day == weekday ? 6 : 4);
+        const uint32_t color = (day == weekday) ? COLOR_RED : COLOR_INK_DIM;
+        draw_arc(ctx, cx, cy, 42, center_angle - 16.0f,
+                 center_angle + 16.0f, color, 4);
     }
 
-    draw_hand(ctx, cx, cy, 4, 25, weekday_angle, COLOR_INK, 4);
-    draw_circle(ctx, cx, cy, 3, COLOR_FACE_DARK, COLOR_INK, 1);
-    draw_text(ctx, cx, cy + 15, hour < 12 ? "AM" : "PM",
-              &lv_font_montserrat_12, COLOR_TRACK, 28);
+    draw_hand(ctx, cx, cy, 0, 28, weekday_angle, COLOR_INK, 4);
 }
 
 static void draw_seconds_dial(lv_draw_ctx_t *ctx, float cx, float cy,
                               float second_angle) {
-    draw_circle(ctx, cx, cy, 25, COLOR_FACE, COLOR_TRACK, 2);
+    if (!dial_visible(ctx, cx, cy, 18)) return;
+    draw_circle(ctx, cx, cy, 18, COLOR_FACE, COLOR_TRACK, 2);
     for (int marker = 0; marker < 12; ++marker) {
         draw_radial_line(ctx, cx, cy, 20, 23, marker * 30.0f,
                          marker == 6 ? COLOR_RED : COLOR_TRACK, 2);
     }
-    draw_hand(ctx, cx, cy, 5, 19, second_angle, COLOR_INK, 3);
-    lv_point_t tip = polar_point(cx, cy, 19, second_angle);
-    draw_circle(ctx, tip.x, tip.y, 2, COLOR_ORANGE, COLOR_ORANGE, 0);
-    draw_circle(ctx, cx, cy, 3, COLOR_FACE_DARK, COLOR_INK, 1);
+    draw_hand(ctx, cx, cy, 0, 15, second_angle, COLOR_INK, 3);
+    lv_point_t tip = polar_point(cx, cy, 10, second_angle - 180);
+    draw_circle(ctx, tip.x, tip.y, 1, COLOR_RED, COLOR_RED, 0);
 }
 
 static void draw_temperature_dial(lv_draw_ctx_t *ctx, float cx, float cy,
                                   float temperature_c) {
-    draw_circle(ctx, cx, cy, 44, COLOR_FACE, COLOR_TRACK, 2);
-    draw_circle(ctx, cx, cy, 32, COLOR_FACE_DARK, COLOR_TRACK, 1);
-    draw_arc(ctx, cx, cy, 37, 200, 275, COLOR_BLUE, 6);
-    draw_arc(ctx, cx, cy, 37, 85, 160, COLOR_ORANGE, 6);
+    if (!dial_visible(ctx, cx, cy, 48)) return;
+    draw_circle(ctx, cx, cy, 48, COLOR_FACE, COLOR_TRACK, 2);
+    draw_circle(ctx, cx, cy, 33, COLOR_FACE, COLOR_TRACK, 2);
+
+    for (int day = 0; day < 5; ++day) {
+        const float center_angle = day * (360.0f / 5.0f);
+        uint32_t color = day == 2 ? COLOR_BLUE : day == 3 ? COLOR_ORANGE : COLOR_INK_DIM;
+        draw_arc(ctx, cx, cy, 42, center_angle - 30.0f,
+                 center_angle + 30.0f, color, 4);
+    }
+
+    // draw_arc(ctx, cx, cy, 42, 200, 275, COLOR_BLUE, 4);
+    // draw_arc(ctx, cx, cy, 42, 85, 160, COLOR_ORANGE, 4);
 
     const float normalized = (clampf(temperature_c, -20.0f, 60.0f) + 20.0f) / 80.0f;
     const float needle_angle = -120.0f + normalized * 240.0f;
-    draw_hand(ctx, cx, cy, 5, 27, needle_angle, COLOR_INK, 5);
-    draw_circle(ctx, cx, cy, 3, COLOR_FACE_DARK, COLOR_INK, 1);
+    draw_hand(ctx, cx, cy, 0, 28, needle_angle, COLOR_INK, 4);
 }
 
 static void draw_date_marker(lv_draw_ctx_t *ctx, float cx, float cy) {
@@ -304,12 +350,16 @@ static void draw_date_marker(lv_draw_ctx_t *ctx, float cx, float cy) {
     dsc.border_color = lv_color_hex(COLOR_INK_DIM);
     lv_draw_polygon(ctx, &dsc, triangle, 3);
 
-    draw_circle(ctx, cx, cy + 168, 3, COLOR_BEZEL_DARK, COLOR_BEZEL_DARK, 0);
+    draw_circle(ctx, cx - 1, cy + 168, 3, COLOR_BEZEL_DARK, COLOR_BEZEL_DARK, 0);
 }
 
 static void clock_draw_event(lv_event_t *event) {
     lv_draw_ctx_t *ctx = lv_event_get_draw_ctx(event);
     lv_obj_t *object = lv_event_get_target(event);
+    const lv_area_t *original_clip = ctx->clip_area;
+    lv_area_t visible_clip = *original_clip;
+    if (!visible_clock_clip(object, &visible_clip)) return;
+    ctx->clip_area = &visible_clip;
     const lv_area_t *coords = &object->coords;
     const float cx = (coords->x1 + coords->x2) * 0.5f;
     const float cy = (coords->y1 + coords->y2) * 0.5f;
@@ -325,7 +375,7 @@ static void clock_draw_event(lv_event_t *event) {
     background_dsc.border_opa = LV_OPA_TRANSP;
     lv_draw_rect(ctx, &background_dsc, coords);
 
-    const uint32_t elapsed_ms = lv_tick_elaps(displayed_time_tick);
+    const uint32_t elapsed_ms = render_time_tick - displayed_time_tick;
     const float elapsed_seconds = elapsed_ms / 1000.0f;
     const float seconds = displayed_time.second + elapsed_seconds;
     const float minutes = displayed_time.minute + seconds / 60.0f;
@@ -351,10 +401,10 @@ static void clock_draw_event(lv_event_t *event) {
      * hours are exactly opposite the minute hand; the remaining instruments
      * reproduce the top / lower-right / bottom composition of the reference.
      */
-    const point_f_t hour_local = polar_offset(70.0f, 180.0f);
-    const point_f_t weekday_local = polar_offset(96.0f, 305.0f);
-    const point_f_t temperature_local = polar_offset(96.0f, 70.0f);
-    const point_f_t seconds_local = polar_offset(112.0f, 110.0f);
+    const point_f_t hour_local = polar_offset(66.0f, 180.0f);
+    const point_f_t weekday_local = polar_offset(95.0f, 290.0f);
+    const point_f_t temperature_local = polar_offset(95.0f, 70.0f);
+    const point_f_t seconds_local = polar_offset(120.0f, 113.0f);
 
     const point_f_t hour_orbit = rotate_offset(hour_local, minute_angle);
     const point_f_t weekday_orbit = rotate_offset(weekday_local, minute_angle);
@@ -368,9 +418,11 @@ static void clock_draw_event(lv_event_t *event) {
                           ambient_temperature_c);
     draw_seconds_dial(ctx, cx + seconds_orbit.x, cy + seconds_orbit.y, second_angle);
     draw_date_marker(ctx, cx, cy);
+    ctx->clip_area = original_clip;
 }
 
 static void animation_timer_cb(lv_timer_t *timer) {
+    render_time_tick = lv_tick_get();
     lv_obj_invalidate((lv_obj_t *)timer->user_data);
 }
 
@@ -383,6 +435,7 @@ static lv_obj_t *create_watch_app(lv_obj_t *parent) {
     lv_obj_add_event_cb(clock_face, clock_draw_event, LV_EVENT_DRAW_MAIN, NULL);
 
     displayed_time_tick = lv_tick_get();
+    render_time_tick = displayed_time_tick;
     lv_timer_t *animation_timer = lv_timer_create(animation_timer_cb, 1000, clock_face);
     chronvs_system_ui_init(clock_face, animation_timer);
     return clock_face;
@@ -413,10 +466,12 @@ void chronvs_watch_app_set_time(const chronvs_time_t *time) {
 
     displayed_time = *time;
     displayed_time_tick = lv_tick_get();
+    render_time_tick = displayed_time_tick;
     lv_obj_invalidate(clock_face);
 }
 
 static void show_watch_app(void) {
+    render_time_tick = lv_tick_get();
     if (clock_face != NULL) lv_obj_invalidate(clock_face);
 }
 

@@ -80,6 +80,55 @@ driver não podem ser copiados diretamente.
 - Wi-Fi só é usado na sincronização NTP e é desligado após a tentativa. Apps
   devem pausar timers em `on_hide` quando não forem necessários; `Aion` já faz
   isso para seu timer de interface.
+- O desenho vetorial do mostrador recorta as regiões cobertas por superfícies
+  retangulares opacas acima dele (painel rápido e lista de apps). O recorte
+  acompanha as coordenadas atuais dessas superfícies durante o arraste e a
+  animação; ao recuarem, a região exposta volta a ser desenhada normalmente.
+- Submostradores inteiramente fora da faixa de desenho são descartados antes
+  de calcular seus textos, escalas e ponteiros. O horário usado na renderização
+  só avança na atualização do relógio, não entre as faixas de um mesmo quadro.
+  Essas otimizações preservam o visual, os gestos e os buffers parciais; o
+  ganho de fluidez e a ausência de rastros ainda precisam ser medidos no painel.
+
+Para validar no dispositivo, abra e feche os acessos rápidos lentamente e
+rapidamente (também pelo arco), revele a lista e cancele o gesto, e retorne da
+lista ao relógio. Observe especialmente a borda móvel e os submostradores que
+reaparecem. Repita após apagar e acordar a tela, verificando que o primeiro
+toque apenas acorda e que a hora é atualizada.
+
+### CPU e biblioteca gráfica
+
+A configuração em teste usa apenas a CPU a 240 MHz. Os caches permanecem nos
+valores validados de 16 KiB para instruções e 32 KiB para dados; flash e PSRAM
+continuam a 80 MHz, com linhas de cache de 32 bytes. LVGL permanece no fluxo
+original de compilação, com `-O0` e `LV_MEMCPY_MEMSET_STD=0` (padrão da
+biblioteca). Antes de testar outro ajuste, é necessário confirmar no relógio
+que display, toque, gestos, serial e sincronização NTP continuam funcionando.
+
+O teste anterior conjunto de CPU a 240 MHz, caches 32/64 KiB, LVGL com `-O2` e
+rotinas de memória da plataforma compilou, mas foi seguido de tela apagada e
+ausência de saída serial no dispositivo. Esses ajustes foram revertidos em
+conjunto para recuperação; a causa individual ainda não foi isolada. Não
+reaplique o conjunto. Futuras experiências devem alterar uma opção por vez,
+verificando boot, display e serial antes de prosseguir. A otimização de recorte
+vetorial anterior, confirmada pelo usuário, foi preservada.
+
+As escolhas de CPU e cache estão em `sdkconfig.defaults`. Em um checkout já
+configurado, atualize também as mesmas opções no `sdkconfig.waveshare_esp32_s3_touch_lcd_146`
+local: defaults não substituem opções já salvas. Confira os valores efetivos
+em `.pio/build/waveshare_esp32_s3_touch_lcd_146/config/sdkconfig.h` após compilar.
+Para recuperar o dispositivo, use `pio run -t upload`: ele grava bootloader,
+partições e aplicação com o mesmo build, nos endereços corretos. Não grave
+apenas a aplicação ao trocar configurações de cache. Se o reset automático
+não funcionar, entre no bootloader com BOOT pressionado ao acionar RESET,
+solte BOOT e confira a porta USB antes de repetir o upload.
+
+O alvo de 50 FPS não é uma medição: compare os mesmos arrastes no hardware.
+O monitor opcional `LV_USE_PERF_MONITOR` do LVGL mede atividade do renderizador,
+não a utilização total dos dois núcleos, e sua sobreposição também gera desenho.
+Deixe-o desativado no firmware normal para preservar a política de tela apagada.
+
+Referência: [otimização de velocidade do ESP-IDF 5.3.1](https://docs.espressif.com/projects/esp-idf/en/v5.3.1/esp32s3/api-guides/performance/speed.html).
 
 ### Configurações que não devem ser reintroduzidas
 

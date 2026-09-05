@@ -28,7 +28,9 @@ bool chronvs_app_open(const char *id);
 
 /* Shows an app temporarily at an x offset during a drag transition. */
 bool chronvs_app_preview(const char *id, lv_coord_t x);
+bool chronvs_app_preview_y(const char *id, lv_coord_t y);
 void chronvs_app_set_active_x(lv_coord_t x);
+void chronvs_app_set_active_y(lv_coord_t y);
 void chronvs_app_cancel_preview(void);
 
 size_t chronvs_app_count(void);

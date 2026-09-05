@@ -70,8 +70,8 @@ lista curva, com ícone à esquerda e nome ao lado, e pode ser aberto com
 `.launcher_visible = false`; portanto, não aparecem na própria lista. Os apps
 instaláveis usam `.launcher_visible = true` e entram na lista automaticamente.
 
-- No mostrador, arrastar para a esquerda revela a lista de apps e acompanha o
-  dedo durante o gesto.
+- No mostrador, arrastar para cima revela a lista de apps sobre o mostrador e
+  acompanha o dedo desde a borda inferior durante o gesto.
 - Na lista, tocar uma linha abre o app. Arrastar 70 px para a direita retorna
   ao mostrador; a tela acompanha esse movimento antes de concluir a navegação.
 - O primeiro app incluído é `Aion`, o cronômetro. Ele atualiza décimos de

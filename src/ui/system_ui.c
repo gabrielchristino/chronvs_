@@ -30,6 +30,8 @@
 #define MENU_DRAG_SLOP 5
 #define MENU_DRAG_FRAME_MS 20
 #define MENU_ANIMATION_MS 220
+#define MENU_OPEN_COMMIT_DISTANCE 120
+#define MENU_OPEN_FOLLOW_GAIN 2
 #define APP_SWIPE_COMMIT_DISTANCE 120
 #define APP_SWIPE_FOLLOW_GAIN 2
 
@@ -343,14 +345,14 @@ static void place_menu_at(int16_t y) {
     lv_obj_set_y(settings_panel, clamp_menu_y(y));
 }
 
-static void place_app_preview_at(lv_coord_t x) {
+static void place_app_preview_above(lv_coord_t y) {
     const uint32_t now = lv_tick_get();
     if (last_app_drag_tick != 0 &&
         lv_tick_elaps(last_app_drag_tick) < MENU_DRAG_FRAME_MS) {
         return;
     }
     last_app_drag_tick = now;
-    chronvs_app_preview("apps", x);
+    chronvs_app_preview_y("apps", y);
 }
 
 static void menu_touch_event(lv_event_t *event) {
@@ -492,28 +494,28 @@ static void clock_touch_event(lv_event_t *event) {
     }
     else if (code == LV_EVENT_PRESSING && app_swipe_dragging) {
         lv_indev_get_point(lv_indev_get_act(), &point);
-        int16_t distance = gesture_start_x - point.x;
+        int16_t distance = gesture_start_y - point.y;
         if (distance < 0) distance = 0;
-        const int16_t width = lv_disp_get_hor_res(NULL);
-        if (distance > width / APP_SWIPE_FOLLOW_GAIN) {
-            distance = width / APP_SWIPE_FOLLOW_GAIN;
+        const int16_t height = lv_disp_get_ver_res(NULL);
+        if (distance > height / APP_SWIPE_FOLLOW_GAIN) {
+            distance = height / APP_SWIPE_FOLLOW_GAIN;
         }
-        place_app_preview_at(width - distance * APP_SWIPE_FOLLOW_GAIN);
+        place_app_preview_above(height - distance * APP_SWIPE_FOLLOW_GAIN);
         mark_activity();
     }
     else if (code == LV_EVENT_PRESSING && clock_swipe_candidate) {
         lv_indev_get_point(lv_indev_get_act(), &point);
         const int16_t dx = point.x - gesture_start_x;
         const int16_t dy = point.y - gesture_start_y;
-        if (dx < -MENU_DRAG_SLOP && -dx > (dy < 0 ? -dy : dy) + 12) {
-            const int16_t width = lv_disp_get_hor_res(NULL);
-            int16_t distance = -dx;
-            if (distance > width / APP_SWIPE_FOLLOW_GAIN) {
-                distance = width / APP_SWIPE_FOLLOW_GAIN;
+        if (dy < -MENU_DRAG_SLOP && -dy > (dx < 0 ? -dx : dx) + 12) {
+            const int16_t height = lv_disp_get_ver_res(NULL);
+            int16_t distance = -dy;
+            if (distance > height / APP_SWIPE_FOLLOW_GAIN) {
+                distance = height / APP_SWIPE_FOLLOW_GAIN;
             }
             last_app_drag_tick = 0;
-            app_swipe_dragging = chronvs_app_preview(
-                "apps", width - distance * APP_SWIPE_FOLLOW_GAIN);
+            app_swipe_dragging = chronvs_app_preview_y(
+                "apps", height - distance * APP_SWIPE_FOLLOW_GAIN);
             mark_activity();
         }
         else if (gesture_start_y <= MENU_EDGE_START_Y &&
@@ -521,7 +523,7 @@ static void clock_touch_event(lv_event_t *event) {
             if (!menu_dragging) begin_menu_drag(true);
             menu_dragging = true;
             menu_open = true;
-            place_menu_at(point.y - menu_height());
+            place_menu_at(point.y * MENU_OPEN_FOLLOW_GAIN - menu_height());
             mark_activity();
         }
         else if (dx > 45 || dx < -45) {
@@ -531,7 +533,7 @@ static void clock_touch_event(lv_event_t *event) {
     else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
         if (app_swipe_dragging) {
             lv_indev_get_point(lv_indev_get_act(), &point);
-            if (gesture_start_x - point.x >= APP_SWIPE_COMMIT_DISTANCE) {
+            if (gesture_start_y - point.y >= APP_SWIPE_COMMIT_DISTANCE) {
                 chronvs_app_open("apps");
             }
             else {
@@ -542,8 +544,13 @@ static void clock_touch_event(lv_event_t *event) {
         else if (menu_dragging) {
             lv_indev_get_point(lv_indev_get_act(), &point);
             lv_obj_set_y(settings_panel,
-                         clamp_menu_y(point.y - menu_height()));
-            animate_menu(true);
+                         clamp_menu_y(point.y * MENU_OPEN_FOLLOW_GAIN -
+                                      menu_height()));
+            if (point.y >= MENU_OPEN_COMMIT_DISTANCE) {
+                animate_menu(true);
+            } else {
+                animate_menu(false);
+            }
         }
         else if (!wake_only_contact) {
             mark_activity();

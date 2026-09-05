@@ -23,8 +23,8 @@ disponível sobre o mostrador sem pertencer a um app.
 
 | Tela atual | Gesto | Resultado |
 | --- | --- | --- |
-| Mostrador | Arrastar da borda superior para baixo | Abre os acessos rápidos acompanhando o dedo. |
-| Mostrador | Arrastar para a esquerda | Revela a lista de apps acompanhando o dedo. |
+| Mostrador | Arrastar da borda superior para baixo | Abre os acessos rápidos sobre o mostrador, acompanhando o dedo com ganho visual 2×; menos de 120 px cancela a abertura. |
+| Mostrador | Arrastar para cima | Revela a lista de apps sobre o mostrador, acompanhando o dedo desde a borda inferior. |
 | Acessos rápidos | Arrastar para cima | Fecha o painel. O limiar é 5 px e vale também sobre o arco de brilho. |
 | Lista de apps | Tocar uma linha | Abre o app selecionado. |
 | Lista de apps | Arrastar 70 px para a direita | Volta ao mostrador. |

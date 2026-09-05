@@ -82,6 +82,7 @@ bool chronvs_app_open(const char *id) {
 
     lv_obj_clear_flag(next->root, LV_OBJ_FLAG_HIDDEN);
     lv_obj_set_x(next->root, 0);
+    lv_obj_set_y(next->root, 0);
     active_app = next;
     preview_app = NULL;
     if (next->definition->on_show != NULL) next->definition->on_show();
@@ -107,17 +108,42 @@ bool chronvs_app_preview(const char *id, lv_coord_t x) {
     return true;
 }
 
+bool chronvs_app_preview_y(const char *id, lv_coord_t y) {
+    app_entry_t *next = find_app(id);
+    if (next == NULL || next == active_app) return false;
+
+    if (next->root == NULL) {
+        next->root = next->definition->create(content_layer);
+        if (next->root == NULL) return false;
+    }
+
+    if (preview_app != NULL && preview_app != next) {
+        lv_obj_add_flag(preview_app->root, LV_OBJ_FLAG_HIDDEN);
+    }
+    preview_app = next;
+    lv_obj_clear_flag(next->root, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_set_x(next->root, 0);
+    lv_obj_set_y(next->root, y);
+    return true;
+}
+
 void chronvs_app_set_active_x(lv_coord_t x) {
     if (active_app != NULL) lv_obj_set_x(active_app->root, x);
+}
+
+void chronvs_app_set_active_y(lv_coord_t y) {
+    if (active_app != NULL) lv_obj_set_y(active_app->root, y);
 }
 
 void chronvs_app_cancel_preview(void) {
     if (preview_app != NULL) {
         lv_obj_set_x(preview_app->root, 0);
+        lv_obj_set_y(preview_app->root, 0);
         lv_obj_add_flag(preview_app->root, LV_OBJ_FLAG_HIDDEN);
         preview_app = NULL;
     }
     chronvs_app_set_active_x(0);
+    chronvs_app_set_active_y(0);
 }
 
 const char *chronvs_app_active_id(void) {

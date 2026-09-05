@@ -27,7 +27,7 @@ disponível sobre o mostrador sem pertencer a um app.
 | Mostrador | Arrastar para cima | Revela a lista de apps sobre o mostrador, acompanhando o dedo desde a borda inferior. |
 | Acessos rápidos | Arrastar para cima | Fecha o painel. O limiar é 5 px e vale também sobre o arco de brilho. |
 | Lista de apps | Tocar uma linha | Abre o app selecionado. |
-| Lista de apps | Arrastar 70 px para a direita | Volta ao mostrador. |
+| Lista de apps | Arrastar para baixo a partir do topo | Fecha a lista acompanhando o dedo; o gesto precisa avançar 120 px. |
 | Aion | Arrastar 80 px para a direita | Volta à lista de apps. |
 
 Os movimentos visuais são limitados a uma atualização a cada 20 ms. Isso evita

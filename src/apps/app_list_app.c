@@ -16,7 +16,8 @@
 #define LIST_TOP 72
 #define ROW_HEIGHT 74
 #define SCREEN_SIZE 412
-#define BACK_SWIPE_COMMIT_DISTANCE 70
+#define CLOSE_PULL_COMMIT_DISTANCE 120
+#define CLOSE_PULL_START_Y 60
 #define DRAG_FRAME_MS 20
 
 typedef struct {
@@ -24,9 +25,8 @@ typedef struct {
 } app_row_context_t;
 
 static app_row_context_t row_contexts[8];
-static int16_t gesture_start_x;
 static int16_t gesture_start_y;
-static bool back_swipe_active;
+static bool close_pull_active;
 static uint32_t last_back_drag_tick;
 
 static int16_t curved_inset(int16_t row_center_y) {
@@ -56,39 +56,41 @@ static void app_list_touch_event(lv_event_t *event) {
 
     if (code == LV_EVENT_PRESSED) {
         lv_indev_get_point(lv_indev_get_act(), &point);
-        gesture_start_x = point.x;
         gesture_start_y = point.y;
-        back_swipe_active = false;
+        close_pull_active = false;
         last_back_drag_tick = 0;
     }
-    else if (code == LV_EVENT_PRESSING && !back_swipe_active) {
+    else if (code == LV_EVENT_PRESSING && !close_pull_active) {
         lv_indev_get_point(lv_indev_get_act(), &point);
-        const int16_t dx = point.x - gesture_start_x;
         const int16_t dy = point.y - gesture_start_y;
-        const int16_t vertical_distance = dy < 0 ? -dy : dy;
-        if (dx > 20 && dx > vertical_distance + 20) {
-            back_swipe_active = true;
-            chronvs_app_preview("watch", 0);
-            place_active_app_at(dx);
+        if (gesture_start_y <= CLOSE_PULL_START_Y &&
+            dy > 20) {
+            close_pull_active = true;
+            /* Keep the watch stationary underneath; only the launcher moves. */
+            chronvs_app_preview_y("watch", 0);
+            chronvs_app_set_active_y(dy);
+            place_active_app_at(0);
         }
     }
-    else if (code == LV_EVENT_PRESSING && back_swipe_active) {
+    else if (code == LV_EVENT_PRESSING && close_pull_active) {
         lv_indev_get_point(lv_indev_get_act(), &point);
-        int16_t distance = point.x - gesture_start_x;
+        int16_t distance = point.y - gesture_start_y;
         if (distance < 0) distance = 0;
         if (distance > SCREEN_SIZE) distance = SCREEN_SIZE;
-        place_active_app_at(distance);
+        place_active_app_at(0);
+        chronvs_app_set_active_y(distance);
+        chronvs_app_preview_y("watch", 0);
     }
     else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
-        if (!back_swipe_active) return;
-        lv_indev_get_point(lv_indev_get_act(), &point);
-        if (point.x - gesture_start_x >= BACK_SWIPE_COMMIT_DISTANCE) {
-            chronvs_app_open("watch");
+        if (close_pull_active) {
+            lv_indev_get_point(lv_indev_get_act(), &point);
+            if (point.y - gesture_start_y >= CLOSE_PULL_COMMIT_DISTANCE) {
+                chronvs_app_open("watch");
+            } else {
+                chronvs_app_cancel_preview();
+            }
+            close_pull_active = false;
         }
-        else {
-            chronvs_app_cancel_preview();
-        }
-        back_swipe_active = false;
     }
 }
 

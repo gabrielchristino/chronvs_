@@ -13,6 +13,8 @@
 #include "services/rtc_service.h"
 #include "services/time_sync_service.h"
 #include "ui/system_ui.h"
+#include "services/aion_service.h"
+#include "ui/aion_alert.h"
 
 #define BATTERY_UPDATE_PERIOD_MS 60000
 
@@ -27,6 +29,7 @@ void app_main(void) {
     if (!chronvs_apps_register_all() || !chronvs_app_open("watch")) {
         ESP_LOGE(TAG, "Could not start the watch app");
     }
+    chronvs_aion_init();
     chronvs_time_sync_start();
 
     TickType_t next_rtc_update = 0;
@@ -34,6 +37,9 @@ void app_main(void) {
     bool display_was_off = false;
 
     while (true) {
+        chronvs_time_t synchronized_time;
+        if (chronvs_time_sync_take_update(&synchronized_time))
+            chronvs_aion_observe_time(&synchronized_time);
         const TickType_t now = xTaskGetTickCount();
         const bool display_is_off = chronvs_system_ui_display_is_off();
         if (display_is_off) {
@@ -42,6 +48,7 @@ void app_main(void) {
             const bool refresh_after_wake = display_was_off;
             if (refresh_after_wake || now >= next_rtc_update) {
                 const chronvs_time_t time = chronvs_rtc_read();
+                chronvs_aion_observe_time(&time);
                 chronvs_watch_app_set_time(&time);
                 next_rtc_update = now + pdMS_TO_TICKS(1000);
             }
@@ -57,6 +64,8 @@ void app_main(void) {
             display_was_off = false;
         }
 
+        chronvs_aion_poll();
+        chronvs_aion_alert_poll();
         lv_timer_handler();
         vTaskDelay(pdMS_TO_TICKS(5));
     }

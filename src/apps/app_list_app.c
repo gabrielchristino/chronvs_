@@ -5,6 +5,7 @@
 
 #include "apps/app_catalog.h"
 #include "lvgl.h"
+#include "ui/control_style.h"
 
 #define COLOR_PANEL       0x26302B
 #define COLOR_PANEL_EDGE  0x748173
@@ -106,10 +107,10 @@ static lv_obj_t *create_app_list(lv_obj_t *parent) {
     lv_obj_add_event_cb(root, app_list_touch_event, LV_EVENT_ALL, NULL);
 
     lv_obj_t *title = lv_label_create(root);
-    lv_label_set_text(title, "APLICATIVOS");
-    lv_obj_set_style_text_font(title, &lv_font_montserrat_18, 0);
+    lv_label_set_text(title, "Aplicativos");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(COLOR_ACCENT), 0);
-    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 18);
+    lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 34);
 
     size_t visible_index = 0;
     const size_t count = chronvs_app_count();
@@ -120,14 +121,9 @@ static lv_obj_t *create_app_list(lv_obj_t *parent) {
         const int16_t y = LIST_TOP + (int16_t)(visible_index * ROW_HEIGHT);
         const int16_t inset = curved_inset(y + 32);
         lv_obj_t *row = lv_btn_create(root);
+        chronvs_ui_style_control(row, false);
         lv_obj_set_size(row, SCREEN_SIZE - 2 * inset, 64);
         lv_obj_set_pos(row, inset, y);
-        lv_obj_set_style_radius(row, 32, 0);
-        lv_obj_set_style_bg_color(row, lv_color_hex(COLOR_PANEL_EDGE), 0);
-        lv_obj_set_style_bg_opa(row, LV_OPA_COVER, 0);
-        lv_obj_set_style_border_color(row, lv_color_hex(COLOR_TEXT_DIM), 0);
-        lv_obj_set_style_border_width(row, 1, 0);
-        lv_obj_set_style_shadow_width(row, 0, 0);
         row_contexts[visible_index].id = app->id;
         lv_obj_add_flag(row, LV_OBJ_FLAG_EVENT_BUBBLE);
         lv_obj_add_event_cb(row, open_app_event, LV_EVENT_CLICKED,
@@ -138,6 +134,7 @@ static lv_obj_t *create_app_list(lv_obj_t *parent) {
         lv_obj_set_size(icon, 44, 44);
         lv_obj_align(icon, LV_ALIGN_LEFT_MID, 12, 0);
         lv_obj_clear_flag(icon, LV_OBJ_FLAG_SCROLLABLE);
+        lv_obj_clear_flag(icon, LV_OBJ_FLAG_CLICKABLE);
         if (app->create_icon != NULL) {
             app->create_icon(icon);
         }

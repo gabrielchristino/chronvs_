@@ -6,6 +6,8 @@
 #include "core/app_manager.h"
 #include "lvgl.h"
 #include "ui/system_ui.h"
+#include "apps/aion_pages.h"
+#include "ui/aion_widgets.h"
 
 #define COLOR_PANEL       0x26302B
 #define COLOR_PANEL_EDGE  0x748173
@@ -16,6 +18,9 @@
 #define BACK_SWIPE_DISTANCE 80
 
 static lv_obj_t *aion_root;
+static lv_obj_t *stopwatch_page;
+static unsigned current_page;
+static uint32_t last_stopwatch_refresh;
 static lv_obj_t *elapsed_label;
 static lv_obj_t *status_label;
 static lv_obj_t *start_label;
@@ -26,6 +31,7 @@ static uint32_t started_at_tick;
 static int16_t gesture_start_x;
 static int16_t gesture_start_y;
 static bool returning_to_list;
+static bool page_back_allowed;
 
 static void draw_icon_rect(lv_draw_ctx_t *ctx, const lv_area_t *area,
                            uint32_t color, lv_coord_t radius) {
@@ -113,23 +119,24 @@ static void update_display(void) {
                           (unsigned long)deciseconds);
     lv_label_set_text(status_label, running ? "EM CURSO" :
                       stored_elapsed_ms == 0 ? "PRONTO" : "PAUSADO");
-    lv_label_set_text(start_label, running ? "PAUSAR" : "INICIAR");
+    lv_label_set_text(start_label, running ? "Pausar" : "Iniciar");
 }
 
 static void refresh_timer_cb(lv_timer_t *timer) {
     (void)timer;
-    update_display();
+    if (chronvs_system_ui_display_is_off()) return;
+    chronvs_aion_pages_refresh();
+    if (!current_page && lv_tick_elaps(last_stopwatch_refresh) >= 100) {
+        last_stopwatch_refresh = lv_tick_get();
+        update_display();
+    }
 }
 
-static void style_round_button(lv_obj_t *button, lv_color_t background,
-                               lv_color_t border) {
-    lv_obj_set_size(button, 110, 110);
-    lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
-    lv_obj_set_style_bg_color(button, background, 0);
-    lv_obj_set_style_bg_opa(button, LV_OPA_COVER, 0);
-    lv_obj_set_style_border_color(button, border, 0);
-    lv_obj_set_style_border_width(button, 1, 0);
-    lv_obj_set_style_shadow_width(button, 0, 0);
+static void select_page(unsigned page) {
+    current_page = page;
+    if (page) lv_obj_add_flag(stopwatch_page, LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_clear_flag(stopwatch_page, LV_OBJ_FLAG_HIDDEN);
+    chronvs_aion_pages_show(page);
 }
 
 static void start_pause_event(lv_event_t *event) {
@@ -163,6 +170,7 @@ static void aion_touch_event(lv_event_t *event) {
         gesture_start_x = point.x;
         gesture_start_y = point.y;
         returning_to_list = false;
+        page_back_allowed = chronvs_aion_pages_can_swipe_back(lv_event_get_target(event));
         chronvs_system_ui_notify_activity();
     }
     else if (code == LV_EVENT_PRESSING && !returning_to_list) {
@@ -172,12 +180,23 @@ static void aion_touch_event(lv_event_t *event) {
         const int16_t vertical = dy < 0 ? -dy : dy;
         if (dx > BACK_SWIPE_DISTANCE && dx > vertical + 20) {
             returning_to_list = true;
-            chronvs_app_open("apps");
+            lv_indev_wait_release(lv_indev_get_act());
+            if (!chronvs_aion_pages_back()) chronvs_app_open("apps");
+        }
+        else if (!chronvs_aion_pages_editing() && vertical > 80 &&
+                 vertical > (dx < 0 ? -dx : dx) + 20 &&
+                 ((dy < 0 && current_page < 2) ||
+                  (dy > 0 && current_page > 0 && page_back_allowed))) {
+            returning_to_list = true;
+            lv_indev_wait_release(lv_indev_get_act());
+            if (dy < 0) select_page(current_page + 1);
+            else select_page(current_page - 1);
         }
     }
 }
 
 static void show_aion(void) {
+    select_page(0);
     update_display();
     lv_timer_resume(refresh_timer);
 }
@@ -195,46 +214,32 @@ static lv_obj_t *create_aion(lv_obj_t *parent) {
     lv_obj_clear_flag(aion_root, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(aion_root, aion_touch_event, LV_EVENT_ALL, NULL);
 
-    lv_obj_t *title = lv_label_create(aion_root);
-    lv_label_set_text(title, "AION");
+    stopwatch_page = lv_obj_create(aion_root);
+    chronvs_aion_surface(stopwatch_page);
+
+    lv_obj_t *title = lv_label_create(stopwatch_page);
+    lv_label_set_text(title, "Cronometro");
     lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(COLOR_ACCENT), 0);
     lv_obj_align(title, LV_ALIGN_TOP_MID, 0, 34);
 
-    status_label = lv_label_create(aion_root);
+    status_label = lv_label_create(stopwatch_page);
     lv_obj_set_style_text_font(status_label, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_color(status_label, lv_color_hex(COLOR_TEXT_DIM), 0);
     lv_obj_align(status_label, LV_ALIGN_TOP_MID, 0, 68);
 
-    elapsed_label = lv_label_create(aion_root);
+    elapsed_label = lv_label_create(stopwatch_page);
     lv_obj_set_style_text_font(elapsed_label, &lv_font_montserrat_48, 0);
     lv_obj_set_style_text_color(elapsed_label, lv_color_hex(COLOR_TEXT), 0);
     lv_obj_align(elapsed_label, LV_ALIGN_CENTER, 0, -35);
 
-    lv_obj_t *start_button = lv_btn_create(aion_root);
-    style_round_button(start_button, lv_color_hex(COLOR_PANEL_EDGE),
-                       lv_color_hex(COLOR_TEXT_DIM));
-    lv_obj_align(start_button, LV_ALIGN_CENTER, -65, 85);
-    lv_obj_add_flag(start_button, LV_OBJ_FLAG_EVENT_BUBBLE);
-    lv_obj_add_event_cb(start_button, start_pause_event, LV_EVENT_CLICKED, NULL);
-    start_label = lv_label_create(start_button);
-    lv_obj_set_style_text_font(start_label, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(start_label, lv_color_hex(COLOR_TEXT), 0);
-    lv_obj_center(start_label);
+    lv_obj_t *start_button = chronvs_aion_action(stopwatch_page, "Iniciar", -66, 264,
+                                                CHRONVS_UI_PAIR_WIDTH, false, start_pause_event, 0);
+    start_label = lv_obj_get_child(start_button, 0);
+    chronvs_aion_action(stopwatch_page, "Zerar", 66, 264, CHRONVS_UI_PAIR_WIDTH, true, reset_event, 0);
 
-    lv_obj_t *reset_button = lv_btn_create(aion_root);
-    style_round_button(reset_button, lv_color_hex(COLOR_PANEL),
-                       lv_color_hex(COLOR_PANEL_EDGE));
-    lv_obj_align(reset_button, LV_ALIGN_CENTER, 65, 85);
-    lv_obj_add_flag(reset_button, LV_OBJ_FLAG_EVENT_BUBBLE);
-    lv_obj_add_event_cb(reset_button, reset_event, LV_EVENT_CLICKED, NULL);
-    lv_obj_t *reset_label = lv_label_create(reset_button);
-    lv_label_set_text(reset_label, "ZERAR");
-    lv_obj_set_style_text_font(reset_label, &lv_font_montserrat_12, 0);
-    lv_obj_set_style_text_color(reset_label, lv_color_hex(COLOR_TEXT), 0);
-    lv_obj_center(reset_label);
-
-    refresh_timer = lv_timer_create(refresh_timer_cb, 100, NULL);
+    chronvs_aion_pages_init(aion_root);
+    refresh_timer = lv_timer_create(refresh_timer_cb, 20, NULL);
     update_display();
     return aion_root;
 }

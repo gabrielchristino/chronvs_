@@ -54,6 +54,14 @@ Os limites de gesto, layout e paleta estão documentados em
 `docs/interface.md`. Atualize esse documento quando alterar comportamento
 visível ou parâmetros de interface.
 
+- Para conjuntos com sete opções circulares que caibam na tela, use sempre
+  a disposição hexagonal **2–3–2**, como nos acessos rápidos, preservando a
+  identidade visual. Ações complementares, como `Criar` e `Parar`, ficam abaixo.
+- Opções e atalhos usam círculos de 70 px; ações textuais (`Criar`, `Excluir`,
+  `Parar`, `Voltar`, `Iniciar` etc.) usam pílulas de 54 px de altura. Use os
+  estilos compartilhados de `ui/control_style.h` e os construtores do Aion;
+  não escolha proporções diferentes para a mesma categoria de controle.
+
 ## Display e desempenho — regras críticas
 
 O driver da Waveshare tem limitações observadas em hardware. Não altere estes
@@ -63,6 +71,9 @@ firmware:
 - LVGL deve ficar com `LV_DISP_DEF_REFR_PERIOD = 20` ms.
 - O buffer LVGL é duplo, em PSRAM, e deve ter `1/20` da tela.
 - A transferência QSPI deve permanecer em 2 KiB.
+- Preserve a espera síncrona da fila QSPI antes de `draw_bitmap` retornar,
+  aplicada por `scripts/add_waveshare_drivers.py`. Ela eliminou as listras
+  no boot e nos avisos de timer, conforme teste confirmado no relógio.
 - Não use buffers de tela inteira, buffers `1/10` ou maiores, transferências
   de 8 KiB, nem mova `lv_disp_flush_ready()` para callback assíncrono de QSPI.
   Essas experiências causaram, respectivamente, listras pretas ou travamento.

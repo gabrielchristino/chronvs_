@@ -11,6 +11,7 @@
 
 #include "Display_SPD2010.h"
 #include "core/app_manager.h"
+#include "ui/control_style.h"
 
 #define COLOR_PANEL       0x26302B
 #define COLOR_PANEL_EDGE  0x748173
@@ -94,6 +95,13 @@ static void mark_activity(void) {
     lv_disp_trig_activity(NULL);
 }
 
+static lv_obj_t *wake_guard;
+static void wake_guard_event(lv_event_t *event) {
+    (void)event;
+    lv_indev_wait_release(lv_indev_get_act());
+    chronvs_system_ui_notify_activity();
+}
+
 static void set_output_brightness(uint8_t brightness) {
     if (brightness == output_brightness) return;
     output_brightness = brightness;
@@ -111,6 +119,7 @@ static void set_display_state(display_state_t state) {
     display_state = state;
 
     if (state == DISPLAY_ACTIVE) {
+        if (wake_guard) { lv_obj_del(wake_guard); wake_guard = NULL; }
         set_output_brightness(active_output_brightness());
         lv_timer_set_period(clock_animation_timer, CLOCK_REDRAW_PERIOD_MS);
         lv_timer_resume(clock_animation_timer);
@@ -125,6 +134,14 @@ static void set_display_state(display_state_t state) {
         lv_timer_resume(clock_animation_timer);
     }
     else { /* DISPLAY_OFF */
+        if (!wake_guard) {
+            wake_guard = lv_obj_create(lv_layer_top());
+            lv_obj_remove_style_all(wake_guard);
+            lv_obj_set_size(wake_guard, lv_pct(100), lv_pct(100));
+            lv_obj_clear_flag(wake_guard, LV_OBJ_FLAG_SCROLLABLE);
+            lv_obj_add_flag(wake_guard, LV_OBJ_FLAG_CLICKABLE);
+            lv_obj_add_event_cb(wake_guard, wake_guard_event, LV_EVENT_PRESSED, NULL);
+        }
         set_output_brightness(0);
         lv_timer_pause(clock_animation_timer);
     }
@@ -239,22 +256,12 @@ static void app_launcher_event(lv_event_t *event) {
     if (chronvs_app_open("apps")) animate_menu(false);
 }
 
-static void style_button(lv_obj_t *button) {
-    lv_obj_set_style_bg_color(button, lv_color_hex(COLOR_PANEL_EDGE), 0);
-    lv_obj_set_style_bg_opa(button, LV_OPA_COVER, 0);
-    lv_obj_set_style_radius(button, 24, 0);
-    lv_obj_set_style_border_color(button, lv_color_hex(COLOR_TEXT_DIM), 0);
-    lv_obj_set_style_border_width(button, 1, 0);
-    lv_obj_set_style_shadow_width(button, 0, 0);
-}
-
 static lv_obj_t *create_round_slot(lv_obj_t *parent, int16_t x, int16_t y,
                                    bool enabled) {
     lv_obj_t *button = lv_btn_create(parent);
-    lv_obj_set_size(button, 70, 70);
+    chronvs_ui_style_control(button, !enabled);
+    lv_obj_set_size(button, CHRONVS_UI_CIRCLE_SIZE, CHRONVS_UI_CIRCLE_SIZE);
     lv_obj_align(button, LV_ALIGN_CENTER, x, y);
-    style_button(button);
-    lv_obj_set_style_radius(button, LV_RADIUS_CIRCLE, 0);
 
     if (!enabled) {
         lv_obj_clear_flag(button, LV_OBJ_FLAG_CLICKABLE);
@@ -409,12 +416,7 @@ static void create_quick_settings(void) {
     lv_arc_set_range(brightness_arc, 10, 100);
     lv_arc_set_bg_angles(brightness_arc, 135, 45);
     lv_arc_set_value(brightness_arc, selected_brightness);
-    lv_obj_set_style_arc_color(brightness_arc, lv_color_hex(COLOR_PANEL_EDGE), LV_PART_MAIN);
-    lv_obj_set_style_arc_width(brightness_arc, 14, LV_PART_MAIN);
-    lv_obj_set_style_arc_color(brightness_arc, lv_color_hex(COLOR_ACCENT), LV_PART_INDICATOR);
-    lv_obj_set_style_arc_width(brightness_arc, 14, LV_PART_INDICATOR);
-    lv_obj_set_style_bg_color(brightness_arc, lv_color_hex(COLOR_TEXT), LV_PART_KNOB);
-    lv_obj_set_style_pad_all(brightness_arc, 7, LV_PART_KNOB);
+    chronvs_ui_style_arc(brightness_arc);
     lv_obj_add_event_cb(brightness_arc, brightness_event, LV_EVENT_ALL, NULL);
 
     brightness_label = lv_label_create(settings_panel);
@@ -423,7 +425,8 @@ static void create_quick_settings(void) {
     lv_obj_align(brightness_label, LV_ALIGN_TOP_MID, 0, 48);
     update_brightness_label();
 
-    profile_button = create_round_slot(settings_panel, -45, -75, true);
+    profile_button = create_round_slot(settings_panel, chronvs_ui_hex_offsets[0].x,
+                                        chronvs_ui_hex_offsets[0].y - 72, true);
     lv_obj_add_flag(profile_button, LV_OBJ_FLAG_EVENT_BUBBLE);
     lv_obj_add_event_cb(profile_button, profile_event, LV_EVENT_CLICKED, NULL);
 
@@ -433,7 +436,8 @@ static void create_quick_settings(void) {
     lv_obj_set_style_text_color(profile_label, lv_color_hex(COLOR_TEXT), 0);
     lv_obj_center(profile_label);
 
-    battery_button = create_round_slot(settings_panel, 45, -75, true);
+    battery_button = create_round_slot(settings_panel, chronvs_ui_hex_offsets[1].x,
+                                        chronvs_ui_hex_offsets[1].y - 72, true);
     lv_obj_add_flag(battery_button, LV_OBJ_FLAG_EVENT_BUBBLE);
     lv_obj_add_event_cb(battery_button, eco_event, LV_EVENT_CLICKED, NULL);
 
@@ -450,7 +454,8 @@ static void create_quick_settings(void) {
     update_battery_eco_button();
     update_brightness_control();
 
-    app_launcher_button = create_round_slot(settings_panel, 0, 5, true);
+    app_launcher_button = create_round_slot(settings_panel, chronvs_ui_hex_offsets[3].x,
+                                             chronvs_ui_hex_offsets[3].y - 72, true);
     lv_obj_add_flag(app_launcher_button, LV_OBJ_FLAG_EVENT_BUBBLE);
     lv_obj_add_event_cb(app_launcher_button, app_launcher_event, LV_EVENT_CLICKED, NULL);
     lv_obj_t *app_launcher_label = lv_label_create(app_launcher_button);
@@ -459,16 +464,13 @@ static void create_quick_settings(void) {
     lv_obj_set_style_text_color(app_launcher_label, lv_color_hex(COLOR_TEXT), 0);
     lv_obj_center(app_launcher_label);
 
-    static const int16_t placeholder_positions[][2] = {
-        {-78, 5}, {78, 5},
-        {-45, 85}, {45, 85},
-    };
+    static const uint8_t placeholder_indices[] = {2, 4, 5, 6};
     for (size_t index = 0;
-         index < sizeof(placeholder_positions) / sizeof(placeholder_positions[0]);
+         index < sizeof(placeholder_indices) / sizeof(placeholder_indices[0]);
          ++index) {
         create_round_slot(settings_panel,
-                          placeholder_positions[index][0],
-                          placeholder_positions[index][1], false);
+                          chronvs_ui_hex_offsets[placeholder_indices[index]].x,
+                          chronvs_ui_hex_offsets[placeholder_indices[index]].y - 72, false);
     }
 
     lv_obj_add_flag(settings_panel, LV_OBJ_FLAG_HIDDEN);

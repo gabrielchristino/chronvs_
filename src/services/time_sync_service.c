@@ -46,6 +46,17 @@ static const char *TAG = "time_sync";
 static EventGroupHandle_t wifi_events;
 static volatile bool connection_requested;
 static int connection_retries;
+static portMUX_TYPE update_lock = portMUX_INITIALIZER_UNLOCKED;
+static chronvs_time_t synchronized_time;
+static bool update_pending;
+
+bool chronvs_time_sync_take_update(chronvs_time_t *time) {
+    portENTER_CRITICAL(&update_lock);
+    bool pending = update_pending;
+    if (pending) { *time = synchronized_time; update_pending = false; }
+    portEXIT_CRITICAL(&update_lock);
+    return pending;
+}
 
 static uint8_t decimal_to_bcd(uint8_t value) {
     return (uint8_t)(((value / 10) << 4) | (value % 10));
@@ -152,6 +163,15 @@ static bool synchronize_once(void) {
                          local_time.tm_mday, local_time.tm_hour,
                          local_time.tm_min, local_time.tm_sec);
                 rtc_updated = true;
+                portENTER_CRITICAL(&update_lock);
+                synchronized_time = (chronvs_time_t){
+                    .year = (local_time.tm_year + 1900) % 100,
+                    .month = local_time.tm_mon + 1, .day = local_time.tm_mday,
+                    .weekday = local_time.tm_wday, .hour = local_time.tm_hour,
+                    .minute = local_time.tm_min, .second = local_time.tm_sec, .valid = true,
+                };
+                update_pending = true;
+                portEXIT_CRITICAL(&update_lock);
             }
             else {
                 ESP_LOGE(TAG, "Could not write PCF85063: %s", esp_err_to_name(result));

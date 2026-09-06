@@ -263,6 +263,33 @@ display_header_text = display_header_text.replace(
 with open(display_header, "w", encoding="utf-8", newline="") as header_file:
     header_file.write(display_header_text)
 
+# Keep flush_ready in the synchronous LVGL callback, but make draw_bitmap
+# actually finish its queued QSPI writes before returning. IDF 5.3.1's SPI
+# tx_param(-1, NULL, 0) drains pending color transactions without sending a
+# command. This also protects the vendor startup clear's buffer before free().
+# Set CHRONVS_QSPI_DRAIN=0 for an isolated comparison with the vendor behavior.
+panel_source = join(driver_dir, "LCD_Driver", "esp_lcd_spd2010", "esp_lcd_spd2010.c")
+with open(panel_source, "r", encoding="utf-8") as source_file:
+    panel_text = source_file.read()
+color_transfer = '    ESP_RETURN_ON_ERROR(tx_color(spd2010, io, LCD_CMD_RAMWR, color_data, len), TAG, "send color failed");'
+drain_transfer = color_transfer + '''
+    // Chronvs: finish queued pixel transfers before releasing their buffer.
+    ESP_RETURN_ON_ERROR(esp_lcd_panel_io_tx_param(io, -1, NULL, 0), TAG, "drain color failed");'''
+if drain_transfer in panel_text:
+    panel_text = panel_text.replace(drain_transfer, color_transfer)
+if panel_text.count(color_transfer) != 1:
+    raise RuntimeError("Could not locate SPD2010 pixel transfer for synchronous drain")
+if os.environ.get("CHRONVS_QSPI_DRAIN", "1") != "0":
+    panel_text = panel_text.replace(color_transfer, drain_transfer)
+    print("Chronvs: synchronous QSPI drain enabled (1/20 buffers, 2 KiB transfers)")
+else:
+    print("Chronvs: vendor QSPI completion behavior (diagnostic comparison)")
+with open(panel_source, "r", encoding="utf-8") as source_file:
+    original_panel_text = source_file.read()
+if panel_text != original_panel_text:
+    with open(panel_source, "w", encoding="utf-8", newline="") as source_file:
+        source_file.write(panel_text)
+
 env.Append(CPPPATH=[
     join(driver_dir, "I2C_Driver"),
     join(driver_dir, "EXIO"),

@@ -13,7 +13,8 @@ de renderização do painel.
 
 Além do mostrador, Aion reúne cronômetro, timer e alarmes. Mnemo oferece notas
 persistentes com teclado multi-tap e edição de texto na tela circular; seu
-layout compacto ainda precisa de validação de toque no dispositivo.
+layout compacto ainda precisa de validação de toque no dispositivo. A calculadora
+é um app nativo com operações básicas, precedência e parênteses.
 
 ## Estado validado
 

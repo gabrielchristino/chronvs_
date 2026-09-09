@@ -385,3 +385,39 @@ tocada. O script de build aplica debounce no limite LVGL: um contato precisa
 aparecer em duas amostras consecutivas, permanecer próximo e ter intensidade
 válida. A liberação é imediata. Isso evita acordar a tela, alternar brilho ou
 abrir painéis sem interação real.
+
+## Calculadora
+
+A calculadora nativa reúne tudo em uma tela, sem título. O visor ocupa
+240 px de largura, centralizado em x=206, y=44, com texto alinhado à direita.
+O teclado é uma exceção explícita ao padrão de atalhos: 20 teclas circulares
+de 54 px. Números e operadores ficam em 4 colunas × 4 linhas, com centros
+x=113/175/237/299 e y=175/233/291/349. As laterais têm dois controles cada:
+`C` e `(` em x=51, `DEL` e `)` em x=361, ambos em y=175/233.
+O intervalo é de 8 px na horizontal e 4 px na vertical; todas as teclas cabem
+inteiramente no recorte circular, sem sobrepor áreas de toque. A antiga linha
+de comandos acima do teclado fica livre, dando mais espaço ao visor.
+
+```text
+ C    7   8   9   /    DEL
+ (    4   5   6   x     )
+      1   2   3   -
+      0   .   =   +
+```
+
+`C` limpa a expressão, `DEL` apaga o último caractere e `=` usa destaque
+amarelo. O ícone segue o padrão vetorial dos apps nativos: contorno amarelo
+de 2 px, fundo transparente, visor e teclas claros, corpo de 28 × 36 px como
+o Mnemo. O desenho é feito diretamente no
+contêiner de 44 px para evitar deslocamentos causados por bordas de filhos.
+
+Arrastar mais de 80 px para a direita, com predominância horizontal de 20 px,
+volta diretamente ao launcher. O gesto vale no conteúdo e em todas as
+teclas, consome a liberação e não exige botão Voltar. A tela vincula sua árvore
+a `ui/app_input.h` uma única vez. Toques e contatos prolongados reiniciam a
+inatividade; cálculos não contam como atividade. O primeiro toque com o
+backlight apagado continua reservado ao despertar. Não há animações em repouso.
+
+A entrada aceita até 64 caracteres. A avaliação respeita precedência de
+multiplicação e divisão, parênteses e sinal unário. Resultados usam até 12
+algarismos significativos; erros preservam a expressão para correção com `DEL`.

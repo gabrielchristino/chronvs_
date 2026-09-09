@@ -73,7 +73,20 @@ lista curva, com ícone à esquerda e nome ao lado, e pode ser aberto com
 
 `watch` e `apps` são apps internos de navegação e usam
 `.launcher_visible = false`; portanto, não aparecem na própria lista. Os apps
-instaláveis usam `.launcher_visible = true` e entram na lista automaticamente.
+destinados ao launcher usam `.launcher_visible = true` e entram na lista automaticamente.
+
+Calculadora, Aion e Mnemo são apps nativos registrados individualmente com
+`CHRONVS_REGISTER_APP`. A calculadora mantém sua avaliação aritmética em
+`core/calculator.c` e sua interface em `apps/calculator_app.c`.
+
+A calculadora é compilada junto ao firmware e funciona sem cartão. Não há
+carregador, instalador ou interpretador de apps externos. A tela é criada na
+primeira abertura e reutilizada; cada abertura inicia uma expressão vazia.
+O layout e o ícone foram validados no relógio antes da migração para app nativo.
+Após a migração, passaram os testes de aritmética e integração LVGL (toques,
+energia, parênteses e exclusão), a compilação e a gravação com hashes verificados.
+Os testes estão em `tests/run_calculator_tests.ps1` e
+`tests/run_aion_ui.ps1 -System`. O firmware não acessa os antigos arquivos no SD.
 
 - No mostrador, arrastar para cima revela a lista de apps sobre o mostrador e
   acompanha o dedo desde a borda inferior durante o gesto.

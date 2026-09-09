@@ -44,6 +44,14 @@ static lv_obj_t *find_textarea(lv_obj_t *tree) {
     }
     return NULL;
 }
+static lv_obj_t *find_label_text(lv_obj_t *tree, const char *text) {
+    if (lv_obj_check_type(tree, &lv_label_class) && !strcmp(lv_label_get_text(tree), text)) return tree;
+    for (unsigned i = 0; i < lv_obj_get_child_cnt(tree); ++i) {
+        lv_obj_t *found = find_label_text(lv_obj_get_child(tree, i), text);
+        if (found) return found;
+    }
+    return NULL;
+}
 
 void *heap_caps_calloc(size_t count, size_t size, unsigned caps) {
     assert(caps == (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
@@ -136,6 +144,32 @@ int main(void) {
     lv_mem_monitor_t memory; lv_mem_monitor(&memory);
     assert(memory.free_biggest_size > 16384);
     printf("All apps retained: %u bytes of LVGL heap free.\n", (unsigned)memory.free_size);
+    assert(chronvs_app_open("apps"));
+    assert(chronvs_app_open("calculator"));
+    lv_obj_t *calculator = lv_obj_get_child(chronvs_app_content_layer(), -1);
+    lv_obj_t *calculator_display = lv_obj_get_child(calculator, 0);
+    assert(find_label_text(calculator, "DEL") &&
+           lv_obj_check_type(calculator_display, &lv_label_class) &&
+           !strcmp(lv_label_get_text(calculator_display), "0"));
+    capture("17-calculator-integrated");
+    /* ECO applies to the calculator too; waking consumes the first key. */
+    elapse(16000); assert(LCD_Backlight == 0);
+    tap(113,175); assert(LCD_Backlight == 35);
+    assert(!strcmp(lv_label_get_text(calculator_display), "0"));
+    capture("18-calculator-awake");
+    tap(113,175); assert(!strcmp(lv_label_get_text(calculator_display), "7"));
+    tap(51,175); assert(!strcmp(lv_label_get_text(calculator_display), "0"));
+    tap(51,233); tap(113,291); tap(299,349); tap(175,291); tap(361,233);
+    assert(!strcmp(lv_label_get_text(calculator_display), "(1+2)"));
+    tap(237,349); assert(!strcmp(lv_label_get_text(calculator_display), "3"));
+    tap(361,175); assert(!strcmp(lv_label_get_text(calculator_display), "0"));
+    touch(113,175,LV_INDEV_STATE_PR);
+    for (unsigned i = 0; i < 20; ++i) { elapse(1000); assert(LCD_Backlight == 35); }
+    touch(113,175,LV_INDEV_STATE_REL);
+    assert(chronvs_app_open("apps"));
+    assert(chronvs_app_open("aion"));
+    assert(chronvs_app_open("mnemo"));
+    lv_mem_monitor(&memory); assert(memory.free_biggest_size > 16384);
     puts("System UI passed: controls, Mnemo typing/hold, AUTO/ECO inactivity and wake-only touch.");
     return 0;
 }

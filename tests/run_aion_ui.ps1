@@ -16,8 +16,9 @@ try {
             else { $_ }
         }
         $arguments += @('src/apps/watch_app.c','src/apps/app_list_app.c','src/apps/app_catalog.c',
-            'src/apps/aion_app.c','src/apps/aion_pages.c','src/core/app_manager.c','src/ui/system_ui.c',
+            'src/apps/aion_app.c','src/apps/aion_pages.c','src/apps/calculator_app.c','src/core/calculator.c','src/core/app_manager.c','src/ui/system_ui.c',
             'src/apps/mnemo_app.c','src/core/mnemo_text.c','src/services/mnemo_service.c','src/ui/mnemo_font.c','src/ui/app_input.c')
+        $arguments += @('-lm')
     }
     # GCC response file avoids the Windows command-line length limit.
     ($arguments | ForEach-Object { '"' + $_.Replace('\','/') + '"' }) | Set-Content '.pio/host-tests/ui-compile.rsp'

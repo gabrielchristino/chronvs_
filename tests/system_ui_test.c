@@ -109,6 +109,42 @@ int main(void) {
     assert(circles==7);
     lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);
     assert(chronvs_app_open("apps"));capture("14-app-list");
+    lv_obj_t *launcher = lv_obj_get_child(chronvs_app_content_layer(), -1);
+    lv_obj_t *app_list = lv_obj_get_child(launcher, 0);
+    assert(lv_obj_get_child_cnt(app_list) == 3);
+    lv_obj_t *first_row = lv_obj_get_child(app_list, 0);
+    lv_obj_t *middle_row = lv_obj_get_child(app_list, 1);
+    assert(lv_obj_get_style_translate_x(first_row, 0) >
+           lv_obj_get_style_translate_x(middle_row, 0));
+    lv_obj_scroll_to_y(app_list, 0, LV_ANIM_OFF); elapse(70);
+    int centered_x = lv_obj_get_style_translate_x(first_row, 0);
+    lv_obj_scroll_to_y(app_list, 82, LV_ANIM_OFF); elapse(70);
+    assert(lv_obj_get_style_translate_x(first_row, 0) > centered_x);
+    capture("19-launcher-arc");
+    /* A vertical drag on an app scrolls the arc without launching on release. */
+    touch(150,206,LV_INDEV_STATE_PR);
+    touch(150,170,LV_INDEV_STATE_PR);
+    touch(150,120,LV_INDEV_STATE_PR);
+    touch(150,120,LV_INDEV_STATE_REL); elapse(500);
+    assert(!strcmp(chronvs_app_active_id(), "apps"));
+    assert(lv_obj_get_scroll_y(app_list) > 82);
+    capture("20-launcher-scrolled");
+    lv_obj_scroll_to_y(app_list, 0, LV_ANIM_OFF); elapse(100);
+    const char *first_id = NULL;
+    for (size_t i = 0; i < chronvs_app_count(); ++i) {
+        if (chronvs_app_at(i)->launcher_visible) { first_id = chronvs_app_at(i)->id; break; }
+    }
+    assert(first_id);
+    tap(40,206); assert(!strcmp(chronvs_app_active_id(), first_id)); /* Icon. */
+    assert(chronvs_app_open("apps")); elapse(70);
+    tap(150,206); assert(!strcmp(chronvs_app_active_id(), first_id)); /* Name. */
+    assert(chronvs_app_open("apps")); elapse(70);
+    touch(206,30,LV_INDEV_STATE_PR); touch(206,80,LV_INDEV_STATE_PR);
+    touch(206,80,LV_INDEV_STATE_REL); elapse(70);
+    assert(!strcmp(chronvs_app_active_id(), "apps") && lv_obj_get_y(launcher) == 0);
+    touch(206,30,LV_INDEV_STATE_PR); touch(206,90,LV_INDEV_STATE_PR);
+    touch(206,170,LV_INDEV_STATE_PR); touch(206,170,LV_INDEV_STATE_REL); elapse(70);
+    assert(!strcmp(chronvs_app_active_id(), "watch"));
     assert(chronvs_app_open("aion"));
     assert(chronvs_app_open("mnemo"));capture("15-mnemo-integrated");
     tap(206,341); /* Nova nota. */

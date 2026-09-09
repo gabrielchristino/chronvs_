@@ -68,6 +68,9 @@ CHRONVS_REGISTER_APP(chronvs_timer_app)
 O catálogo registra todos os apps durante o boot. O app `apps` fornece uma
 lista curva, com ícone à esquerda e nome ao lado, e pode ser aberto com
 `chronvs_app_open("apps")`.
+Durante a rolagem vertical, a posição horizontal de cada linha acompanha
+um arco calculado a partir da sua altura visível. A geometria e os gestos
+estão em [`interface.md`](interface.md#lista-de-apps-em-arco).
 
 ## Navegação e apps instalados
 

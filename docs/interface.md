@@ -64,7 +64,7 @@ launcher, cronômetro, timer, lista/criação/detalhe de alarmes e os dois aviso
 | Ação isolada: Criar, Excluir, Cancelar, Parar | Pílula de 140 × 54 px. |
 | Duas ações: Iniciar/Zerar, Voltar/Proximo, +5 min/Parar | Duas pílulas de 120 × 54 px, com 12 px entre elas. |
 | Novo alarme | Pílula de 180 × 54 px para comportar o rótulo. |
-| Linhas de lista | Pílulas largas, com 56 px nos alarmes e 64 px no launcher para comportar o ícone de 44 px. |
+| Linhas de lista | Pílulas de 56 px nos alarmes. No launcher, linhas transparentes de 64 px com ícone de 44 px em disco de 60 px. |
 
 Botões usam Montserrat 18 e caixa normal. Títulos de apps e avisos usam
 Montserrat 24, amarelo, a 34 px do topo. Valores de tempo usam Montserrat 48;
@@ -385,6 +385,30 @@ tocada. O script de build aplica debounce no limite LVGL: um contato precisa
 aparecer em duas amostras consecutivas, permanecer próximo e ter intensidade
 válida. A liberação é imediata. Isso evita acordar a tela, alternar brilho ou
 abrir painéis sem interação real.
+
+## Lista de apps em arco
+
+O launcher mostra ícone e nome diretamente sobre o fundo, sem título fixo.
+As linhas têm 64 px de altura e centros separados por 82 px. O centro dos
+ícones acompanha o lado esquerdo de um arco de raio 166 px, centrado em
+(206, 206): mais à esquerda no meio da tela e mais à direita nas extremidades.
+A opacidade diminui nos últimos 48 px antes do limite vertical de 178 px.
+
+Arrastar verticalmente no conteúdo rola a lista com inércia; os deslocamentos
+horizontais são recalculados no máximo a cada 20 ms, apenas quando há mudança
+e a tela está acesa. O primeiro e o último item podem alcançar o centro.
+A primeira abertura centraliza o conjunto; reaberturas preservam a rolagem.
+Ícone e nome abrem o mesmo app, e um arraste não gera clique na liberação.
+Os 60 px superiores continuam reservados para puxar o launcher para baixo:
+120 px confirmam o retorno ao relógio; movimentos menores cancelam.
+Contatos reiniciam a inatividade; a animação de rolagem não conta como atividade.
+
+Verificação: `tests/run_aion_ui.ps1 -System` cobre deslocamento pelo arco,
+rolagem por toque sem abertura acidental, abertura por ícone/nome e fechamento
+confirmado/cancelado. Build e gravação passaram. O usuário confirmou no relógio
+que a lista em arco ficou correta, aprovando o comportamento visual e a interação.
+As capturas ficam em `.pio/host-tests/19-launcher-arc.bmp`
+e `.pio/host-tests/20-launcher-scrolled.bmp`.
 
 ## Calculadora
 

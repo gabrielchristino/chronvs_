@@ -10,7 +10,8 @@ lv_scr_act()
 ├── content_layer                 apps ativos e prévias de navegação
 │   ├── watch                     mostrador
 │   ├── apps                      lista de aplicativos
-│   └── aion                      cronômetro, timer e alarmes
+│   ├── aion                      cronômetro, timer e alarmes
+│   └── mnemo                     notas, editor e teclado multi-tap
 └── settings_panel                painel global de acessos rápidos
 
 lv_layer_top()
@@ -36,6 +37,16 @@ disponível sobre o mostrador sem pertencer a um app.
 | Aion: cronômetro / timer | Arrastar 80 px para cima | Avança para timer / alarmes. |
 | Aion: timer / alarmes | Arrastar 80 px para baixo | Retorna para cronômetro / timer. Pode começar no meio da tela ou sobre uma linha de alarme quando a lista está no topo. Se estiver rolada, o gesto dentro da lista apenas rola o conteúdo; um novo arraste no topo retorna ao timer. Fora da lista, o retorno é direto. |
 | Aion: criação / detalhe de alarme | Arrastar 80 px para a direita | Volta à etapa anterior / lista de alarmes. Os arcos recebem o toque exclusivamente para selecionar o valor. |
+| Mnemo: lista | Arrastar para a direita | Volta ao launcher, inclusive iniciando sobre uma linha. |
+| Mnemo: editor / leitura | Arrastar para a direita | Salva e volta à lista de notas, inclusive sobre texto e teclado. Falha de gravação mantém o editor aberto. |
+| Mnemo: confirmação de exclusão | Arrastar para a direita | Cancela a confirmação. |
+
+Todo novo app deve adotar o retorno da esquerda para a direita do Aion, sem
+botão Voltar no topo. O gesto confirma com deslocamento horizontal maior que
+80 px e maior que o deslocamento vertical absoluto mais 20 px. Ao confirmar,
+consome o contato até soltar, evitando acionar o controle sob o dedo. A tela
+inicial volta ao launcher; subetapas retornam à anterior e confirmações são
+canceladas. Exceções para controles com arraste próprio devem ser explícitas.
 
 Os movimentos visuais são limitados a uma atualização a cada 20 ms. Isso evita
 invalidar a árvore LVGL em cada amostra do touch e mantém o painel próximo ao
@@ -60,6 +71,45 @@ Montserrat 24, amarelo, a 34 px do topo. Valores de tempo usam Montserrat 48;
 legendas e estados compactos, Montserrat 12. Os valores dos atalhos podem
 usar 18/24 conforme seu conteúdo. O mostrador mantém sua composição vetorial:
 submostradores redondos são instrumentos de leitura, não botões de ação.
+
+O teclado do Mnemo tem **20 círculos de 44 px em 6–6–5–3**, abaixo do texto,
+em um contêiner de 304 × 188 px em (54, 204). As linhas começam em y=204,
+252, 300 e 348, com 52 px entre centros na horizontal e linhas centradas
+em x=206. Essa é uma exceção específica ao tamanho dos atalhos. As 13 teclas
+de letras contêm duas letras-base cada, com acentos nos grupos correspondentes;
+os grupos de gh a yz contêm, também, os números de 1 a 9 e 0.
+Os grupos estão em `docs/apps.md`; o multi-tap confirma após 800 ms.
+Maiúsculas só aparecem com Shift, acionado por toque em tecla própria. O estado
+amarelo e os rótulos maiúsculos persistem durante a composição da próxima letra.
+
+O editor usa uma área de texto de 280 × 112 px em (66, 82), Montserrat 18 com
+suplemento de acentos e linhas de 25 px, mostrando cerca de quatro linhas. O
+contador mostra até 512 caracteres e o estado de salvamento. O botão com ícone
+de teclado em (90, 42), de 36 × 36 px, alterna leitura, ampliando o texto para
+218 px de altura. Apagar, nova linha e espaço ficam nas duas últimas linhas
+do teclado. `#+=` troca as 13 teclas de letras por grupos de símbolos; `abc`
+restaura as letras. As ações compactas fazem parte do editor; ações textuais
+continuam com as pílulas padrão de 54 px.
+
+Tocar o texto reposiciona o cursor com as métricas da fonte e a rolagem atual.
+Arrastar verticalmente rola sem mudar o cursor; arrastes horizontais não movem
+o cursor, e o arraste para a direita confirma o retorno. Inserir/apagar acompanha o cursor sem animação de
+rolagem. O caractere ainda em composição fica sublinhado e o cursor amarelo
+pisca a cada 500 ms, somente com app e tela ativos. Segurar apagar repete a
+exclusão antes do cursor.
+
+Não há botão Voltar no topo. O botão de lixeira em (286, 42), de 36 × 36 px,
+abre confirmação com
+Cancelar/Excluir em pílulas de 120 × 54 px. Na lista, linhas de 280 × 56 px
+mostram a primeira linha das notas mais recentes; Nova nota usa 180 × 54 px
+em y=314 e fica desabilitado ao atingir 12 notas. O primeiro toque com a tela
+apagada continua reservado ao despertar pela camada global.
+
+Toques, arrastes e contatos prolongados no Mnemo reiniciam o prazo global de
+inatividade, incluindo lista, editor, teclado e diálogos. Sem contato, os
+perfis normais e ECO continuam reduzindo e apagando a iluminação. Animação do
+cursor e salvamento automático não prolongam o prazo. Novos apps devem manter
+esse contrato usando o tratamento compartilhado de `ui/app_input.h`.
 
 Arcos de brilho, hora e minuto usam a mesma espessura de 14 px, trilha
 cinza-esverdeada, indicador amarelo e alça clara. Seus raios e limites variam
@@ -303,6 +353,16 @@ Deixe-o desativado no firmware normal para preservar a política de tela apagada
 Referência: [otimização de velocidade do ESP-IDF 5.3.1](https://docs.espressif.com/projects/esp-idf/en/v5.3.1/esp32s3/api-guides/performance/speed.html).
 
 ### Configurações que não devem ser reintroduzidas
+
+Após a inclusão do Mnemo, foram relatadas listras novamente já no boot, antes
+de abrir o app. Como teste isolado, a opção global `LV_LABEL_TEXT_SELECTION`
+foi restaurada ao padrão anterior; o destaque da composição passou a ser um
+sublinhado local do editor. Buffers, QSPI, caches e espera síncrona foram
+preservados. O teste no relógio não eliminou as listras, portanto essa opção
+não foi confirmada como causa. A revisão seguinte moveu o cache das notas
+(12.384 bytes) da RAM interna estática para alocação tardia na PSRAM, liberando
+memória interna antes de inicializar display e Wi-Fi. Essa hipótese de pressão
+de memória ainda precisa de validação física; o protocolo QSPI permanece igual.
 
 Foram testadas no hardware e apresentaram falhas:
 

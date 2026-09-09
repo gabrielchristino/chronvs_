@@ -47,7 +47,17 @@ Preserve estes contratos, salvo pedido explícito do usuário:
 - Painel rápido: arrastar para cima fecha, inclusive quando iniciado no arco
   de brilho.
 - Lista de apps: tocar abre um item; arrastar para a direita volta ao relógio.
-- Apps devem permitir retorno coerente à lista ou ao relógio.
+- Todo novo app deve voltar por arraste da esquerda para a direita, como o
+  Aion: mais de 80 px, com deslocamento horizontal maior que o vertical
+  absoluto mais 20 px. Na tela inicial, volta ao launcher; em subetapas,
+  volta à etapa anterior; em confirmações, cancela. Não use botão Voltar no
+  topo. Consuma o contato ao reconhecer o gesto para evitar clique ao soltar.
+- O gesto deve funcionar no conteúdo e nos controles; exceções para controles
+  que exigem arraste próprio devem ser documentadas. No Mnemo, toque posiciona
+  o cursor, arraste vertical rola e arraste para a direita volta.
+- Todo app deve registrar atividade real durante toques e contatos prolongados
+  para reiniciar a inatividade. Use `ui/app_input.h` nos novos apps, vinculando
+  cada nova subárvore uma única vez. Timers visuais não contam como interação.
 - O primeiro toque com backlight apagado somente acorda a tela.
 
 Os limites de gesto, layout e paleta estão documentados em

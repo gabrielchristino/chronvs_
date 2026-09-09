@@ -10,10 +10,11 @@ static bool fail_save;
 int64_t esp_timer_get_time(void) { return now_us; }
 int nvs_open(const char *name, int mode, nvs_handle_t *handle) { (void)name; (void)mode; *handle = 1; return 0; }
 int nvs_get_blob(nvs_handle_t h, const char *k, void *out, size_t *size) {
-    (void)h; (void)k; assert(*size == sizeof(persisted)); memcpy(out, persisted, *size); return 0;
+    (void)h; if (strcmp(k, "alarms_v1")) return -1;
+    assert(*size == sizeof(persisted)); memcpy(out, persisted, *size); return 0;
 }
 int nvs_set_blob(nvs_handle_t h, const char *k, const void *in, size_t size) {
-    (void)h; (void)k;
+    (void)h; assert(!strcmp(k, "alarms_v1") && size == sizeof(persisted));
     if (fail_save) return -1;
     memcpy(persisted, in, size); return 0;
 }

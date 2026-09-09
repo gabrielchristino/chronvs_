@@ -11,6 +11,10 @@ o mostrador vive em `src/apps/watch_app.c` como o primeiro app. Consulte
 [`docs/interface.md`](docs/interface.md) para a navegação, energia e limites
 de renderização do painel.
 
+Além do mostrador, Aion reúne cronômetro, timer e alarmes. Mnemo oferece notas
+persistentes com teclado multi-tap e edição de texto na tela circular; seu
+layout compacto ainda precisa de validação de toque no dispositivo.
+
 ## Estado validado
 
 - Compilação com PlatformIO `espressif32 @ 6.9.0` e ESP-IDF 5.3.1.

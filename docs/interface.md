@@ -11,7 +11,9 @@ lv_scr_act()
 │   ├── watch                     mostrador
 │   ├── apps                      lista de aplicativos
 │   ├── aion                      cronômetro, timer e alarmes
-│   └── mnemo                     notas, editor e teclado multi-tap
+│   ├── mnemo                     notas, editor e teclado multi-tap
+│   ├── calculator                calculadora
+│   └── weather                   clima de São Paulo
 └── settings_panel                painel global de acessos rápidos
 
 lv_layer_top()
@@ -40,6 +42,7 @@ disponível sobre o mostrador sem pertencer a um app.
 | Mnemo: lista | Arrastar para a direita | Volta ao launcher, inclusive iniciando sobre uma linha. |
 | Mnemo: editor / leitura | Arrastar para a direita | Salva e volta à lista de notas, inclusive sobre texto e teclado. Falha de gravação mantém o editor aberto. |
 | Mnemo: confirmação de exclusão | Arrastar para a direita | Cancela a confirmação. |
+| Clima | Arrastar para a direita | Volta ao launcher, inclusive começando no ícone ou nos textos. |
 
 Todo novo app deve adotar o retorno da esquerda para a direita do Aion, sem
 botão Voltar no topo. O gesto confirma com deslocamento horizontal maior que
@@ -310,7 +313,8 @@ driver não podem ser copiados diretamente.
 - O script `scripts/add_waveshare_drivers.py` reaplica essas escolhas ao
   exemplo da Waveshare antes de cada build. Não edite apenas a cópia em
   `.vendor-reference/`, pois o script é a fonte persistente da configuração.
-- Wi-Fi só é usado na sincronização NTP e é desligado após a tentativa. Apps
+- Wi-Fi é usado pelo NTP e por uma consulta ao abrir Clima, em sessões
+  exclusivas; o rádio é desligado ao encerrar cada sessão. Apps
   devem pausar timers em `on_hide` quando não forem necessários; `Aion` já faz
   isso para seu timer de interface.
 - O desenho vetorial do mostrador recorta as regiões cobertas por superfícies
@@ -364,6 +368,19 @@ Deixe-o desativado no firmware normal para preservar a política de tela apagada
 Referência: [otimização de velocidade do ESP-IDF 5.3.1](https://docs.espressif.com/projects/esp-idf/en/v5.3.1/esp32s3/api-guides/performance/speed.html).
 
 ### Configurações que não devem ser reintroduzidas
+
+O heap de objetos LVGL deve permanecer com **128 KiB em PSRAM**, via
+`LV_MEM_POOL_ALLOC` e `platform/lvgl_memory.c`, mantendo TLSF e uma única
+reserva reutilizável. Não confundir esse pool com os dois buffers de pixels
+`1/20`. Ao abrir Clima com o pool estático na RAM interna, o SPI falhava antes
+da rede e o TLS falhava por falta de memória. A mudança liberou 128 KiB internos;
+o usuário confirmou dados e ausência de listras, inclusive sem atraso de rede.
+
+Antes de acrescentar HTTPS, tarefas ou grandes caches, confira memória interna
+livre e maior bloco DMA durante a operação. O percentual de RAM no build não
+mostra essa pressão. Preserve as correções QSPI e use fases/logs para diagnosticar;
+um sintoma visual semelhante não comprova a mesma causa. A investigação e as
+regras de prevenção estão em [`weather.md`](weather.md#dificuldades-soluções-e-prevenção).
 
 Após a inclusão do Mnemo, foram relatadas listras novamente já no boot, antes
 de abrir o app. Como teste isolado, a opção global `LV_LABEL_TEXT_SELECTION`
@@ -432,6 +449,49 @@ confirmado/cancelado. Build e gravação passaram. O usuário confirmou no reló
 que a lista em arco ficou correta, aprovando o comportamento visual e a interação.
 As capturas ficam em `.pio/host-tests/19-launcher-arc.bmp`
 e `.pio/host-tests/20-launcher-scrolled.bmp`.
+
+## Clima
+
+Clima abre numa tela única: título `CLIMA` em Montserrat 24 amarelo a y=34,
+localização `São Paulo` a y=68 e ícone vetorial em área de 56 × 48 px a y=99.
+A temperatura usa Montserrat 48 a y=151. Condição, sensação, umidade e
+mínima/máxima ocupam y=210/241/266/291. Os textos de 18 px usam o complemento
+de acentos já presente no Mnemo. Não há botões nem animação de carregamento.
+
+A idade fica a y=324 e o estado a y=349: `Atualizando...`, `Falha ao atualizar`
+com cache ou a causa resumida sem cache. Sem leitura válida, mostra `--°C` e
+`Sem dados`. A fonte dos dados, `Open-Meteo`, aparece em Montserrat 12 a y=380.
+As larguras variam de 140 a 300 px para caber no painel circular.
+
+Após relato de listras imediatamente ao abrir, um teste com atraso de 2 s
+mostrou falhas SPI antes da rede, pouca RAM interna livre e falha de alocação
+no TLS. A correção move o pool de objetos LVGL de 128 KiB para PSRAM, mantendo
+tamanho, TLSF, buffers de pixels e configuração QSPI. O usuário confirmou
+Clima sem listras e com dados. O atraso de diagnóstico foi retirado após essa
+confirmação; a consulta inicia normalmente ao abrir. O usuário também confirmou
+o funcionamento da versão final sem atraso, com dados e sem listras. O procedimento e os logs estão em
+[`weather.md`](weather.md#listras-ao-abrir--teste-de-isolamento).
+
+O cache permanece visível durante a consulta e após falhas. A idade parte do
+horário local da medição; inclui minutos, horas ou dias. Se o RTC estiver
+inválido ou anterior à medição, mostra `Horário indisponível`. Um timer de 250 ms
+aplica resultados e só altera textos quando mudam. A idade é revista na abertura,
+no resultado, ao despertar e a cada minuto com tela ativa. Com backlight apagado,
+não lê RTC nem altera objetos; `on_hide` pausa o timer. A consulta em andamento
+pode terminar e persistir sem acordar a tela.
+
+Arrastar mais de 80 px para a direita, com predominância horizontal de 20 px,
+volta ao launcher. A árvore inteira é vinculada uma vez a `ui/app_input.h`;
+o gesto consome o contato e toques prolongados registram atividade. A proteção
+global consome o primeiro contato com a tela apagada.
+
+`tests/run_weather_tests.ps1 -UI` cobre layout, cache, retorno sobre conteúdo
+e ícone, contatos prolongados, pausa ao sair/apagar e resultados tardios.
+`tests/run_aion_ui.ps1 -System` inclui Clima no launcher, no orçamento LVGL e
+no teste do primeiro arraste após despertar. A renderização simulada foi
+inspecionada; a consulta real e a memória durante TLS foram observadas no relógio.
+Consumo, fluidez e picos de memória em outros cenários ainda exigem medição no
+dispositivo. Os parâmetros do SPD2010 foram preservados.
 
 ## Calculadora
 

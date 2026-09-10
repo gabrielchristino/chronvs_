@@ -80,6 +80,10 @@ firmware:
 
 - LVGL deve ficar com `LV_DISP_DEF_REFR_PERIOD = 20` ms.
 - O buffer LVGL é duplo, em PSRAM, e deve ter `1/20` da tela.
+- O heap de **objetos** LVGL deve permanecer com 128 KiB em PSRAM, via
+  `LV_MEM_POOL_ALLOC` e `platform/lvgl_memory.c`, mantendo TLSF. Não restaure
+  o array estático na RAM interna. Esse pool é separado dos buffers de pixels;
+  movê-lo resolveu as falhas SPI/TLS e listras do Clima no relógio.
 - A transferência QSPI deve permanecer em 2 KiB.
 - Preserve a espera síncrona da fila QSPI antes de `draw_bitmap` retornar,
   aplicada por `scripts/add_waveshare_drivers.py`. Ela eliminou as listras
@@ -97,6 +101,27 @@ As correções persistentes são aplicadas por
 `scripts/add_waveshare_drivers.py`; edite esse script, não apenas a cópia do
 driver. O script também preserva a limpeza inicial preta do GRAM e o debounce
 contra toques espúrios.
+
+### Memória e diagnóstico de listras
+
+- Não atribua listras automaticamente à concorrência entre LVGL, Wi-Fi ou
+  áudio. No áudio, a espera síncrona QSPI resolveu o problema; no Clima, os
+  logs mostraram falhas SPI **antes** da rede e falta de memória no TLS.
+- Antes de acrescentar tarefas, HTTPS ou caches grandes, considere RAM
+  interna livre e maior bloco DMA durante a operação, além da PSRAM. O
+  percentual de RAM do PlatformIO usa os 8 MB como denominador e não garante
+  espaço interno para DMA. Não use os valores de uma captura como limite seguro.
+- Prefira PSRAM para grandes reservas de dados que não exigem DMA ou acesso
+  com cache desligado. Não mova indiscriminadamente pilhas, buffers DMA ou
+  estruturas usadas por interrupções para PSRAM.
+- Em uma regressão, preserve o firmware, capture a serial com etapas e memória,
+  e altere uma variável por teste. Atrasos artificiais servem para isolamento;
+  retire-os e repita o fluxo original antes de declarar a correção validada.
+- Preserve a sessão Wi-Fi exclusiva de NTP/Clima e o acesso a LVGL somente
+  pela tarefa da interface. Build e mocks não substituem teste físico do painel.
+
+Consulte [`docs/weather.md`](docs/weather.md#dificuldades-soluções-e-prevenção)
+para os sintomas, os números observados, as soluções e os limites da validação.
 
 ## Build e verificação
 

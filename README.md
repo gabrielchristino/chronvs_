@@ -16,6 +16,13 @@ persistentes com teclado multi-tap e edição de texto na tela circular; seu
 layout e interação foram validados no dispositivo. A calculadora
 é um app nativo com operações básicas, precedência e parênteses.
 
+Clima mostra as condições de São Paulo pela Open-Meteo, com atualização ao ser
+aberto, cache persistente e fallback para a última leitura. Compartilha sessões
+Wi-Fi exclusivas com o NTP. Consulte [`docs/weather.md`](docs/weather.md) para
+o funcionamento, a correção de memória validada no dispositivo e os testes restantes.
+As [dificuldades e regras de prevenção](docs/weather.md#dificuldades-soluções-e-prevenção)
+registram o diagnóstico das listras e distinguem o heap de objetos dos buffers de pixels.
+
 ## Estado validado
 
 - Compilação com PlatformIO `espressif32 @ 6.9.0` e ESP-IDF 5.3.1.
@@ -95,7 +102,7 @@ A composição segue estas relações:
 - A temperatura ambiente usa uma escala provisória de −20 a 60 °C e pode ser atualizada por `chronvs_set_ambient_temperature()`.
 - Se o RTC não responder ou contiver valores inválidos, uma hora de demonstração mantém a interface animada e testável.
 
-As fontes Montserrat 12, 18, 24 e 48 estão habilitadas. O heap interno do LVGL foi ampliado para 128 KiB para comportar o mostrador e futuras extensões. A configuração `LV_COLOR_16_SWAP=1`, também presente no exemplo oficial, é obrigatória para o RGB565 transmitido ao SPD2010; sem ela, cores e pixels das fontes ficam corrompidos.
+As fontes Montserrat 12, 18, 24 e 48 estão habilitadas. O heap de objetos do LVGL tem 128 KiB em PSRAM, liberando RAM interna para DMA e rede. A configuração `LV_COLOR_16_SWAP=1`, também presente no exemplo oficial, é obrigatória para o RGB565 transmitido ao SPD2010; sem ela, cores e pixels das fontes ficam corrompidos.
 
 ## Sincronização de hora por Wi-Fi
 

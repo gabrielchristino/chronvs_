@@ -78,9 +78,36 @@ estão em [`interface.md`](interface.md#lista-de-apps-em-arco).
 `.launcher_visible = false`; portanto, não aparecem na própria lista. Os apps
 destinados ao launcher usam `.launcher_visible = true` e entram na lista automaticamente.
 
-Calculadora, Aion e Mnemo são apps nativos registrados individualmente com
+Calculadora, Aion, Mnemo e Clima são apps nativos registrados individualmente com
 `CHRONVS_REGISTER_APP`. A calculadora mantém sua avaliação aritmética em
 `core/calculator.c` e sua interface em `apps/calculator_app.c`.
+
+O app Clima está implementado em `apps/weather_app.c`; sua especificação e
+validação estão em [`weather.md`](weather.md). `on_show` restaura o cache e
+solicita uma consulta; reabrir durante uma consulta existente acompanha essa
+operação, sem enfileirar outra. `on_hide` pausa o timer visual. A tarefa de rede
+termina e salva o resultado mesmo fora da tela, sem acessar LVGL. A atualização
+fica pendente até a próxima leitura pela UI; não muda o app ativo.
+
+`services/weather_service.c` mantém cache NVS e uma caixa de resultado sob mutex.
+`services/weather_data.c` valida JSON, horário civil e códigos WMO sem acessar
+hardware. `services/wifi_session_service.c` centraliza rádio, credenciais e
+handlers; seu mutex é inicializado no boot antes da tarefa NTP. A inicialização
+da pilha de rede ocorre somente na primeira sessão. NTP e Clima adquirem a sessão
+exclusiva em suas tarefas e desligam o rádio antes de liberar a próxima operação.
+Apps não chamam APIs globais de Wi-Fi. Não há nova consulta periódica de clima.
+
+O diagnóstico de listras usou uma espera de 2 s antes da sessão Wi-Fi.
+Após corrigir a pressão de memória e confirmar a tela no relógio, o atraso
+foi retirado; os logs de memória nas etapas de rede/TLS foram mantidos.
+Consulte os resultados em [`weather.md`](weather.md).
+
+O pool de objetos LVGL tem 128 KiB em PSRAM, alocado uma vez por
+`platform/lvgl_memory.c` via `LV_MEM_POOL_ALLOC`. Mantém TLSF e reutiliza a
+reserva ao reinicializar LVGL. Essa mudança libera RAM interna após falhas de
+SPI e alocação TLS observadas ao abrir Clima; os buffers de desenho são separados
+e conservam os parâmetros validados. O usuário confirmou Clima sem listras e
+com dados; medições de fluidez e outros cenários permanecem testes separados.
 
 A calculadora é compilada junto ao firmware e funciona sem cartão. Não há
 carregador, instalador ou interpretador de apps externos. A tela é criada na

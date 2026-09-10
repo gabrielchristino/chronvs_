@@ -12,6 +12,7 @@
 #include "services/battery_service.h"
 #include "services/rtc_service.h"
 #include "services/time_sync_service.h"
+#include "services/wifi_session_service.h"
 #include "ui/system_ui.h"
 #include "services/aion_service.h"
 #include "ui/aion_alert.h"
@@ -30,6 +31,7 @@ void app_main(void) {
         ESP_LOGE(TAG, "Could not start the watch app");
     }
     chronvs_aion_init();
+    chronvs_wifi_session_init();
     chronvs_time_sync_start();
 
     TickType_t next_rtc_update = 0;

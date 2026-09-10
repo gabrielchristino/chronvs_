@@ -19,6 +19,10 @@ try {
             'src/apps/aion_app.c','src/apps/aion_pages.c','src/apps/calculator_app.c','src/core/calculator.c','src/core/app_manager.c','src/ui/system_ui.c',
             'src/apps/mnemo_app.c','src/core/mnemo_text.c','src/services/mnemo_service.c','src/ui/mnemo_font.c','src/ui/app_input.c')
         $arguments += @('-lm')
+        $jsonRoot = Join-Path $env:USERPROFILE '.platformio/packages/framework-espidf/components/json/cJSON'
+        $arguments += @('src/apps/weather_app.c','src/services/weather_data.c',"$jsonRoot/cJSON.c",'-I',$jsonRoot)
+        $arguments += @('src/platform/lvgl_memory.c','-DLV_MEM_POOL_ALLOC=chronvs_lvgl_pool_alloc',
+            '-include','src/platform/lvgl_memory.h')
     }
     # GCC response file avoids the Windows command-line length limit.
     ($arguments | ForEach-Object { '"' + $_.Replace('\','/') + '"' }) | Set-Content '.pio/host-tests/ui-compile.rsp'

@@ -10,6 +10,12 @@
 // The stock 48 KiB heap is enough for a few labels, but not for a dial with
 // rings, subdials and persistent tick objects.
 #define LV_MEM_SIZE (128U * 1024U)
+// Keep the TLSF arena and its size, but leave internal RAM available for DMA
+// and network tasks. These are object allocations, not pixel draw buffers.
+#ifdef ESP_PLATFORM
+#define LV_MEM_POOL_INCLUDE "platform/lvgl_memory.h"
+#define LV_MEM_POOL_ALLOC chronvs_lvgl_pool_alloc
+#endif
 // 50 FPS is the smooth, sustainable target for this QSPI display.  It gives
 // gesture updates enough time to finish without continuously queuing frames.
 #define LV_DISP_DEF_REFR_PERIOD 20

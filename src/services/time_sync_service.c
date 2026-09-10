@@ -1,4 +1,5 @@
 #include "services/time_sync_service.h"
+#include "services/wifi_session_service.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -7,45 +8,20 @@
 #include <time.h>
 
 #include "driver/i2c.h"
-#include "esp_check.h"
 #include "esp_err.h"
-#include "esp_event.h"
 #include "esp_log.h"
-#include "esp_netif.h"
 #include "esp_sntp.h"
-#include "esp_wifi.h"
 #include "freertos/FreeRTOS.h"
-#include "freertos/event_groups.h"
 #include "freertos/task.h"
-#include "nvs_flash.h"
 
 #include "I2C_Driver.h"
 
-#if __has_include("chronvs_secrets.h")
-#include "chronvs_secrets.h"
-#endif
-
-#ifndef CHRONVS_WIFI_SSID
-#define CHRONVS_WIFI_SSID ""
-#endif
-
-#ifndef CHRONVS_WIFI_PASSWORD
-#define CHRONVS_WIFI_PASSWORD ""
-#endif
-
-#define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAILED_BIT BIT1
-#define WIFI_MAX_RETRIES 5
-#define WIFI_CONNECT_TIMEOUT_MS 20000
 #define NTP_SYNC_TIMEOUT_MS 15000
 #define SYNC_PERIOD_MS (12 * 60 * 60 * 1000)
 #define PCF85063_ADDRESS 0x51
 #define PCF85063_TIME_REGISTER 0x04
 
 static const char *TAG = "time_sync";
-static EventGroupHandle_t wifi_events;
-static volatile bool connection_requested;
-static int connection_retries;
 static portMUX_TYPE update_lock = portMUX_INITIALIZER_UNLOCKED;
 static chronvs_time_t synchronized_time;
 static bool update_pending;
@@ -79,33 +55,6 @@ static esp_err_t write_rtc(const struct tm *local_time) {
                                       pdMS_TO_TICKS(250));
 }
 
-static void wifi_event_handler(void *argument, esp_event_base_t event_base,
-                               int32_t event_id, void *event_data) {
-    (void)argument;
-    (void)event_data;
-
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        if (connection_requested) esp_wifi_connect();
-    }
-    else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (!connection_requested) return;
-
-        if (connection_retries < WIFI_MAX_RETRIES) {
-            ++connection_retries;
-            ESP_LOGW(TAG, "Wi-Fi disconnected; retry %d/%d",
-                     connection_retries, WIFI_MAX_RETRIES);
-            esp_wifi_connect();
-        }
-        else {
-            xEventGroupSetBits(wifi_events, WIFI_FAILED_BIT);
-        }
-    }
-    else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        connection_retries = 0;
-        xEventGroupSetBits(wifi_events, WIFI_CONNECTED_BIT);
-    }
-}
-
 static bool wait_for_ntp(struct tm *local_time) {
     /* ESP-IDF/newlib expects a POSIX TZ string. Brazil currently uses UTC-3. */
     setenv("TZ", "BRT3", 1);
@@ -137,23 +86,13 @@ static bool wait_for_ntp(struct tm *local_time) {
 }
 
 static bool synchronize_once(void) {
-    connection_retries = 0;
-    connection_requested = true;
-    xEventGroupClearBits(wifi_events, WIFI_CONNECTED_BIT | WIFI_FAILED_BIT);
-
-    esp_err_t result = esp_wifi_start();
+    esp_err_t result = chronvs_wifi_session_acquire();
     if (result != ESP_OK) {
-        ESP_LOGE(TAG, "Could not start Wi-Fi: %s", esp_err_to_name(result));
-        connection_requested = false;
+        ESP_LOGW(TAG, "Wi-Fi session unavailable: %s", esp_err_to_name(result));
         return false;
     }
-
-    const EventBits_t bits = xEventGroupWaitBits(
-        wifi_events, WIFI_CONNECTED_BIT | WIFI_FAILED_BIT, pdTRUE, pdFALSE,
-        pdMS_TO_TICKS(WIFI_CONNECT_TIMEOUT_MS));
-
     bool rtc_updated = false;
-    if (bits & WIFI_CONNECTED_BIT) {
+    {
         struct tm local_time = {0};
         if (wait_for_ntp(&local_time)) {
             result = write_rtc(&local_time);
@@ -181,70 +120,13 @@ static bool synchronize_once(void) {
             ESP_LOGW(TAG, "NTP synchronization timed out");
         }
     }
-    else {
-        ESP_LOGW(TAG, "Wi-Fi connection timed out");
-    }
 
-    connection_requested = false;
-    esp_wifi_disconnect();
-    esp_wifi_stop();
+    chronvs_wifi_session_release();
     return rtc_updated;
-}
-
-static esp_err_t initialize_wifi(void) {
-    esp_err_t result = nvs_flash_init();
-    if (result == ESP_ERR_NVS_NO_FREE_PAGES || result == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_RETURN_ON_ERROR(nvs_flash_erase(), TAG, "Could not erase NVS");
-        result = nvs_flash_init();
-    }
-    ESP_RETURN_ON_ERROR(result, TAG, "Could not initialize NVS");
-    ESP_RETURN_ON_ERROR(esp_netif_init(), TAG, "Could not initialize network stack");
-
-    result = esp_event_loop_create_default();
-    if (result != ESP_OK && result != ESP_ERR_INVALID_STATE) return result;
-
-    wifi_events = xEventGroupCreate();
-    if (wifi_events == NULL) return ESP_ERR_NO_MEM;
-
-    if (esp_netif_create_default_wifi_sta() == NULL) return ESP_ERR_NO_MEM;
-
-    wifi_init_config_t initialization = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_RETURN_ON_ERROR(esp_wifi_init(&initialization), TAG, "Could not initialize Wi-Fi");
-    ESP_RETURN_ON_ERROR(esp_wifi_set_storage(WIFI_STORAGE_RAM), TAG, "Could not select Wi-Fi storage");
-
-    ESP_RETURN_ON_ERROR(
-        esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID,
-                                            wifi_event_handler, NULL, NULL),
-        TAG, "Could not register Wi-Fi event handler");
-    ESP_RETURN_ON_ERROR(
-        esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP,
-                                            wifi_event_handler, NULL, NULL),
-        TAG, "Could not register IP event handler");
-
-    wifi_config_t configuration = {0};
-    strlcpy((char *)configuration.sta.ssid, CHRONVS_WIFI_SSID,
-            sizeof(configuration.sta.ssid));
-    strlcpy((char *)configuration.sta.password, CHRONVS_WIFI_PASSWORD,
-            sizeof(configuration.sta.password));
-    configuration.sta.threshold.authmode = WIFI_AUTH_OPEN;
-    configuration.sta.pmf_cfg.capable = true;
-    configuration.sta.pmf_cfg.required = false;
-
-    ESP_RETURN_ON_ERROR(esp_wifi_set_mode(WIFI_MODE_STA), TAG, "Could not set station mode");
-    ESP_RETURN_ON_ERROR(esp_wifi_set_config(WIFI_IF_STA, &configuration),
-                        TAG, "Could not configure station");
-    return ESP_OK;
 }
 
 static void time_sync_task(void *argument) {
     (void)argument;
-
-    esp_err_t result = initialize_wifi();
-    if (result != ESP_OK) {
-        ESP_LOGE(TAG, "Time synchronization disabled: %s", esp_err_to_name(result));
-        vTaskDelete(NULL);
-        return;
-    }
 
     while (true) {
         synchronize_once();
@@ -253,7 +135,7 @@ static void time_sync_task(void *argument) {
 }
 
 void chronvs_time_sync_start(void) {
-    if (CHRONVS_WIFI_SSID[0] == '\0') {
+    if (!chronvs_wifi_session_configured()) {
         ESP_LOGI(TAG, "No Wi-Fi credentials; using PCF85063 only");
         return;
     }

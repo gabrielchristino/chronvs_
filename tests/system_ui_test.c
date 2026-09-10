@@ -11,6 +11,8 @@
 #include "esp_heap_caps.h"
 #include "services/mnemo_service.h"
 #include "services/sound_service.h"
+#include "services/weather_service.h"
+#include "platform/lvgl_memory.h"
 #include <stdlib.h>
 
 int nvs_set_blob(nvs_handle_t h, const char *k, const void *in, size_t size) {
@@ -21,6 +23,25 @@ int nvs_set_blob(nvs_handle_t h, const char *k, const void *in, size_t size) {
 }
 
 static lv_indev_state_t contact;
+static unsigned weather_queries, weather_rtc_reads;
+static chronvs_weather_state_t weather_state;
+bool chronvs_weather_init(void) { return true; }
+bool chronvs_weather_get_snapshot(chronvs_weather_snapshot_t *snapshot) {
+    *snapshot=(chronvs_weather_snapshot_t){0}; return false;
+}
+chronvs_weather_state_t chronvs_weather_state(void) { return weather_state; }
+const char *chronvs_weather_error(void) { return ""; }
+bool chronvs_weather_request_update(void) {
+    if (weather_state==CHRONVS_WEATHER_FETCHING) return false;
+    ++weather_queries; weather_state=CHRONVS_WEATHER_FETCHING; return true;
+}
+bool chronvs_weather_take_result(chronvs_weather_snapshot_t *s,char *e,size_t n) {
+    (void)s; (void)e; (void)n; return false;
+}
+chronvs_time_t chronvs_rtc_read(void) {
+    assert(!chronvs_system_ui_display_is_off()); ++weather_rtc_reads;
+    return (chronvs_time_t){.year=26,.month=9,.day=10,.hour=12,.valid=true};
+}
 static lv_point_t point;
 static void read_touch(lv_indev_drv_t *driver, lv_indev_data_t *data) {
     (void)driver; data->state=contact; data->point=point;
@@ -57,6 +78,12 @@ static lv_obj_t *find_label_text(lv_obj_t *tree, const char *text) {
 void *heap_caps_calloc(size_t count, size_t size, unsigned caps) {
     assert(caps == (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     return calloc(count, size);
+}
+static unsigned lvgl_pool_allocations;
+void *heap_caps_malloc(size_t size, unsigned caps) {
+    assert(size==LV_MEM_SIZE && caps==(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    ++lvgl_pool_allocations;
+    return malloc(size);
 }
 
 uint8_t LCD_Backlight;
@@ -102,6 +129,9 @@ static void capture(const char *name) {
 }
 int main(void) {
     lv_init();
+    assert(lvgl_pool_allocations==1);
+    assert(chronvs_lvgl_pool_alloc(LV_MEM_SIZE)==chronvs_lvgl_pool_alloc(LV_MEM_SIZE));
+    assert(lvgl_pool_allocations==1); /* Reinitialization keeps the same arena. */
     static lv_color_t buffer[412*412/20];static lv_disp_draw_buf_t draw;static lv_disp_drv_t driver;
     lv_disp_draw_buf_init(&draw,buffer,NULL,412*412/20);lv_disp_drv_init(&driver);
     driver.hor_res=driver.ver_res=412;driver.draw_buf=&draw;driver.flush_cb=flush;
@@ -142,7 +172,7 @@ int main(void) {
     assert(chronvs_app_open("apps"));capture("14-app-list");
     lv_obj_t *launcher = lv_obj_get_child(chronvs_app_content_layer(), -1);
     lv_obj_t *app_list = lv_obj_get_child(launcher, 0);
-    assert(lv_obj_get_child_cnt(app_list) == 3);
+    assert(lv_obj_get_child_cnt(app_list) == 4);
     lv_obj_t *first_row = lv_obj_get_child(app_list, 0);
     lv_obj_t *middle_row = lv_obj_get_child(app_list, 1);
     assert(lv_obj_get_style_translate_x(first_row, 0) >
@@ -233,6 +263,18 @@ int main(void) {
     touch(113,175,LV_INDEV_STATE_PR);
     for (unsigned i = 0; i < 20; ++i) { elapse(1000); assert(LCD_Backlight == 35); }
     touch(113,175,LV_INDEV_STATE_REL);
+    assert(chronvs_app_open("weather")); capture("23-weather-integrated");
+    assert(weather_queries==1 && find_label_text(chronvs_app_content_layer(),"Atualizando..."));
+    elapse(16000); assert(LCD_Backlight==0);
+    unsigned rtc_before=weather_rtc_reads;
+    /* The global wake guard consumes the entire first swipe, including release. */
+    touch(120,180,LV_INDEV_STATE_PR); touch(170,180,LV_INDEV_STATE_PR);
+    touch(220,180,LV_INDEV_STATE_PR); touch(220,180,LV_INDEV_STATE_REL);
+    assert(!strcmp(chronvs_app_active_id(),"weather") && weather_queries==1);
+    assert(weather_rtc_reads==rtc_before);
+    touch(120,180,LV_INDEV_STATE_PR); touch(170,180,LV_INDEV_STATE_PR);
+    touch(220,180,LV_INDEV_STATE_PR); touch(220,180,LV_INDEV_STATE_REL);
+    assert(!strcmp(chronvs_app_active_id(),"apps"));
     assert(chronvs_app_open("apps"));
     assert(chronvs_app_open("aion"));
     assert(chronvs_app_open("mnemo"));

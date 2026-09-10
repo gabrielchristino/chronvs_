@@ -232,13 +232,19 @@ Uma consulta HTTPS pública pelo host retornou HTTP 200 com os campos e unidades
 esperados; isso não valida a conexão TLS/Wi-Fi do ESP32.
 No relógio foram confirmados dados e ausência de listras após a correção de
 memória; os logs confirmaram TLS e encerramento da sessão em duas consultas.
-Ainda é necessário ampliar a validação: reiniciar e consultar sem rede;
-abrir durante NTP; sair e reabrir durante a consulta; apagar/acordar; medir
-consumo, pico de memória/pilha e fluidez em outros cenários.
+Em 2026-09-10, o usuário confirmou que os testes funcionais complementares
+foram realizados no relógio e estavam corretos:
+
+- carregar os dados, reiniciar sem rede e manter o cache com idade após a falha;
+- restaurar o Wi-Fi e atualizar normalmente ao reabrir;
+- abrir durante a sincronização NTP;
+- sair durante a consulta;
+- apagar e acordar a tela.
+
+Essa confirmação conclui a validação funcional proposta. Medições quantitativas
+de consumo, pico de memória/pilha e fluidez permanecem avaliações separadas;
+não foram fornecidas novas capturas ou medições para esses testes complementares.
 Não houve alteração de buffers LVGL, transferência QSPI, caches ou driver.
 
 Referências de protocolo: [Open-Meteo](https://open-meteo.com/en/docs) e
 [ESP HTTP Client 5.3.1](https://docs.espressif.com/projects/esp-idf/en/v5.3.1/esp32s3/api-reference/protocols/esp_http_client.html).
-
-Os testes restantes acima ampliam a cobertura; não invalidam a confirmação do
-fluxo de abertura, consulta e ausência de listras na versão final.

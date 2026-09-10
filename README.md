@@ -19,7 +19,7 @@ layout e interação foram validados no dispositivo. A calculadora
 Clima mostra as condições de São Paulo pela Open-Meteo, com atualização ao ser
 aberto, cache persistente e fallback para a última leitura. Compartilha sessões
 Wi-Fi exclusivas com o NTP. Consulte [`docs/weather.md`](docs/weather.md) para
-o funcionamento, a correção de memória validada no dispositivo e os testes restantes.
+o funcionamento, a correção de memória e os cenários funcionais validados no dispositivo.
 As [dificuldades e regras de prevenção](docs/weather.md#dificuldades-soluções-e-prevenção)
 registram o diagnóstico das listras e distinguem o heap de objetos dos buffers de pixels.
 

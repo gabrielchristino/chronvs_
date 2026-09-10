@@ -107,7 +107,10 @@ O pool de objetos LVGL tem 128 KiB em PSRAM, alocado uma vez por
 reserva ao reinicializar LVGL. Essa mudança libera RAM interna após falhas de
 SPI e alocação TLS observadas ao abrir Clima; os buffers de desenho são separados
 e conservam os parâmetros validados. O usuário confirmou Clima sem listras e
-com dados; medições de fluidez e outros cenários permanecem testes separados.
+com dados. Também confirmou cache após reinício sem rede, recuperação da conexão,
+abertura durante NTP, saída durante a consulta e apagar/acordar a tela, conforme
+o registro em `weather.md`. Medições de consumo, fluidez e picos de memória
+permanecem avaliações separadas.
 
 A calculadora é compilada junto ao firmware e funciona sem cartão. Não há
 carregador, instalador ou interpretador de apps externos. A tela é criada na

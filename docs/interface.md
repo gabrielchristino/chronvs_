@@ -136,7 +136,18 @@ acento amarelo `#F2B84B`, a mesma linguagem visual da lista de apps.
 - O botão superior esquerdo alterna os perfis `15s`, `30s` e `ON`.
 - O botão superior direito mostra a bateria e alterna o modo `ECO`.
 - O botão central abre a lista de apps.
-- Os demais círculos são espaços reservados para futuros atalhos; não recebem
+- O círculo à esquerda do centro controla o volume: cada toque avança por
+  `0 → 1 → 2 → 3 → 4 → 5 → 0`. São cinco níveis audíveis mais o modo mudo.
+  O símbolo de alto-falante e o número mostram o nível; zero usa o símbolo mudo.
+  A preferência é salva na NVS e restaurada no boot. Sem preferência, o nível 1
+  preserva a amplitude anterior. O ganho PCM cresce até 32760 no nível 5;
+  mudanças durante um aviso são aplicadas pela tarefa de áudio. No zero,
+  avisos visuais continuam e I2S permanece desabilitado. Cada clique nos níveis
+  1 a 5 toca um bip de 1 kHz por 120 ms no novo volume, sem bloquear a interface.
+  No zero não há bip. Cliques rápidos reiniciam a prévia, sem acumular sons;
+  avisos ativos têm prioridade. I2S é inicializado no primeiro som solicitado.
+  Restaurar a preferência no boot não toca o bip.
+- Os três círculos restantes são espaços reservados para futuros atalhos; não recebem
   toque.
 
 Brilho, perfil de tempo e modo econômico são gravados na NVS. Quando o modo
@@ -385,6 +396,18 @@ tocada. O script de build aplica debounce no limite LVGL: um contato precisa
 aparecer em duas amostras consecutivas, permanecer próximo e ter intensidade
 válida. A liberação é imediata. Isso evita acordar a tela, alternar brilho ou
 abrir painéis sem interação real.
+
+## Verificação do volume
+
+`tests/run_sound_tests.ps1` executa o gerador real com I2S simulado: confirma
+silêncio em zero, inicialização tardia, cinco ganhos crescentes sem overflow,
+canais estéreo iguais, silenciamento durante um aviso e prévia finita de
+120 ms, sem fila e cancelada pelo nível zero.
+`tests/run_aion_ui.ps1 -System` cobre restauração da preferência, ciclo completo,
+salvamento, primeiro toque para despertar e arraste sobre o controle sem alterar
+volume ou tocar prévia. O usuário confirmou o controle de volume no relógio.
+O novo bip de confirmação e a ausência de distorção no nível máximo precisam
+ser avaliados no speaker do relógio.
 
 ## Lista de apps em arco
 

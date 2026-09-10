@@ -271,6 +271,5 @@ e repetição de entrada/saída sem vazamento de memória LVGL.
 memória com os outros apps criados, além do controle real de energia com
 toques simulados: 50 s de digitação em AUTO, 20 s de contato contínuo em ECO,
 redução/apagamento após inatividade e primeiro toque reservado ao despertar.
-Precisam de validação física a precisão
-das teclas de 44 px, o tempo de multi-tap, o despertar e a persistência após
-reiniciar o relógio.
+O usuário confirmou a validação física do Mnemo, incluindo a interação e
+persistência, e considerou concluídas as pendências de validação do Aion.

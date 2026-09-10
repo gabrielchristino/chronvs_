@@ -13,7 +13,7 @@ de renderização do painel.
 
 Além do mostrador, Aion reúne cronômetro, timer e alarmes. Mnemo oferece notas
 persistentes com teclado multi-tap e edição de texto na tela circular; seu
-layout compacto ainda precisa de validação de toque no dispositivo. A calculadora
+layout e interação foram validados no dispositivo. A calculadora
 é um app nativo com operações básicas, precedência e parênteses.
 
 ## Estado validado
@@ -128,7 +128,7 @@ O mostrador inteiro funciona como superfície de toque:
 
 - Arrastar a partir da borda superior para baixo revela um painel retangular de acessos rápidos sobre o mostrador. O painel acompanha o dedo e completa ou cancela a abertura conforme a distância percorrida.
 - O arco externo do painel controla continuamente o brilho entre 10% e 100%.
-- Os atalhos ocupam uma grade 2–3–2. O primeiro botão mostra `15s`, `30s` ou `ON` e alterna entre `AUTO 15s / 45s`, `AUTO 30s / 2min` e `SEMPRE LIGADA`. O segundo reúne bateria e economia: exibe o percentual de carga e alterna o modo `ECO` ao ser tocado. O botão central abre a lista de apps e os quatro slots restantes continuam reservados para funções futuras.
+- Os atalhos ocupam uma grade 2–3–2. O primeiro botão mostra `15s`, `30s` ou `ON` e alterna entre `AUTO 15s / 45s`, `AUTO 30s / 2min` e `SEMPRE LIGADA`. O segundo reúne bateria e economia. O círculo central abre os apps; à esquerda, o volume percorre `0 → 1 → 2 → 3 → 4 → 5 → 0`. Zero silencia os avisos e cinco é o máximo. Três slots continuam reservados.
 - O modo `ECO`, indicado pela borda amarela e pelo texto no botão da bateria, preserva a preferência normal, mas limita temporariamente o brilho e o indicador do arco a 35%, reduz para 5% após 5 segundos e apaga a iluminação após 15 segundos — inclusive quando o perfil normal está em `ON`.
 - Arrastar o painel para cima acompanha o dedo e fecha os acessos rápidos,
   inclusive quando o gesto começa sobre o arco de brilho.

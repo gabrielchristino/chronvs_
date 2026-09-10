@@ -10,6 +10,7 @@
 #include "ui/control_style.h"
 #include "esp_heap_caps.h"
 #include "services/mnemo_service.h"
+#include "services/sound_service.h"
 #include <stdlib.h>
 
 int nvs_set_blob(nvs_handle_t h, const char *k, const void *in, size_t size) {
@@ -62,8 +63,22 @@ uint8_t LCD_Backlight;
 void Set_Backlight(uint8_t brightness) { LCD_Backlight=brightness; }
 int nvs_flash_init(void) { return 0; }
 int nvs_flash_erase(void) { return 0; }
-int nvs_get_u8(nvs_handle_t h, const char *k, uint8_t *v) { (void)h;(void)k;(void)v;return -1; }
-int nvs_set_u8(nvs_handle_t h, const char *k, uint8_t v) { (void)h;(void)k;(void)v;return 0; }
+static uint8_t sound_volume = 1, saved_volume = 4;
+static unsigned previews;
+static uint8_t preview_volume;
+void chronvs_sound_preview(void) { ++previews; preview_volume = sound_volume; }
+uint8_t chronvs_sound_volume(void) { return sound_volume; }
+void chronvs_sound_set_volume(uint8_t level) { assert(level <= 5); sound_volume = level; }
+int nvs_get_u8(nvs_handle_t h, const char *k, uint8_t *v) {
+    (void)h;
+    if (!strcmp(k, "volume")) { *v = saved_volume; return 0; }
+    return -1;
+}
+int nvs_set_u8(nvs_handle_t h, const char *k, uint8_t v) {
+    (void)h;
+    if (!strcmp(k, "volume")) saved_volume = v;
+    return 0;
+}
 
 static unsigned char pixels[412*412*3];
 static void flush(lv_disp_drv_t *driver, const lv_area_t *area, lv_color_t *colors) {
@@ -107,6 +122,22 @@ int main(void) {
         }
     }
     assert(circles==7);
+    assert(sound_volume == 4); /* Restore the saved preference at boot. */
+    assert(previews == 0);
+    const uint8_t levels[] = {5, 0, 1, 2, 3, 4};
+    for (unsigned i = 0; i < sizeof(levels); ++i) {
+        tap(120,206);
+        assert(sound_volume == levels[i] && saved_volume == levels[i]);
+        assert(previews == i + 1 && preview_volume == levels[i]);
+        if (levels[i] == 0) {
+            assert(find_label_text(panel, LV_SYMBOL_MUTE));
+            capture("21-volume-muted");
+        }
+    }
+    capture("22-volume-control");
+    elapse(46000); assert(LCD_Backlight == 0);
+    tap(120,206); assert(sound_volume == 4 && LCD_Backlight == 70);
+    assert(previews == 6);
     lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);
     assert(chronvs_app_open("apps"));capture("14-app-list");
     lv_obj_t *launcher = lv_obj_get_child(chronvs_app_content_layer(), -1);
@@ -206,6 +237,12 @@ int main(void) {
     assert(chronvs_app_open("aion"));
     assert(chronvs_app_open("mnemo"));
     lv_mem_monitor(&memory); assert(memory.free_biggest_size > 16384);
+    /* Closing from the volume button must not change its level on release. */
+    lv_obj_clear_flag(panel, LV_OBJ_FLAG_HIDDEN); lv_obj_set_y(panel, 0);
+    touch(120,206,LV_INDEV_STATE_PR); touch(120,170,LV_INDEV_STATE_PR);
+    touch(120,70,LV_INDEV_STATE_PR); touch(120,70,LV_INDEV_STATE_REL); elapse(300);
+    assert(sound_volume == 4 && saved_volume == 4);
+    assert(previews == 6);
     puts("System UI passed: controls, Mnemo typing/hold, AUTO/ECO inactivity and wake-only touch.");
     return 0;
 }

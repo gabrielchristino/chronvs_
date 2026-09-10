@@ -12,6 +12,7 @@
 #include "Display_SPD2010.h"
 #include "core/app_manager.h"
 #include "ui/control_style.h"
+#include "services/sound_service.h"
 
 #define COLOR_PANEL       0x26302B
 #define COLOR_PANEL_EDGE  0x748173
@@ -65,6 +66,9 @@ static lv_obj_t *brightness_arc;
 static lv_obj_t *profile_button;
 static lv_obj_t *battery_button;
 static lv_obj_t *app_launcher_button;
+static lv_obj_t *volume_button;
+static lv_obj_t *volume_label;
+static lv_obj_t *volume_icon;
 static lv_obj_t *battery_label;
 static lv_obj_t *battery_eco_label;
 static lv_timer_t *clock_animation_timer;
@@ -188,6 +192,25 @@ static void load_settings(void) {
     if (nvs_get_u8(settings_storage, "eco", &value) == ESP_OK) {
         eco_enabled = value != 0;
     }
+    if (nvs_get_u8(settings_storage, "volume", &value) == ESP_OK &&
+        value <= CHRONVS_SOUND_MAX_VOLUME) chronvs_sound_set_volume(value);
+}
+
+static void update_volume(void) {
+    const uint8_t level = chronvs_sound_volume();
+    lv_label_set_text_fmt(volume_label, "%u", level);
+    lv_label_set_text(volume_icon, level == 0 ? LV_SYMBOL_MUTE : LV_SYMBOL_VOLUME_MAX);
+}
+
+static void volume_event(lv_event_t *event) {
+    (void)event;
+    if (menu_suppress_click || wake_only_contact || display_state != DISPLAY_ACTIVE) return;
+    chronvs_system_ui_notify_activity();
+    const uint8_t level = (chronvs_sound_volume() + 1) % (CHRONVS_SOUND_MAX_VOLUME + 1);
+    chronvs_sound_set_volume(level);
+    chronvs_sound_preview();
+    update_volume();
+    store_u8("volume", level);
 }
 
 static void update_brightness_label(void) {
@@ -302,7 +325,7 @@ static void menu_animation_ready(lv_anim_t *animation) {
 
 static void set_menu_interactive(bool interactive) {
     lv_obj_t *objects[] = {
-        settings_panel, brightness_arc, profile_button, battery_button, app_launcher_button,
+        settings_panel, brightness_arc, profile_button, battery_button, app_launcher_button, volume_button,
     };
     for (size_t index = 0; index < sizeof(objects) / sizeof(objects[0]); ++index) {
         if (interactive) lv_obj_add_flag(objects[index], LV_OBJ_FLAG_CLICKABLE);
@@ -464,7 +487,19 @@ static void create_quick_settings(void) {
     lv_obj_set_style_text_color(app_launcher_label, lv_color_hex(COLOR_TEXT), 0);
     lv_obj_center(app_launcher_label);
 
-    static const uint8_t placeholder_indices[] = {2, 4, 5, 6};
+    volume_button = create_round_slot(settings_panel, chronvs_ui_hex_offsets[2].x,
+                                     chronvs_ui_hex_offsets[2].y - 72, true);
+    lv_obj_add_flag(volume_button, LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_add_event_cb(volume_button, volume_event, LV_EVENT_CLICKED, NULL);
+    volume_icon = lv_label_create(volume_button);
+    lv_obj_set_style_text_font(volume_icon, &lv_font_montserrat_18, 0);
+    lv_obj_align(volume_icon, LV_ALIGN_CENTER, 0, -11);
+    volume_label = lv_label_create(volume_button);
+    lv_obj_set_style_text_font(volume_label, &lv_font_montserrat_18, 0);
+    lv_obj_align(volume_label, LV_ALIGN_CENTER, 0, 13);
+    update_volume();
+
+    static const uint8_t placeholder_indices[] = {4, 5, 6};
     for (size_t index = 0;
          index < sizeof(placeholder_indices) / sizeof(placeholder_indices[0]);
          ++index) {

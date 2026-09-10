@@ -150,7 +150,20 @@ acento amarelo `#F2B84B`, a mesma linguagem visual da lista de apps.
   No zero não há bip. Cliques rápidos reiniciam a prévia, sem acumular sons;
   avisos ativos têm prioridade. I2S é inicializado no primeiro som solicitado.
   Restaurar a preferência no boot não toca o bip.
-- Os três círculos restantes são espaços reservados para futuros atalhos; não recebem
+- O círculo à direita de `APPS` mostra somente o cache salvo do Clima: ícone
+  vetorial de 30 × 30 px centralizado 12 px acima do centro e temperatura
+  arredondada em Celsius (`23°`), Montserrat 18, 17 px abaixo. Sem cache válido,
+  mostra apenas `CLIMA`, Montserrat 12 centralizada, sem temperatura nem ícone
+  de condição. Tocar no círculo, ícone ou temperatura abre o app Clima e fecha
+  o painel, inclusive sem cache. A abertura do app solicita sua atualização normal;
+  apenas exibir o atalho não solicita Wi-Fi. O primeiro toque com tela apagada
+  somente acorda, e um arraste para cima fecha o painel sem abrir Clima.
+  O cache persiste entre reinícios; abrir o painel não exige abrir Clima outra vez.
+  A leitura ocorre ao revelar o painel e a cada 500 ms enquanto ele estiver
+  visível com tela acesa, usando o timer global existente. Só mudanças de
+  temperatura ou condição alteram objetos; não há leitura de RTC nem consumo
+  da caixa de resultados do app.
+- Os dois círculos restantes são espaços reservados para futuros atalhos; não recebem
   toque.
 
 Brilho, perfil de tempo e modo econômico são gravados na NVS. Quando o modo

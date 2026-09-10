@@ -3,6 +3,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <string.h>
 
 #include "esp_err.h"
 #include "esp_log.h"
@@ -13,6 +15,8 @@
 #include "core/app_manager.h"
 #include "ui/control_style.h"
 #include "services/sound_service.h"
+#include "services/weather_service.h"
+#include "ui/weather_icon.h"
 
 #define COLOR_PANEL       0x26302B
 #define COLOR_PANEL_EDGE  0x748173
@@ -69,6 +73,10 @@ static lv_obj_t *app_launcher_button;
 static lv_obj_t *volume_button;
 static lv_obj_t *volume_label;
 static lv_obj_t *volume_icon;
+static lv_obj_t *weather_label;
+static lv_obj_t *weather_button;
+static lv_obj_t *weather_symbol;
+static chronvs_weather_snapshot_t weather_snapshot;
 static lv_obj_t *battery_label;
 static lv_obj_t *battery_eco_label;
 static lv_timer_t *clock_animation_timer;
@@ -202,6 +210,35 @@ static void update_volume(void) {
     lv_label_set_text(volume_icon, level == 0 ? LV_SYMBOL_MUTE : LV_SYMBOL_VOLUME_MAX);
 }
 
+static void weather_symbol_draw(lv_event_t *event) {
+    if (!weather_snapshot.valid) return;
+    lv_area_t bounds;
+    lv_obj_get_coords(lv_event_get_target(event), &bounds);
+    chronvs_ui_draw_weather_icon(lv_event_get_draw_ctx(event), &bounds,
+                                 chronvs_weather_icon(weather_snapshot.weather_code));
+}
+
+static void update_weather_cache(void) {
+    if (!weather_label || display_state == DISPLAY_OFF) return;
+    /* Init only restores NVS. Never request a fetch or consume the app's mailbox. */
+    chronvs_weather_init();
+    chronvs_weather_snapshot_t latest = {0};
+    chronvs_weather_get_snapshot(&latest);
+    if (latest.valid == weather_snapshot.valid &&
+        (!latest.valid || (latest.temperature_c == weather_snapshot.temperature_c &&
+                           latest.weather_code == weather_snapshot.weather_code))) return;
+    weather_snapshot = latest;
+    char text[16] = "CLIMA";
+    if (latest.valid) snprintf(text,sizeof(text),"%.0f°",latest.temperature_c);
+    if (strcmp(lv_label_get_text(weather_label),text)) lv_label_set_text(weather_label,text);
+    lv_obj_set_style_text_font(weather_label,
+        latest.valid ? &lv_font_montserrat_18 : &lv_font_montserrat_12,0);
+    lv_obj_align(weather_label,LV_ALIGN_CENTER,0,latest.valid ? 17 : 0);
+    if (latest.valid) lv_obj_clear_flag(weather_symbol,LV_OBJ_FLAG_HIDDEN);
+    else lv_obj_add_flag(weather_symbol,LV_OBJ_FLAG_HIDDEN);
+    lv_obj_invalidate(weather_symbol);
+}
+
 static void volume_event(lv_event_t *event) {
     (void)event;
     if (menu_suppress_click || wake_only_contact || display_state != DISPLAY_ACTIVE) return;
@@ -279,6 +316,12 @@ static void app_launcher_event(lv_event_t *event) {
     if (chronvs_app_open("apps")) animate_menu(false);
 }
 
+static void weather_event(lv_event_t *event) {
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || menu_suppress_click ||
+        wake_only_contact || display_state != DISPLAY_ACTIVE) return;
+    if (chronvs_app_open("weather")) animate_menu(false);
+}
+
 static lv_obj_t *create_round_slot(lv_obj_t *parent, int16_t x, int16_t y,
                                    bool enabled) {
     lv_obj_t *button = lv_btn_create(parent);
@@ -325,7 +368,8 @@ static void menu_animation_ready(lv_anim_t *animation) {
 
 static void set_menu_interactive(bool interactive) {
     lv_obj_t *objects[] = {
-        settings_panel, brightness_arc, profile_button, battery_button, app_launcher_button, volume_button,
+        settings_panel, brightness_arc, profile_button, battery_button, app_launcher_button,
+        volume_button, weather_button,
     };
     for (size_t index = 0; index < sizeof(objects) / sizeof(objects[0]); ++index) {
         if (interactive) lv_obj_add_flag(objects[index], LV_OBJ_FLAG_CLICKABLE);
@@ -339,6 +383,7 @@ static void animate_menu(bool open) {
     menu_dragging = false;
 
     if (open) {
+        update_weather_cache();
         lv_obj_clear_flag(settings_panel, LV_OBJ_FLAG_HIDDEN);
         lv_obj_move_foreground(settings_panel);
     }
@@ -358,6 +403,7 @@ static void animate_menu(bool open) {
 }
 
 static void begin_menu_drag(bool opening) {
+    if (opening) update_weather_cache();
     lv_anim_del(settings_panel, NULL);
     lv_obj_clear_flag(settings_panel, LV_OBJ_FLAG_HIDDEN);
     lv_obj_move_foreground(settings_panel);
@@ -499,7 +545,24 @@ static void create_quick_settings(void) {
     lv_obj_align(volume_label, LV_ALIGN_CENTER, 0, 13);
     update_volume();
 
-    static const uint8_t placeholder_indices[] = {4, 5, 6};
+    weather_button = create_round_slot(settings_panel, chronvs_ui_hex_offsets[4].x,
+                                               chronvs_ui_hex_offsets[4].y - 72, false);
+    lv_obj_add_flag(weather_button,LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_obj_add_event_cb(weather_button,weather_event,LV_EVENT_CLICKED,NULL);
+    weather_symbol = lv_obj_create(weather_button);
+    lv_obj_remove_style_all(weather_symbol);
+    lv_obj_set_size(weather_symbol,30,30);
+    lv_obj_align(weather_symbol,LV_ALIGN_CENTER,0,-12);
+    lv_obj_clear_flag(weather_symbol,LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(weather_symbol,LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_event_cb(weather_symbol,weather_symbol_draw,LV_EVENT_DRAW_MAIN,NULL);
+    weather_label = lv_label_create(weather_button);
+    lv_label_set_text(weather_label,"CLIMA");
+    lv_obj_set_style_text_font(weather_label,&lv_font_montserrat_12,0);
+    lv_obj_set_style_text_color(weather_label,lv_color_hex(COLOR_TEXT),0);
+    lv_obj_center(weather_label);
+
+    static const uint8_t placeholder_indices[] = {5, 6};
     for (size_t index = 0;
          index < sizeof(placeholder_indices) / sizeof(placeholder_indices[0]);
          ++index) {
@@ -600,6 +663,8 @@ static void clock_touch_event(lv_event_t *event) {
 
 static void power_timer_event(lv_timer_t *timer) {
     (void)timer;
+    if (display_state != DISPLAY_OFF && !lv_obj_has_flag(settings_panel,LV_OBJ_FLAG_HIDDEN))
+        update_weather_cache();
     if (menu_open || menu_dragging) return;
 
     const uint32_t inactive_ms = lv_tick_elaps(last_activity_tick);

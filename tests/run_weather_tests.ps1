@@ -21,7 +21,7 @@ try {
         $sources = @(rg --files "$lvglRoot/src" -g '*.c')
         $arguments = @('-std=c11','-O0','-DLV_CONF_INCLUDE_SIMPLE','-I','src','-I','tests/aion_stubs',
             '-I',$lvglRoot,'-I',$jsonRoot,'tests/weather_ui_test.c','src/services/weather_data.c',
-            'src/ui/aion_widgets.c','src/ui/control_style.c','src/ui/app_input.c','src/ui/mnemo_font.c',
+            'src/ui/aion_widgets.c','src/ui/control_style.c','src/ui/app_input.c','src/ui/mnemo_font.c','src/ui/weather_icon.c',
             "$jsonRoot/cJSON.c") + $sources + @('-lm','-o','.pio/host-tests/weather_ui_test.exe')
         ($arguments | ForEach-Object { '"' + $_.Replace('\','/') + '"' }) | Set-Content '.pio/host-tests/weather-ui-compile.rsp'
         & gcc '@.pio/host-tests/weather-ui-compile.rsp'

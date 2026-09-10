@@ -101,6 +101,36 @@ Cache inválido na NVS é ignorado. Erros adicionais locais são `Falha ao salva
 e `Memória insuficiente`; com cache, a UI continua mostrando `Falha ao atualizar`.
 Reabrir durante a consulta acompanha a operação existente; não agenda outra.
 
+### Indicador nos acessos rápidos
+
+O círculo à direita de `APPS` consome exclusivamente o cache persistido pelo
+serviço. Antes da primeira consulta salva, ou com cache inválido, mostra apenas
+`CLIMA`, sem temperatura ou condição inventadas. Com dados, mostra o ícone da
+condição e a temperatura arredondada em Celsius (`23°`). Após reiniciar, pode
+mostrar a última leitura salva sem abrir o app novamente.
+
+Tocar no atalho (círculo, ícone ou temperatura) abre Clima e fecha os acessos
+rápidos, inclusive quando mostra apenas `CLIMA`. A consulta ocorre pelo
+`on_show` normal do app; exibir o painel continua consumindo somente cache.
+O arraste para fechar não abre o app, e o primeiro toque com tela apagada
+somente acorda o relógio.
+
+O painel chama `chronvs_weather_init` para restaurar NVS uma vez e
+`chronvs_weather_get_snapshot` para ler a cópia protegida por mutex. Não chama
+`chronvs_weather_request_update` nem `chronvs_weather_take_result`: não inicia
+rede e não retira resultados pendentes do app. Sem nova consulta bem-sucedida,
+conserva a leitura salva. Os ícones vetoriais são compartilhados com o app e o
+launcher por `ui/weather_icon.c`, com escala para o círculo de 70 px.
+
+O teste integrado `tests/run_aion_ui.ps1 -System` cobre ausência/cache válido,
+atualização do indicador, falha preservando dados, ausência de consultas e
+consumo de resultados, pausa oculto/apagado, abertura pelo texto/ícone/temperatura,
+primeiro toque reservado ao despertar, gesto de fechamento sem abrir o app
+e os sete símbolos com temperaturas extremas dentro do círculo. Build e testes
+no host passaram. O firmware foi gravado na COM3, com hashes de bootloader,
+partições e aplicação verificados. Após a gravação da versão com abertura por
+toque, o usuário aprovou o resultado e solicitou seu registro e publicação no Git.
+
 ## Testes
 
 - cache válido aparece com idade correta;

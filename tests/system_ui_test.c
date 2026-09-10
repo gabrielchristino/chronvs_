@@ -23,11 +23,13 @@ int nvs_set_blob(nvs_handle_t h, const char *k, const void *in, size_t size) {
 }
 
 static lv_indev_state_t contact;
-static unsigned weather_queries, weather_rtc_reads;
+static unsigned weather_queries, weather_rtc_reads, weather_cache_reads, weather_result_reads;
+static chronvs_weather_snapshot_t saved_weather;
 static chronvs_weather_state_t weather_state;
 bool chronvs_weather_init(void) { return true; }
 bool chronvs_weather_get_snapshot(chronvs_weather_snapshot_t *snapshot) {
-    *snapshot=(chronvs_weather_snapshot_t){0}; return false;
+    ++weather_cache_reads;
+    *snapshot=saved_weather; return snapshot->valid;
 }
 chronvs_weather_state_t chronvs_weather_state(void) { return weather_state; }
 const char *chronvs_weather_error(void) { return ""; }
@@ -36,6 +38,7 @@ bool chronvs_weather_request_update(void) {
     ++weather_queries; weather_state=CHRONVS_WEATHER_FETCHING; return true;
 }
 bool chronvs_weather_take_result(chronvs_weather_snapshot_t *s,char *e,size_t n) {
+    ++weather_result_reads;
     (void)s; (void)e; (void)n; return false;
 }
 chronvs_time_t chronvs_rtc_read(void) {
@@ -152,6 +155,48 @@ int main(void) {
         }
     }
     assert(circles==7);
+    /* The quick indicator reads persisted data before the weather app is opened. */
+    lv_obj_t *weather_caption=find_label_text(panel,"CLIMA"); assert(weather_caption);
+    lv_obj_t *weather_slot=lv_obj_get_parent(weather_caption);
+    lv_obj_t *weather_icon=lv_obj_get_child(weather_slot,0);
+    assert(lv_obj_has_flag(weather_slot,LV_OBJ_FLAG_CLICKABLE));
+    assert(lv_obj_has_flag(weather_icon,LV_OBJ_FLAG_HIDDEN));
+    assert(weather_queries==0 && weather_result_reads==0);
+    saved_weather=(chronvs_weather_snapshot_t){.valid=true,.temperature_c=23,.weather_code=2};
+    elapse(600);
+    assert(find_label_text(weather_slot,"23°") && !lv_obj_has_flag(weather_icon,LV_OBJ_FLAG_HIDDEN));
+    capture("24-quick-weather-cache");
+    /* All symbols and extreme temperatures stay within the 70 px circle. */
+    const int weather_codes[]={0,2,3,45,61,71,95};
+    for (unsigned i=0;i<sizeof(weather_codes)/sizeof(weather_codes[0]);++i) {
+        saved_weather.weather_code=weather_codes[i];
+        saved_weather.temperature_c=i==0 ? -90 : 70;
+        elapse(600);
+        char name[64]; snprintf(name,sizeof(name),"quick-weather-icon-%d",weather_codes[i]);
+        capture(name);
+        lv_area_t slot_area, caption_area, icon_area;
+        lv_obj_get_coords(weather_slot,&slot_area);
+        lv_obj_get_coords(weather_caption,&caption_area);
+        lv_obj_get_coords(weather_icon,&icon_area);
+        assert(icon_area.y2<caption_area.y1);
+        const lv_area_t areas[]={caption_area,icon_area};
+        for (unsigned j=0;j<2;++j) {
+            int dx=LV_MAX(abs(areas[j].x1-(slot_area.x1+35)),abs(areas[j].x2-(slot_area.x1+35)));
+            int dy=LV_MAX(abs(areas[j].y1-(slot_area.y1+35)),abs(areas[j].y2-(slot_area.y1+35)));
+            assert(dx*dx+dy*dy<=35*35);
+        }
+    }
+    weather_state=CHRONVS_WEATHER_ERROR; elapse(600);
+    assert(find_label_text(weather_slot,"70°")); /* Failed refresh keeps saved data. */
+    assert(weather_queries==0 && weather_result_reads==0 && weather_rtc_reads==0);
+    assert(!strcmp(chronvs_app_active_id(),"watch"));
+    lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);
+    unsigned cache_reads_before=weather_cache_reads;
+    elapse(600); assert(weather_cache_reads==cache_reads_before);
+    lv_obj_clear_flag(panel,LV_OBJ_FLAG_HIDDEN);
+    saved_weather=(chronvs_weather_snapshot_t){0}; weather_state=CHRONVS_WEATHER_IDLE;
+    elapse(600);
+    assert(find_label_text(weather_slot,"CLIMA") && lv_obj_has_flag(weather_icon,LV_OBJ_FLAG_HIDDEN));
     assert(sound_volume == 4); /* Restore the saved preference at boot. */
     assert(previews == 0);
     const uint8_t levels[] = {5, 0, 1, 2, 3, 4};
@@ -166,7 +211,10 @@ int main(void) {
     }
     capture("22-volume-control");
     elapse(46000); assert(LCD_Backlight == 0);
-    tap(120,206); assert(sound_volume == 4 && LCD_Backlight == 70);
+    cache_reads_before=weather_cache_reads;
+    elapse(1000); assert(weather_cache_reads==cache_reads_before);
+    tap(292,206); assert(weather_queries==0 && !strcmp(chronvs_app_active_id(),"watch"));
+    assert(sound_volume == 4 && LCD_Backlight == 70); /* Wake without opening Clima. */
     assert(previews == 6);
     lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);
     assert(chronvs_app_open("apps"));capture("14-app-list");
@@ -281,10 +329,31 @@ int main(void) {
     lv_mem_monitor(&memory); assert(memory.free_biggest_size > 16384);
     /* Closing from the volume button must not change its level on release. */
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_HIDDEN); lv_obj_set_y(panel, 0);
+    touch(292,206,LV_INDEV_STATE_PR); touch(292,170,LV_INDEV_STATE_PR);
+    touch(292,70,LV_INDEV_STATE_PR); touch(292,70,LV_INDEV_STATE_REL); elapse(300);
+    assert(lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN) && weather_queries==1);
+    lv_obj_clear_flag(panel, LV_OBJ_FLAG_HIDDEN); lv_obj_set_y(panel, 0);
     touch(120,206,LV_INDEV_STATE_PR); touch(120,170,LV_INDEV_STATE_PR);
     touch(120,70,LV_INDEV_STATE_PR); touch(120,70,LV_INDEV_STATE_REL); elapse(300);
     assert(sound_volume == 4 && saved_volume == 4);
     assert(previews == 6);
+    /* Open the real panel, then tap the empty label, cached icon and cached value. */
+    const int weather_tap_y[]={206,194,223};
+    for (unsigned i=0;i<3;++i) {
+        assert(chronvs_app_open("watch"));
+        chronvs_system_ui_notify_activity();
+        saved_weather=(chronvs_weather_snapshot_t){.valid=i!=0,.temperature_c=23,.weather_code=2};
+        weather_state=CHRONVS_WEATHER_IDLE;
+        unsigned queries_before=weather_queries;
+        touch(206,30,LV_INDEV_STATE_PR); touch(206,100,LV_INDEV_STATE_PR);
+        touch(206,180,LV_INDEV_STATE_PR); touch(206,180,LV_INDEV_STATE_REL); elapse(300);
+        assert(!lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN));
+        assert(weather_queries==queries_before); /* Viewing remains cache-only. */
+        tap(292,weather_tap_y[i]); elapse(300);
+        assert(!strcmp(chronvs_app_active_id(),"weather"));
+        assert(lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN));
+        assert(weather_queries==queries_before+1); /* Only on_show requests data. */
+    }
     puts("System UI passed: controls, Mnemo typing/hold, AUTO/ECO inactivity and wake-only touch.");
     return 0;
 }

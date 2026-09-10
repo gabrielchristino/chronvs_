@@ -97,6 +97,13 @@ da pilha de rede ocorre somente na primeira sessão. NTP e Clima adquirem a sess
 exclusiva em suas tarefas e desligam o rádio antes de liberar a próxima operação.
 Apps não chamam APIs globais de Wi-Fi. Não há nova consulta periódica de clima.
 
+O painel rápido usa somente `chronvs_weather_init` e `chronvs_weather_get_snapshot`
+para exibir temperatura e condição salvas; não dispara consulta nem consome a
+caixa de resultados do app. Sem cache, omite a temperatura. `ui/weather_icon.c`
+compartilha os símbolos vetoriais entre app, launcher e painel rápido.
+Tocar no atalho abre `weather` pelo gerenciador e fecha o painel. O `on_show`
+do app solicita a atualização; a visualização do atalho continua usando só cache.
+
 O diagnóstico de listras usou uma espera de 2 s antes da sessão Wi-Fi.
 Após corrigir a pressão de memória e confirmar a tela no relógio, o atraso
 foi retirado; os logs de memória nas etapas de rede/TLS foram mantidos.

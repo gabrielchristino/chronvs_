@@ -135,8 +135,9 @@ O mostrador inteiro funciona como superfície de toque:
 
 - Arrastar a partir da borda superior para baixo revela um painel retangular de acessos rápidos sobre o mostrador. O painel acompanha o dedo e completa ou cancela a abertura conforme a distância percorrida.
 - O arco externo do painel controla continuamente o brilho entre 10% e 100%.
-- Os atalhos ocupam uma grade 2–3–2. O primeiro botão mostra `15s`, `30s` ou `ON` e alterna entre `AUTO 15s / 45s`, `AUTO 30s / 2min` e `SEMPRE LIGADA`. O segundo reúne bateria e economia. O círculo central abre os apps; à esquerda, o volume percorre `0 → 1 → 2 → 3 → 4 → 5 → 0`. Zero silencia os avisos e cinco é o máximo. Três slots continuam reservados.
+- Os atalhos ocupam uma grade 2–3–2. O primeiro botão mostra `15s`, `30s` ou `ON` e alterna entre `AUTO 15s / 45s`, `AUTO 30s / 2min` e `SEMPRE LIGADA`. O segundo reúne bateria e economia. O círculo central abre os apps; à esquerda, o volume percorre `0 → 1 → 2 → 3 → 4 → 5 → 0`. Zero silencia os avisos e cinco é o máximo. À direita, o indicador Clima mostra ícone e temperatura apenas do cache salvo, sem ligar Wi-Fi; sem cache, mostra somente `CLIMA`. Dois slots continuam reservados.
 - O modo `ECO`, indicado pela borda amarela e pelo texto no botão da bateria, preserva a preferência normal, mas limita temporariamente o brilho e o indicador do arco a 35%, reduz para 5% após 5 segundos e apaga a iluminação após 15 segundos — inclusive quando o perfil normal está em `ON`.
+- Tocar no atalho Clima abre o app e fecha o painel; a abertura do app solicita a atualização dos dados.
 - Arrastar o painel para cima acompanha o dedo e fecha os acessos rápidos,
   inclusive quando o gesto começa sobre o arco de brilho.
 - Toques curtos e longos sobre o mostrador não alteram configurações.

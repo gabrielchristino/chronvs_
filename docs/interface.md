@@ -450,6 +450,13 @@ ser avaliados no speaker do relógio.
 
 ## Lista de apps em arco
 
+Os ícones compartilham a paleta e o desenho vetorial, mas cada app deve ter
+silhueta e elemento central próprios, legíveis no contêiner de 44 × 44 px.
+Evite repetir uma caixa com pequenos quadrados para representar funções
+diferentes. Compare sempre o conjunto no tamanho real do launcher.
+Calculadora usa operadores abertos; Hemera, uma folha com argolas e data
+grande; Mnemo, uma folha com linhas; Aion, um cronômetro; Clima, sol e nuvem.
+
 O launcher mostra ícone e nome diretamente sobre o fundo, sem título fixo.
 As linhas têm 64 px de altura e centros separados por 82 px. O centro dos
 ícones acompanha o lado esquerdo de um arco de raio 166 px, centrado em
@@ -517,6 +524,11 @@ dispositivo. Os parâmetros do SPD2010 foram preservados.
 
 ## Hemera — Calendário
 
+O ícone vetorial tem uma folha de 34 × 36 px, incluindo duas argolas claras,
+contorno amarelo de 2 px e canto inferior direito dobrado. Um `31` fixo em
+Montserrat 18 identifica o calendário; é um símbolo, não a data atual.
+Não há grade de pequenos quadrados, para diferenciá-lo da calculadora.
+
 Hemera funciona offline e abre no mês atual do RTC. A semana começa no domingo;
 meses de 2000 a 2099 incluem anos bissextos e até seis linhas. As telas de mês
 e detalhe não exibem o nome do app no topo, deixando essa área livre para
@@ -577,10 +589,15 @@ de comandos acima do teclado fica livre, dando mais espaço ao visor.
 ```
 
 `C` limpa a expressão, `DEL` apaga o último caractere e `=` usa destaque
-amarelo. O ícone segue o padrão vetorial dos apps nativos: contorno amarelo
-de 2 px, fundo transparente, visor e teclas claros, corpo de 28 × 36 px como
-o Mnemo. O desenho é feito diretamente no
-contêiner de 44 px para evitar deslocamentos causados por bordas de filhos.
+amarelo. O ícone é formado pelos operadores `+`, `−`, `×` e `=`, sem moldura:
+mais e igual em amarelo, menos e multiplicação em texto claro. Traços de 3 px
+com pontas arredondadas ocupam uma área de 36 × 36 px dentro do contêiner de
+44 px. O desenho vetorial direto substitui o antigo corpo retangular com
+visor e teclas, evitando semelhança com Hemera e Mnemo.
+
+Os novos ícones da calculadora e do Hemera foram inspecionados junto ao
+conjunto em renderização LVGL no host, com build e testes de integração
+aprovados. A legibilidade no painel físico ainda precisa ser confirmada.
 
 Arrastar mais de 80 px para a direita, com predominância horizontal de 20 px,
 volta diretamente ao launcher. O gesto vale no conteúdo e em todas as

@@ -164,30 +164,39 @@ static void poll(lv_timer_t *timer) {
 
 static void draw_icon(lv_event_t *event) {
     lv_area_t a; lv_obj_get_coords(lv_event_get_target(event), &a);
-    int x = a.x1 + 8, y = a.y1 + 6;
+    int x = a.x1 + (lv_area_get_width(&a) - 34) / 2;
+    int y = a.y1 + (lv_area_get_height(&a) - 36) / 2;
     lv_draw_ctx_t *ctx = lv_event_get_draw_ctx(event);
-    lv_draw_rect_dsc_t rect; lv_draw_rect_dsc_init(&rect);
-    rect.bg_opa = LV_OPA_TRANSP;
-    rect.border_color = lv_color_hex(CHRONVS_UI_ACCENT);
-    rect.border_width = 2; rect.radius = 4;
-    lv_area_t body = {x, y, x + 27, y + 31};
-    lv_draw_rect(ctx, &rect, &body);
+    /* Bound page with a folded corner and one large date, never a key grid. */
+    static const lv_point_t outline[] = {
+        {0, 5}, {33, 5}, {33, 27}, {25, 35}, {0, 35}, {0, 5},
+    };
     lv_draw_line_dsc_t line; lv_draw_line_dsc_init(&line);
-    line.color = rect.border_color; line.width = 2;
-    lv_point_t p = {x, y + 9}, q = {x + 27, y + 9};
-    lv_draw_line(ctx, &line, &p, &q);
-    for (int col = 0; col < 2; ++col) {
-        p = (lv_point_t){x + 7 + col * 13, y - 3};
-        q = (lv_point_t){p.x, y + 4};
+    line.color = lv_color_hex(CHRONVS_UI_ACCENT); line.width = 2;
+    line.round_start = line.round_end = true;
+    for (unsigned i = 1; i < sizeof(outline) / sizeof(outline[0]); ++i) {
+        lv_point_t p = {x + outline[i-1].x, y + outline[i-1].y};
+        lv_point_t q = {x + outline[i].x, y + outline[i].y};
         lv_draw_line(ctx, &line, &p, &q);
     }
-    rect.bg_opa = LV_OPA_COVER; rect.border_width = 0; rect.radius = 1;
-    rect.bg_color = lv_color_hex(CHRONVS_UI_TEXT);
-    for (int i = 0; i < 6; ++i) {
-        lv_area_t dot = {x + 5 + i % 3 * 7, y + 15 + i / 3 * 8,
-            x + 8 + i % 3 * 7, y + 18 + i / 3 * 8};
-        lv_draw_rect(ctx, &rect, &dot);
+    lv_point_t p = {x, y + 12}, q = {x + 33, y + 12};
+    lv_draw_line(ctx, &line, &p, &q);
+    p = (lv_point_t){x + 25, y + 35}; q = (lv_point_t){x + 25, y + 27};
+    lv_draw_line(ctx, &line, &p, &q);
+    p = (lv_point_t){x + 33, y + 27};
+    lv_draw_line(ctx, &line, &q, &p);
+    line.color = lv_color_hex(CHRONVS_UI_TEXT);
+    for (int col = 0; col < 2; ++col) {
+        p = (lv_point_t){x + 8 + col * 17, y};
+        q = (lv_point_t){p.x, y + 7};
+        lv_draw_line(ctx, &line, &p, &q);
     }
+    lv_draw_label_dsc_t date; lv_draw_label_dsc_init(&date);
+    date.font = &lv_font_montserrat_18;
+    date.color = lv_color_hex(CHRONVS_UI_TEXT);
+    date.align = LV_TEXT_ALIGN_CENTER;
+    lv_area_t number = {x + 2, y + 13, x + 28, y + 34};
+    lv_draw_label(ctx, &date, &number, "31", NULL);
 }
 
 static void create_icon(lv_obj_t *parent) {

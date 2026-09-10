@@ -37,6 +37,9 @@ src/
 - `watch` e `apps` são internos e devem manter `launcher_visible = false`.
 - Ícones de app são criados por `create_icon` dentro do contêiner fornecido;
   não adicione assets bitmap sem uma necessidade clara.
+- Diferencie os ícones por silhueta e símbolo principal, mantendo a paleta
+  comum. Evite repetir caixas e grades para funções distintas; confira a
+  legibilidade do conjunto no tamanho real de 44 × 44 px do launcher.
 
 ## Navegação e interação
 

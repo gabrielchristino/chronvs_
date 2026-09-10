@@ -122,7 +122,7 @@ permanecem avaliações separadas.
 A calculadora é compilada junto ao firmware e funciona sem cartão. Não há
 carregador, instalador ou interpretador de apps externos. A tela é criada na
 primeira abertura e reutilizada; cada abertura inicia uma expressão vazia.
-O layout e o ícone foram validados no relógio antes da migração para app nativo.
+O layout e o ícone anterior foram validados no relógio antes da migração para app nativo.
 Após a migração, passaram os testes de aritmética e integração LVGL (toques,
 energia, parênteses e exclusão), a compilação e a gravação com hashes verificados.
 Os testes estão em `tests/run_calculator_tests.ps1` e

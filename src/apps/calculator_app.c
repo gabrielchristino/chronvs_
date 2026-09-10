@@ -107,27 +107,25 @@ static void key_event(lv_event_t *event) {
 static void draw_icon(lv_event_t *event) {
     lv_area_t area;
     lv_obj_get_coords(lv_event_get_target(event), &area);
-    const int x = area.x1 + (lv_area_get_width(&area) - 28) / 2;
+    const int x = area.x1 + (lv_area_get_width(&area) - 36) / 2;
     const int y = area.y1 + (lv_area_get_height(&area) - 36) / 2;
     lv_draw_ctx_t *context = lv_event_get_draw_ctx(event);
-    lv_draw_rect_dsc_t style;
-    lv_draw_rect_dsc_init(&style);
-    style.bg_opa = LV_OPA_TRANSP;
-    style.border_width = 2;
-    style.border_color = lv_color_hex(CHRONVS_UI_ACCENT);
-    style.radius = 4;
-    lv_area_t shape = {x, y, x + 27, y + 35};
-    lv_draw_rect(context, &style, &shape);
-
-    style.border_width = 0;
-    style.radius = 1;
-    style.bg_opa = LV_OPA_COVER;
-    style.bg_color = lv_color_hex(CHRONVS_UI_TEXT);
-    for (unsigned index = 0; index < 7; ++index) {
-        const int px = x + (index ? 5 + ((index - 1) % 3) * 7 : 5);
-        const int py = y + (index ? 18 + ((index - 1) / 3) * 8 : 5);
-        shape = (lv_area_t){px, py, px + (index ? 3 : 17), py + (index ? 3 : 5)};
-        lv_draw_rect(context, &style, &shape);
+    /* Open mathematical marks give this app a silhouette unlike a page. */
+    static const lv_point_t strokes[][2] = {
+        {{1, 8}, {15, 8}}, {{8, 1}, {8, 15}},       /* + */
+        {{23, 8}, {35, 8}},                        /* - */
+        {{3, 25}, {13, 35}}, {{3, 35}, {13, 25}},  /* x */
+        {{23, 26}, {35, 26}}, {{23, 33}, {35, 33}},/* = */
+    };
+    lv_draw_line_dsc_t line;
+    lv_draw_line_dsc_init(&line);
+    line.width = 3;
+    line.round_start = line.round_end = true;
+    for (unsigned i = 0; i < sizeof(strokes) / sizeof(strokes[0]); ++i) {
+        line.color = lv_color_hex(i < 2 || i >= 5 ? CHRONVS_UI_ACCENT : CHRONVS_UI_TEXT);
+        lv_point_t start = {x + strokes[i][0].x, y + strokes[i][0].y};
+        lv_point_t end = {x + strokes[i][1].x, y + strokes[i][1].y};
+        lv_draw_line(context, &line, &start, &end);
     }
 }
 

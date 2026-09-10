@@ -21,6 +21,7 @@ try {
         $arguments += @('-lm')
         $jsonRoot = Join-Path $env:USERPROFILE '.platformio/packages/framework-espidf/components/json/cJSON'
         $arguments += @('src/apps/weather_app.c','src/ui/weather_icon.c','src/services/weather_data.c',"$jsonRoot/cJSON.c",'-I',$jsonRoot)
+        $arguments += @('src/apps/hemera_app.c','src/core/calendar.c')
         $arguments += @('src/platform/lvgl_memory.c','-DLV_MEM_POOL_ALLOC=chronvs_lvgl_pool_alloc',
             '-include','src/platform/lvgl_memory.h')
     }

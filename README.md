@@ -15,6 +15,9 @@ Além do mostrador, Aion reúne cronômetro, timer e alarmes. Mnemo oferece nota
 persistentes com teclado multi-tap e edição de texto na tela circular; seu
 layout e interação foram validados no dispositivo. A calculadora
 é um app nativo com operações básicas, precedência e parênteses.
+Hemera oferece calendário mensal offline, destaque de hoje e consulta do dia
+da semana e da distância até uma data. Veja os detalhes em
+[`docs/interface.md`](docs/interface.md#hemera--calendário).
 
 Clima mostra as condições de São Paulo pela Open-Meteo, com atualização ao ser
 aberto, cache persistente e fallback para a última leitura. Compartilha sessões

@@ -23,6 +23,10 @@ static void contact_event(lv_event_t *event) {
             state->consumed = true;
             lv_indev_wait_release(input);
             state->back();
+        } else if (state->vertical && dy > 80 && dy > abs(dx) + 20) {
+            state->consumed = true;
+            lv_indev_wait_release(input);
+            state->vertical(point.y < state->start.y ? 1 : -1);
         }
     }
 }

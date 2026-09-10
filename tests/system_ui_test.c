@@ -220,7 +220,7 @@ int main(void) {
     assert(chronvs_app_open("apps"));capture("14-app-list");
     lv_obj_t *launcher = lv_obj_get_child(chronvs_app_content_layer(), -1);
     lv_obj_t *app_list = lv_obj_get_child(launcher, 0);
-    assert(lv_obj_get_child_cnt(app_list) == 4);
+    assert(lv_obj_get_child_cnt(app_list) == 5);
     lv_obj_t *first_row = lv_obj_get_child(app_list, 0);
     lv_obj_t *middle_row = lv_obj_get_child(app_list, 1);
     assert(lv_obj_get_style_translate_x(first_row, 0) >
@@ -354,6 +354,27 @@ int main(void) {
         assert(lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN));
         assert(weather_queries==queries_before+1); /* Only on_show requests data. */
     }
-    puts("System UI passed: controls, Mnemo typing/hold, AUTO/ECO inactivity and wake-only touch.");
+    assert(chronvs_app_open("hemera")); capture("25-hemera-integrated");
+    assert(find_label_text(chronvs_app_content_layer(),"Setembro"));
+    lv_mem_monitor(&memory); assert(memory.free_biggest_size > 16384);
+    printf("Including Hemera: %u bytes free, largest block %u.\n",
+        (unsigned)memory.free_size, (unsigned)memory.free_biggest_size);
+    elapse(16000); assert(LCD_Backlight==0);
+    rtc_before=weather_rtc_reads;
+    elapse(60000); assert(weather_rtc_reads==rtc_before);
+    /* The entire first vertical swipe only wakes the display. */
+    touch(206,270,LV_INDEV_STATE_PR); touch(206,220,LV_INDEV_STATE_PR);
+    touch(206,170,LV_INDEV_STATE_PR); touch(206,170,LV_INDEV_STATE_REL);
+    assert(find_label_text(chronvs_app_content_layer(),"Setembro"));
+    touch(206,270,LV_INDEV_STATE_PR); touch(206,220,LV_INDEV_STATE_PR);
+    touch(206,170,LV_INDEV_STATE_PR); touch(206,170,LV_INDEV_STATE_REL);
+    assert(find_label_text(chronvs_app_content_layer(),"Outubro"));
+    touch(206,170,LV_INDEV_STATE_PR); touch(206,220,LV_INDEV_STATE_PR);
+    touch(206,270,LV_INDEV_STATE_PR); touch(206,270,LV_INDEV_STATE_REL);
+    assert(find_label_text(chronvs_app_content_layer(),"Setembro"));
+    touch(86,88,LV_INDEV_STATE_PR); touch(135,88,LV_INDEV_STATE_PR);
+    touch(185,88,LV_INDEV_STATE_PR); touch(185,88,LV_INDEV_STATE_REL);
+    assert(!strcmp(chronvs_app_active_id(),"apps"));
+    puts("System UI passed: controls, Mnemo typing/hold, Hemera, AUTO/ECO inactivity and wake-only touch.");
     return 0;
 }

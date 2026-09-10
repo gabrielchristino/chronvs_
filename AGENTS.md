@@ -40,6 +40,14 @@ src/
 
 ## Navegação e interação
 
+Priorize navegação por gestos nas novas implementações, reduzindo botões usados
+apenas para trocar páginas ou períodos. Em sequências, arrastar de baixo para
+cima avança e de cima para baixo retorna; arrastar para a direita mantém o
+retorno hierárquico. Preserve toques para selecionar conteúdo e executar ações.
+Evite duplicar os gestos com setas e não exiba o nome do app no topo quando ele
+apenas repetir a identificação do launcher; deixe espaço de respiro. Considere
+conflitos com conteúdo rolável e documente exceções e mapeamentos por app.
+
 Preserve estes contratos, salvo pedido explícito do usuário:
 
 - Mostrador: arrastar da borda superior para baixo abre acessos rápidos;

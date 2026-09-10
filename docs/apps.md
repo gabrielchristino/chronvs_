@@ -78,7 +78,7 @@ estão em [`interface.md`](interface.md#lista-de-apps-em-arco).
 `.launcher_visible = false`; portanto, não aparecem na própria lista. Os apps
 destinados ao launcher usam `.launcher_visible = true` e entram na lista automaticamente.
 
-Calculadora, Aion, Mnemo e Clima são apps nativos registrados individualmente com
+Calculadora, Aion, Mnemo, Clima e Hemera são apps nativos registrados individualmente com
 `CHRONVS_REGISTER_APP`. A calculadora mantém sua avaliação aritmética em
 `core/calculator.c` e sua interface em `apps/calculator_app.c`.
 
@@ -168,6 +168,15 @@ de uso. Contatos prolongados também devem manter a tela ativa; timers de
 animação e salvamento não são atividade. A proteção global continua consumindo
 o primeiro toque com a tela apagada.
 
+Priorize gestos para navegar por páginas ou períodos nas novas implementações,
+com subir para avançar, descer para retornar e direita para voltar um nível.
+Toques selecionam conteúdo ou executam ações; evite setas redundantes e títulos
+que apenas repetem o nome do launcher. Respeite rolagem e controles com arraste
+próprio, documentando os conflitos. O callback opcional `vertical` de
+`chronvs_ui_app_input_t` recebe `+1` ao subir e `-1` ao descer, com mais de 80 px
+e predominância de 20 px; consome o contato antes de chamar o app. Sem callback,
+o helper mantém somente o retorno horizontal existente.
+
 Abra o app a partir de um launcher ou atalho:
 
 ```c
@@ -178,6 +187,42 @@ chronvs_app_open("timer");
 entre apps. `on_show` serve para atualizar dados ou retomar timers; `on_hide`
 serve para pausar trabalho que não deve continuar fora da tela. O gerenciador
 aceita atualmente oito apps e rejeita IDs repetidos.
+
+## Hemera — Calendário
+
+`apps/hemera_app.c` registra `hemera` automaticamente, com ícone vetorial e
+duas páginas reutilizadas: mês e detalhe da data. A grade inteira é desenhada
+em um objeto LVGL, com hit-test por célula, evitando 42 botões e seus labels.
+`core/calendar.c` calcula dias do mês, ano bissexto, dia da semana e distância
+entre datas civis de 2000 a 2099, sem timezone, rede ou persistência.
+No mês, o callback `vertical` avança ao subir e retorna ao descer, uma vez por
+contato, inclusive sobre a grade e Hoje; no detalhe, não troca o mês. Não há
+setas. O retorno para a direita permanece hierárquico.
+
+`on_show` abre o mês atual. O timer de 250 ms consulta o serviço RTC na
+abertura, em Hoje, ao despertar e a cada minuto com tela ativa; só redesenha
+quando os dados mudam. `on_hide` pausa o timer e a tela apagada impede leituras
+e alterações visuais. A troca de data atualiza destaque e distância sem mudar
+o mês que o usuário está consultando. Datas impossíveis, inclusive 31/02,
+são rejeitadas mesmo que o serviço RTC marque a leitura como válida.
+
+Sem data válida na primeira abertura, mostra `Sem data` e aguarda recuperação.
+Depois de uma leitura válida, uma falha mantém o mês navegável, remove o
+destaque de hoje e desabilita Hoje; o detalhe informa que a data atual está
+indisponível. Não usa horário de demonstração para cálculos.
+
+`tests/run_hemera_tests.ps1` testa todos os 36.525 dias do intervalo contra o
+calendário da biblioteca C do host, navegação nos limites, bissextos, seis
+semanas, retorno sem clique, contatos prolongados, recuperação do RTC e pausa
+com tela apagada/oculta. Também gera capturas e verifica estabilidade da
+memória LVGL. `tests/run_aion_ui.ps1 -System` inclui Hemera no launcher e no
+orçamento compartilhado, além do primeiro toque reservado ao despertar.
+Build PlatformIO e ambos os testes passaram na versão com gestos verticais.
+No host, 100 ciclos de abertura/detalhe/retorno mantiveram a memória livre
+estável; com todos os apps criados, o maior bloco LVGL livre foi de 30.576
+bytes. Essa medição do pool LVGL simulado não representa RAM interna ou DMA
+livres no dispositivo.
+A validação física da legibilidade e precisão de seleção segue pendente.
 
 ## Agenda e avisos do Aion
 

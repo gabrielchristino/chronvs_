@@ -13,7 +13,8 @@ lv_scr_act()
 │   ├── aion                      cronômetro, timer e alarmes
 │   ├── mnemo                     notas, editor e teclado multi-tap
 │   ├── calculator                calculadora
-│   └── weather                   clima de São Paulo
+│   ├── weather                   clima de São Paulo
+│   └── hemera                    calendário mensal e detalhe da data
 └── settings_panel                painel global de acessos rápidos
 
 lv_layer_top()
@@ -43,6 +44,8 @@ disponível sobre o mostrador sem pertencer a um app.
 | Mnemo: editor / leitura | Arrastar para a direita | Salva e volta à lista de notas, inclusive sobre texto e teclado. Falha de gravação mantém o editor aberto. |
 | Mnemo: confirmação de exclusão | Arrastar para a direita | Cancela a confirmação. |
 | Clima | Arrastar para a direita | Volta ao launcher, inclusive começando no ícone ou nos textos. |
+| Hemera: mês / detalhe | Arrastar para a direita | Volta ao launcher / ao mês consultado, inclusive sobre grade e controles. |
+| Hemera: mês | Arrastar para cima / para baixo | Avança / retorna um mês, inclusive sobre a grade e Hoje. |
 
 Todo novo app deve adotar o retorno da esquerda para a direita do Aion, sem
 botão Voltar no topo. O gesto confirma com deslocamento horizontal maior que
@@ -56,6 +59,12 @@ invalidar a árvore LVGL em cada amostra do touch e mantém o painel próximo ao
 dedo sem formar uma fila de quadros antigos.
 
 ## Padrão dos controles
+
+Nas novas implementações, priorize gestos para navegação: subir avança na
+sequência, descer retorna e direita volta um nível. Toques ficam para seleção
+e ações. Evite setas que dupliquem essa navegação e títulos que apenas repetem
+o nome do app no launcher, preservando espaço de respiro. Documente exceções
+quando houver conflito com rolagem ou controles que exigem arraste próprio.
 
 Os estilos de controle ficam em `ui/control_style.c`, incluindo a distribuição
 2–3–2, cores, bordas e estados. A revisão cobre mostrador, acessos rápidos,
@@ -505,6 +514,48 @@ no teste do primeiro arraste após despertar. A renderização simulada foi
 inspecionada; a consulta real e a memória durante TLS foram observadas no relógio.
 Consumo, fluidez e picos de memória em outros cenários ainda exigem medição no
 dispositivo. Os parâmetros do SPD2010 foram preservados.
+
+## Hemera — Calendário
+
+Hemera funciona offline e abre no mês atual do RTC. A semana começa no domingo;
+meses de 2000 a 2099 incluem anos bissextos e até seis linhas. As telas de mês
+e detalhe não exibem o nome do app no topo, deixando essa área livre para
+respiro visual; mês e ano ficam a y=68/95. Não há setas. Arrastar de baixo para
+cima avança um mês; de cima para baixo retorna um mês. A troca exige mais de
+80 px verticais e predominância de 20 px sobre o deslocamento horizontal,
+funciona também sobre a grade e Hoje e ocorre uma vez por contato, consumindo
+a liberação para evitar seleção ou ação acidental. Nos limites do intervalo,
+o gesto é consumido sem alterar o mês. No detalhe, gestos verticais não navegam.
+
+Os cabeçalhos `D S T Q Q S S`, em Montserrat 12, começam a y=132. A grade tem
+294 × 174 px, em (59, 154), com sete colunas e seis linhas de células de
+42 × 29 px. As células são uma exceção específica ao padrão de círculos de
+atalho, necessária para leitura de um mês inteiro; não são sete opções em
+2–3–2. Números usam Montserrat 18; hoje recebe disco amarelo de 28 px e texto
+escuro. Células fora do mês ficam vazias e não recebem seleção. A pílula Hoje,
+de 140 × 54 px a y=342, relê o RTC e retorna ao mês atual.
+
+Toque curto em um dia abre número ampliado, mês/ano, dia da semana e distância
+até hoje (`Hoje`, `Amanhã`, `Ontem`, `Daqui a N dias` ou `Há N dias`). Arrastar
+para a direita retorna ao mesmo mês; outro arraste volta ao launcher. O gesto
+usa mais de 80 px e predominância horizontal de 20 px, em toda a árvore,
+consumindo a liberação. Deslocamento de mais de 12 px na grade cancela a seleção.
+Não há botão Voltar no topo.
+
+Sem RTC válido, Hoje fica desabilitado e aparece `RTC indisponivel`. Se ainda
+não houve data válida, o cabeçalho mostra `Sem data`; caso contrário, preserva
+o mês consultado sem destacar hoje. A data é verificada a cada minuto, ao
+abrir, ao despertar e em Hoje; o mês consultado permanece estável na virada
+do dia. Não há rede, animação em repouso ou leitura/renderização com tela
+apagada. Contatos reais, inclusive prolongados, reiniciam a inatividade via
+`ui/app_input.h`; o primeiro contato com tela apagada somente acorda.
+
+Verificação no host: `tests/run_hemera_tests.ps1` e
+`tests/run_aion_ui.ps1 -System`; capturas em `.pio/host-tests/hemera-*.bmp`.
+No relógio, validar toque nos dias das extremidades e sexta linha, retorno
+sobre grade e Hoje, troca de mês por gestos, legibilidade e apagar/acordar.
+Esses testes físicos permanecem pendentes; buffers, QSPI e pool LVGL mantêm
+os parâmetros validados.
 
 ## Calculadora
 

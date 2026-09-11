@@ -139,6 +139,18 @@ int main(void) {
     lv_obj_t *stop=button_with_text(overlay,"Parar"); assert(stop);
     lv_event_send(stop,LV_EVENT_CLICKED,NULL); chronvs_aion_alert_poll();
     lv_tick_inc(2500); chronvs_aion_alert_poll(); assert(!ringing && !overlay);
+    clear_alarms(); set_time(26,9,11,7,59,59);
+    chronvs_reminder_t reminder={.year=26,.month=9,.day=11,.hour=8,
+        .title="Reunião de planejamento com a equipe"};
+    assert(chronvs_reminder_create(&reminder));
+    display_off=true; advance(1); chronvs_aion_alert_poll();
+    assert(!display_off && overlay && !ringing); frame("26-hemera-alert");
+    lv_tick_inc(2000); chronvs_aion_alert_poll(); assert(ringing);
+    stop=button_with_text(overlay,"Concluir"); assert(stop);
+    fail_save=true; lv_event_send(stop,LV_EVENT_CLICKED,NULL); chronvs_aion_alert_poll();
+    assert(overlay && ringing && !chronvs_reminder_get(0)->done);
+    fail_save=false; lv_event_send(stop,LV_EVENT_CLICKED,NULL); chronvs_aion_alert_poll();
+    assert(!overlay && !ringing && chronvs_reminder_get(0)->done);
     lv_mem_monitor_t memory; lv_mem_monitor(&memory);
     printf("Aion UI passed. LVGL heap used: %u bytes. Snapshots in .pio/host-tests.\n",(unsigned)(memory.total_size-memory.free_size));
     return 0;

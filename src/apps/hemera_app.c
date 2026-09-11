@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include "core/calendar.h"
 #include "services/rtc_service.h"
+#include "services/aion_service.h"
+#include "apps/hemera_reminders.h"
 #include "ui/aion_widgets.h"
 #include "ui/app_input.h"
 #include "ui/mnemo_font.h"
@@ -22,6 +24,7 @@ static chronvs_time_t today;
 static int year, month, selected_day;
 static bool visible, detail, was_off, dirty, reset_month;
 static uint32_t read_tick;
+static uint32_t reminder_revision;
 static void render(void);
 static void poll(lv_timer_t *timer);
 static void back(void) {
@@ -72,6 +75,15 @@ static void draw_grid(lv_event_t *event) {
         label.color = lv_color_hex(current ? CHRONVS_UI_PANEL : CHRONVS_UI_TEXT);
         lv_area_t area = {x, y + 3, x + CELL_W - 1, y + CELL_H - 1};
         lv_draw_label(ctx, &label, &area, text, NULL);
+        for (unsigned i=0; i<CHRONVS_REMINDER_LIMIT; ++i) {
+            const chronvs_reminder_t *r=chronvs_reminder_get(i);
+            if (!r || r->done || 2000+r->year!=year || r->month!=month || r->day!=day) continue;
+            lv_draw_rect_dsc_t dot; lv_draw_rect_dsc_init(&dot);
+            dot.bg_color=lv_color_hex(current ? CHRONVS_UI_PANEL : CHRONVS_UI_ACCENT);
+            dot.radius=LV_RADIUS_CIRCLE;
+            lv_area_t mark={x+19,y+24,x+22,y+27}; lv_draw_rect(ctx,&dot,&mark);
+            break;
+        }
     }
 }
 
@@ -146,12 +158,18 @@ static void poll(lv_timer_t *timer) {
     (void)timer;
     if (!visible) return;
     if (chronvs_system_ui_display_is_off()) { was_off = true; return; }
+    chronvs_hemera_reminders_poll();
+    if (reminder_revision != chronvs_reminder_revision()) {
+        reminder_revision = chronvs_reminder_revision();
+        lv_obj_invalidate(grid);
+    }
     if (!dirty && !was_off && lv_tick_elaps(read_tick) < 60000) return;
     chronvs_time_t now = chronvs_rtc_read();
     now.valid = now.valid && chronvs_calendar_valid(2000 + now.year, now.month, now.day);
     bool changed = now.valid != today.valid || now.year != today.year ||
         now.month != today.month || now.day != today.day;
     today = now;
+    chronvs_aion_observe_time(&now);
     if (today.valid && (reset_month || !year)) {
         year = 2000 + today.year; month = today.month;
         reset_month = false;
@@ -211,6 +229,11 @@ static lv_obj_t *label(lv_obj_t *parent, const char *text, int y, int width, con
     return obj;
 }
 
+static void open_reminders(lv_event_t *event) {
+    if (input.consumed || chronvs_system_ui_display_is_off()) return;
+    chronvs_hemera_reminders_open(lv_obj_get_parent(lv_event_get_target(event)), year, month, selected_day);
+}
+
 static lv_obj_t *create(lv_obj_t *parent) {
     lv_obj_t *root = lv_obj_create(parent); chronvs_aion_surface(root);
     month_page = lv_obj_create(root); chronvs_aion_surface(month_page);
@@ -239,14 +262,19 @@ static lv_obj_t *create(lv_obj_t *parent) {
     detail_weekday = label(detail_page, "", 223, 290, &chronvs_mnemo_font);
     distance_label = label(detail_page, "", 281, 290, &chronvs_mnemo_font);
     lv_obj_set_style_text_color(distance_label, lv_color_hex(CHRONVS_UI_ACCENT), 0);
+    chronvs_aion_action(detail_page, "Lembretes", 0, 330, 180, false, open_reminders, 0);
     chronvs_ui_app_input_bind(root, &input);
-    refresh = lv_timer_create(poll, 250, NULL);
+    refresh = lv_timer_create(poll, 20, NULL);
     lv_timer_pause(refresh);
     hidden(detail_page, true);
     return root;
 }
 
 static void show(void) {
+    if (chronvs_hemera_reminders_active()) {
+        visible = dirty = true;
+        lv_timer_resume(refresh); poll(refresh); return;
+    }
     visible = dirty = reset_month = true;
     detail = false;
     input.consumed = false;

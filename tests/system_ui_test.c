@@ -13,6 +13,7 @@
 #include "services/sound_service.h"
 #include "services/weather_service.h"
 #include "platform/lvgl_memory.h"
+#include "ui/aion_alert.h"
 #include <stdlib.h>
 
 int nvs_set_blob(nvs_handle_t h, const char *k, const void *in, size_t size) {
@@ -23,6 +24,8 @@ int nvs_set_blob(nvs_handle_t h, const char *k, const void *in, size_t size) {
 }
 
 static lv_indev_state_t contact;
+static bool reminder_ringing;
+void chronvs_sound_set_ringing(bool value) { reminder_ringing=value; }
 static unsigned weather_queries, weather_rtc_reads, weather_cache_reads, weather_result_reads;
 static chronvs_weather_snapshot_t saved_weather;
 static chronvs_weather_state_t weather_state;
@@ -376,5 +379,22 @@ int main(void) {
     touch(185,88,LV_INDEV_STATE_PR); touch(185,88,LV_INDEV_STATE_REL);
     assert(!strcmp(chronvs_app_active_id(),"apps"));
     puts("System UI passed: controls, Mnemo typing/hold, Hemera, AUTO/ECO inactivity and wake-only touch.");
+    assert(chronvs_app_open("hemera"));
+    lv_obj_t *hemera=lv_obj_get_child(chronvs_app_content_layer(),-1);
+    tap(290,197); tap(206,357); tap(206,341);
+    assert(find_label_text(hemera,"Título do lembrete"));
+    capture("27-hemera-editor-integrated");
+    lv_mem_monitor(&memory);
+    printf("Including reminder editor: %u bytes free, largest block %u.\n",
+        (unsigned)memory.free_size,(unsigned)memory.free_biggest_size);
+    assert(memory.free_biggest_size>8192);
+    chronvs_aion_init(); set_time(26,9,10,12,0,0);
+    chronvs_reminder_t reminder={.year=26,.month=9,.day=10,.hour=12,.minute=1,.title="Aviso durante a edição"};
+    assert(chronvs_reminder_create(&reminder)); advance(60); chronvs_aion_alert_poll();
+    assert(find_label_text(lv_layer_top(),"Concluir")); capture("28-hemera-alert-integrated");
+    lv_mem_monitor(&memory); assert(memory.free_biggest_size>4096);
+    printf("Editor plus alert: %u bytes free, largest block %u.\n",
+        (unsigned)memory.free_size,(unsigned)memory.free_biggest_size);
+    tap(206,307); chronvs_aion_alert_poll(); assert(!reminder_ringing && chronvs_reminder_get(0)->done);
     return 0;
 }

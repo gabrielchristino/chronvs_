@@ -6,15 +6,26 @@
 
 static int64_t now_us;
 static unsigned char persisted[CHRONVS_ALARM_LIMIT * sizeof(chronvs_alarm_t)];
+static unsigned char persisted_reminders[CHRONVS_REMINDER_LIMIT * sizeof(chronvs_reminder_t)];
 static bool fail_save;
 int64_t esp_timer_get_time(void) { return now_us; }
 int nvs_open(const char *name, int mode, nvs_handle_t *handle) { (void)name; (void)mode; *handle = 1; return 0; }
 int nvs_get_blob(nvs_handle_t h, const char *k, void *out, size_t *size) {
-    (void)h; if (strcmp(k, "alarms_v1")) return -1;
+    (void)h;
+    if (!strcmp(k, "reminders_v1")) {
+        assert(*size == sizeof(persisted_reminders)); memcpy(out, persisted_reminders, *size); return 0;
+    }
+    if (strcmp(k, "alarms_v1")) return -1;
     assert(*size == sizeof(persisted)); memcpy(out, persisted, *size); return 0;
 }
 int nvs_set_blob(nvs_handle_t h, const char *k, const void *in, size_t size) {
-    (void)h; assert(!strcmp(k, "alarms_v1") && size == sizeof(persisted));
+    (void)h;
+    if (!strcmp(k, "reminders_v1")) {
+        assert(size == sizeof(persisted_reminders));
+        if (fail_save) return -1;
+        memcpy(persisted_reminders, in, size); return 0;
+    }
+    assert(!strcmp(k, "alarms_v1") && size == sizeof(persisted));
     if (fail_save) return -1;
     memcpy(persisted, in, size); return 0;
 }
@@ -106,5 +117,45 @@ int main(void) {
         assert(a && a->hour == i && a->minute == 30 && a->days == 127);
     }
     puts("Aion: timer, extensions, weekdays, recurrence, snooze, queue, rollover and NVS tests passed.");
+    clear_alarms();
+    chronvs_reminder_t reminder = {.year=26,.month=9,.day=12,.hour=8,.title="Reunião"};
+    assert(!chronvs_reminder_create(&reminder)); /* No trusted clock after boot. */
+    set_time(26,9,12,7,59,0);
+    fail_save=true; assert(!chronvs_reminder_create(&reminder)); assert(!chronvs_reminder_get(0));
+    fail_save=false;
+    chronvs_reminder_t bad=reminder; bad.month=2; bad.day=30; assert(!chronvs_reminder_create(&bad));
+    bad=reminder; bad.title[0]=0; assert(!chronvs_reminder_create(&bad));
+    bad=reminder; strcpy(bad.title,"   "); assert(!chronvs_reminder_create(&bad));
+    bad=reminder; memset(bad.title,'a',sizeof(bad.title)); assert(!chronvs_reminder_create(&bad));
+    bad=reminder; strcpy(bad.title,"a\nb"); assert(!chronvs_reminder_create(&bad));
+    bad=reminder; bad.hour=7; assert(!chronvs_reminder_create(&bad));
+    assert(chronvs_reminder_create(&reminder)); assert(chronvs_reminder_create(&reminder));
+    assert(chronvs_alarm_create(8,0,127)); chronvs_timer_start(1);
+    advance(60); assert(chronvs_aion_alert()==-1);
+    chronvs_aion_dismiss(0); assert(chronvs_aion_alert()==0);
+    chronvs_aion_dismiss(0); assert(chronvs_aion_alert()==CHRONVS_ALARM_LIMIT);
+    fail_save=true; assert(!chronvs_reminder_complete(0)); assert(chronvs_aion_alert()==CHRONVS_ALARM_LIMIT);
+    assert(!chronvs_reminder_delete(0)); assert(chronvs_reminder_get(0));
+    fail_save=false; assert(chronvs_reminder_complete(0));
+    assert(chronvs_aion_alert()==CHRONVS_ALARM_LIMIT+1);
+    chronvs_aion_init(); set_time(26,9,13,12,0,0); /* Missed reminders survive reboot. */
+    assert(chronvs_reminder_get(0)->done && chronvs_aion_alert()==CHRONVS_ALARM_LIMIT+1);
+    assert(chronvs_reminder_delete(1)); assert(chronvs_aion_alert()==-2);
+    set_time(26,9,12,7,59,0); advance(60); /* A backward correction cannot repeat completed reminders. */
+    chronvs_aion_dismiss(0); assert(chronvs_aion_alert()==-2);
+    assert(chronvs_reminder_delete(0)); clear_alarms();
+    set_time(24,2,28,23,59,59);
+    reminder=(chronvs_reminder_t){.year=24,.month=2,.day=29,.title="Bissexto"};
+    assert(chronvs_reminder_create(&reminder)); advance(1); assert(chronvs_aion_alert()==CHRONVS_ALARM_LIMIT);
+    assert(chronvs_reminder_delete(0));
+    set_time(26,12,31,23,59,59);
+    reminder=(chronvs_reminder_t){.year=27,.month=1,.day=1,.title="Ano novo"};
+    for (unsigned i=0;i<CHRONVS_REMINDER_LIMIT;++i) assert(chronvs_reminder_create(&reminder));
+    assert(!chronvs_reminder_create(&reminder)); advance(1);
+    for (unsigned i=0;i<CHRONVS_REMINDER_LIMIT;++i) {
+        assert(chronvs_aion_alert()==CHRONVS_ALARM_LIMIT+(int)i); assert(chronvs_reminder_complete(i));
+    }
+    chronvs_aion_init(); set_time(27,1,2,0,0,0); assert(chronvs_aion_alert()==-2);
+    puts("Hemera reminders: validation, capacity, NVS, overdue/reboot, one-shot completion, queue and calendar boundaries passed.");
     return 0;
 }

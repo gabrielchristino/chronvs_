@@ -39,7 +39,8 @@ disponível sobre o mostrador sem pertencer a um app.
 | Aion | Arrastar 80 px para a direita | Volta à lista de apps. |
 | Aion: cronômetro / timer | Arrastar 80 px para cima | Avança para timer / alarmes. |
 | Aion: timer / alarmes | Arrastar 80 px para baixo | Retorna para cronômetro / timer. Pode começar no meio da tela ou sobre uma linha de alarme quando a lista está no topo. Se estiver rolada, o gesto dentro da lista apenas rola o conteúdo; um novo arraste no topo retorna ao timer. Fora da lista, o retorno é direto. |
-| Aion: criação / detalhe de alarme | Arrastar 80 px para a direita | Volta à etapa anterior / lista de alarmes. Os arcos recebem o toque exclusivamente para selecionar o valor. |
+| Aion: criação de alarme | Arrastar 80 px para cima / para baixo fora do arco | Avança da hora para os minutos e para os dias / retorna à etapa anterior. O arco recebe o arraste exclusivamente para selecionar o valor. |
+| Aion: criação / detalhe de alarme | Arrastar 80 px para a direita | Volta à etapa anterior / lista de alarmes. |
 | Mnemo: lista | Arrastar para a direita | Volta ao launcher, inclusive iniciando sobre uma linha. |
 | Mnemo: editor / leitura | Arrastar para a direita | Salva e volta à lista de notas, inclusive sobre texto e teclado. Falha de gravação mantém o editor aberto. |
 | Mnemo: confirmação de exclusão | Arrastar para a direita | Cancela a confirmação. |
@@ -74,7 +75,7 @@ launcher, cronômetro, timer, lista/criação/detalhe de alarmes e os dois aviso
 | --- | --- |
 | Atalhos, tempos e dias | Círculos de 70 × 70 px; sete opções em 2–3–2, com os mesmos deslocamentos relativos em todas as telas. |
 | Ação isolada: Criar, Excluir, Cancelar, Parar | Pílula de 140 × 54 px. |
-| Duas ações: Iniciar/Zerar, Voltar/Proximo, +5 min/Parar | Duas pílulas de 120 × 54 px, com 12 px entre elas. |
+| Duas ações: Iniciar/Zerar, +5 min/Parar | Duas pílulas de 120 × 54 px, com 12 px entre elas. |
 | Novo alarme | Pílula de 180 × 54 px para comportar o rótulo. |
 | Linhas de lista | Pílulas de 56 px nos alarmes. No launcher, linhas transparentes de 64 px com ícone de 44 px em disco de 60 px. |
 
@@ -264,8 +265,10 @@ círculos em `ui/control_style.c`.
 
 A lista de alarmes possui rolagem e um botão fixo `Novo alarme`. Até 12 alarmes
 ficam salvos na NVS; ao atingir esse limite, o botão fica desabilitado. A
-criação usa arco de **00–23 horas**, depois arco de **00–59 minutos**, com
-`Voltar` e `Proximo`. A última etapa oferece sete círculos selecionáveis e
+criação usa arco de **00–23 horas**, depois arco de **00–59 minutos**. Um
+arraste para cima na área ao redor do arco avança; um arraste para baixo
+retorna. O próprio arco preserva o arraste para selecionar o valor. A última
+etapa oferece sete círculos selecionáveis e
 o botão de criação em pílula na quarta linha:
 
 ```text
@@ -280,6 +283,11 @@ O alarme se repete semanalmente nos dias escolhidos. Tocar uma linha mostra
 `hh:mm`, os dias selecionados e `Excluir`, sem edição. Excluir também cancela
 um adiamento pendente. Falhas de gravação mantêm a tela e mostram uma mensagem.
 Os rótulos usam os caracteres disponíveis nas fontes Montserrat embarcadas.
+
+**Validação no relógio confirmada pelo usuário:** a criação de alarme funciona
+com os gestos verticais nas etapas de hora, minuto e dias, sem os botões
+`Voltar` e `Proximo`; o ajuste pelo arco e o retorno entre etapas permanecem
+corretos no painel físico.
 
 Ao tocar, o alarme mostra a hora em tela cheia, com `+5 min` para adiar essa
 ocorrência e `Parar` para silenciá-la, mantendo sua recorrência. Timer e

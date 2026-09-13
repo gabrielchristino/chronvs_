@@ -16,6 +16,10 @@ static void touch(int x, int y, lv_indev_state_t state) {
     contact_point=(lv_point_t){x,y}; contact=state;
     lv_tick_inc(35); lv_timer_handler();
 }
+static void swipe(int x1, int y1, int x2, int y2) {
+    touch(x1,y1,LV_INDEV_STATE_PR); touch(x2,y2,LV_INDEV_STATE_PR);
+    touch(x2,y2,LV_INDEV_STATE_REL); chronvs_aion_pages_refresh();
+}
 void chronvs_apps_add(const chronvs_app_t *app) { (void)app; }
 bool chronvs_app_open(const char *id) { (void)id; return true; }
 bool chronvs_system_ui_display_is_off(void) { return display_off; }
@@ -106,9 +110,19 @@ int main(void) {
     assert(!ringing && chronvs_timer_remaining()==7200);
     select_page(2); frame("05-alarm-empty");
     click("Novo alarme"); assert(view==HOUR); frame("06-alarm-hour");
-    lv_arc_set_value(arc,7); click("Proximo"); assert(view==MINUTE);
+    assert(!button_with_text(aion_root,"Voltar"));
+    assert(!button_with_text(aion_root,"Proximo"));
+    /* The arc keeps vertical drag for values; the side surface changes steps. */
+    swipe(206,280,206,170); assert(view==HOUR);
+    swipe(50,170,50,280); assert(view==LIST);
+    click("Novo alarme"); assert(view==HOUR);
+    lv_arc_set_value(arc,7); swipe(50,300,50,190); assert(view==MINUTE && hour==7);
     lv_arc_set_value(arc,30); frame("07-alarm-minute");
-    click("Proximo"); assert(view==DAYS);
+    swipe(50,170,50,280); assert(view==HOUR && minute==30);
+    swipe(50,300,50,190); assert(view==MINUTE);
+    swipe(50,300,50,190); assert(view==DAYS);
+    swipe(50,170,50,280); assert(view==MINUTE);
+    swipe(50,300,50,190); assert(view==DAYS);
     assert(lv_obj_has_state(create_button,LV_STATE_DISABLED));
     frame("08a-alarm-days-disabled");
     assert(lv_obj_get_width(create_button)==CHRONVS_UI_ACTION_WIDTH);

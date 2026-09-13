@@ -32,6 +32,7 @@ static int16_t gesture_start_x;
 static int16_t gesture_start_y;
 static bool returning_to_list;
 static bool page_back_allowed;
+static bool page_vertical_allowed;
 
 static void draw_icon_rect(lv_draw_ctx_t *ctx, const lv_area_t *area,
                            uint32_t color, lv_coord_t radius) {
@@ -171,6 +172,7 @@ static void aion_touch_event(lv_event_t *event) {
         gesture_start_y = point.y;
         returning_to_list = false;
         page_back_allowed = chronvs_aion_pages_can_swipe_back(lv_event_get_target(event));
+        page_vertical_allowed = chronvs_aion_pages_can_swipe_vertical(lv_event_get_target(event));
         chronvs_system_ui_notify_activity();
     }
     else if (code == LV_EVENT_PRESSING && !returning_to_list) {
@@ -183,14 +185,20 @@ static void aion_touch_event(lv_event_t *event) {
             lv_indev_wait_release(lv_indev_get_act());
             if (!chronvs_aion_pages_back()) chronvs_app_open("apps");
         }
-        else if (!chronvs_aion_pages_editing() && vertical > 80 &&
-                 vertical > (dx < 0 ? -dx : dx) + 20 &&
-                 ((dy < 0 && current_page < 2) ||
-                  (dy > 0 && current_page > 0 && page_back_allowed))) {
-            returning_to_list = true;
-            lv_indev_wait_release(lv_indev_get_act());
-            if (dy < 0) select_page(current_page + 1);
-            else select_page(current_page - 1);
+        else if (vertical > 80 && vertical > (dx < 0 ? -dx : dx) + 20) {
+            bool navigated = false;
+            if (chronvs_aion_pages_editing()) {
+                if (page_vertical_allowed)
+                    navigated = chronvs_aion_pages_vertical(dy < 0 ? 1 : -1);
+            } else if ((dy < 0 && current_page < 2) ||
+                       (dy > 0 && current_page > 0 && page_back_allowed)) {
+                select_page(dy < 0 ? current_page + 1 : current_page - 1);
+                navigated = true;
+            }
+            if (navigated) {
+                returning_to_list = true;
+                lv_indev_wait_release(lv_indev_get_act());
+            }
         }
     }
 }

@@ -138,6 +138,9 @@ Os testes estão em `tests/run_calculator_tests.ps1` e
   timer e alarmes com arrastes para cima; arrastes para baixo voltam de
   alarmes para timer e de timer para cronômetro. Na lista de alarmes, o
   retorno funciona também sobre as linhas quando o conteúdo está no topo.
+  Na criação de alarmes, subir fora do arco avança da hora para os minutos e
+  para os dias; descer retorna à etapa anterior. O arco mantém o arraste para
+  selecionar o valor.
   Volta à lista de apps com um
   arraste para a direita; durante a criação/detalhe de um alarme, esse gesto
   volta à etapa anterior. A interface está detalhada em `docs/interface.md`.
@@ -354,4 +357,5 @@ memória com os outros apps criados, além do controle real de energia com
 toques simulados: 50 s de digitação em AUTO, 20 s de contato contínuo em ECO,
 redução/apagamento após inatividade e primeiro toque reservado ao despertar.
 O usuário confirmou a validação física do Mnemo, incluindo a interação e
-persistência, e considerou concluídas as pendências de validação do Aion.
+persistência. No Aion, confirmou também a criação de alarmes por gestos
+verticais, o retorno entre etapas e o ajuste dos arcos sem botões de navegação.

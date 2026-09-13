@@ -66,11 +66,6 @@ static void choose_day(lv_event_t *e) {
     else lv_obj_add_state(create_button, LV_STATE_DISABLED);
 }
 static void noop(lv_event_t *e) { (void)e; }
-static void back_button(lv_event_t *e) {
-    (void)e;
-    activity();
-    chronvs_aion_pages_back();
-}
 static void arc_changed(lv_event_t *e) {
     (void)e;
     activity();
@@ -148,8 +143,7 @@ static void rebuild(void) {
         lv_obj_add_event_cb(arc, arc_changed, LV_EVENT_VALUE_CHANGED, NULL);
         value_text = chronvs_aion_label(surface, "", 176, &lv_font_montserrat_48);
         chronvs_aion_label(surface, view == HOUR ? "00 - 23" : "00 - 59", 238, &lv_font_montserrat_12);
-        chronvs_aion_action(surface, "Voltar", -66, 314, CHRONVS_UI_PAIR_WIDTH, true, back_button, 0);
-        chronvs_aion_action(surface, "Proximo", 66, 314, CHRONVS_UI_PAIR_WIDTH, false, next_step, 0);
+        chronvs_aion_label(surface, "Deslize para cima", 370, &lv_font_montserrat_12);
     } else {
         if (view == DETAIL) {
             const chronvs_alarm_t *alarm = chronvs_alarm_get(selected);
@@ -188,6 +182,31 @@ bool chronvs_aion_pages_back(void) {
     return true;
 }
 bool chronvs_aion_pages_editing(void) { return page == 2 && view != LIST; }
+bool chronvs_aion_pages_can_swipe_vertical(lv_obj_t *target) {
+    if (page != 2 || (view != HOUR && view != MINUTE && view != DAYS)) return false;
+    /* The hour/minute arc owns its drag. Vertical navigation starts on the
+     * surrounding surface so changing a value cannot also change the step. */
+    for (lv_obj_t *obj = target; obj; obj = lv_obj_get_parent(obj)) {
+        if (obj == arc) return false;
+    }
+    return true;
+}
+bool chronvs_aion_pages_vertical(int direction) {
+    if (page != 2) return false;
+    if (direction > 0) {
+        if (view == HOUR) { hour = lv_arc_get_value(arc); view = MINUTE; }
+        else if (view == MINUTE) { minute = lv_arc_get_value(arc); view = DAYS; }
+        else return false;
+    } else {
+        if (view == HOUR) view = LIST;
+        else if (view == MINUTE) { minute = lv_arc_get_value(arc); view = HOUR; }
+        else if (view == DAYS) view = MINUTE;
+        else return false;
+    }
+    activity();
+    dirty = true;
+    return true;
+}
 bool chronvs_aion_pages_can_swipe_back(lv_obj_t *target) {
     /* Capture this at press time: scrolling back to the top must not also
      * leave the page in the same contact. Outside the list, always allow it. */

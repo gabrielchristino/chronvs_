@@ -1,6 +1,7 @@
 #include "services/wifi_session_service.h"
 
 #include <string.h>
+#include <stdatomic.h>
 #include "esp_event.h"
 #include "esp_netif.h"
 #include "esp_timer.h"
@@ -27,8 +28,10 @@
 static SemaphoreHandle_t session;
 static EventGroupHandle_t events;
 static bool initialized, started, unavailable;
+static atomic_bool session_active;
 
 bool chronvs_wifi_session_configured(void) { return CHRONVS_WIFI_SSID[0] != '\0'; }
+bool chronvs_wifi_session_active(void) { return atomic_load(&session_active); }
 
 bool chronvs_wifi_session_init(void) {
     if (!session) session = xSemaphoreCreateMutex();
@@ -94,12 +97,14 @@ void chronvs_wifi_session_release(void) {
             unavailable = true;
         started = false;
     }
+    atomic_store(&session_active, false);
     xSemaphoreGive(session);
 }
 
 esp_err_t chronvs_wifi_session_acquire(void) {
     if (!session || !chronvs_wifi_session_configured()) return ESP_ERR_INVALID_STATE;
     if (xSemaphoreTake(session, portMAX_DELAY) != pdTRUE) return ESP_FAIL;
+    atomic_store(&session_active, true);
     esp_err_t err = unavailable ? ESP_ERR_INVALID_STATE : initialize_network();
     if (err != ESP_OK) goto failed;
     xEventGroupClearBits(events, CONNECTED | DISCONNECTED | STOPPED);

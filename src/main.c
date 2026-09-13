@@ -18,6 +18,7 @@
 #include "ui/aion_alert.h"
 
 #define BATTERY_UPDATE_PERIOD_MS 60000
+#define DISPLAY_OFF_SLEEP_MS 1000
 
 static const char *TAG = "chronvs";
 
@@ -42,10 +43,16 @@ void app_main(void) {
         chronvs_time_t synchronized_time;
         if (chronvs_time_sync_take_update(&synchronized_time))
             chronvs_aion_observe_time(&synchronized_time);
-        const TickType_t now = xTaskGetTickCount();
+        TickType_t now = xTaskGetTickCount();
         const bool display_is_off = chronvs_system_ui_display_is_off();
         if (display_is_off) {
+            if (!display_was_off)
+                ESP_LOGI(TAG, "Display off: light sleep enabled");
             display_was_off = true;
+            if (!chronvs_wifi_session_active()) {
+                chronvs_board_light_sleep(DISPLAY_OFF_SLEEP_MS);
+                now = xTaskGetTickCount();
+            }
         } else {
             const bool refresh_after_wake = display_was_off;
             if (refresh_after_wake || now >= next_rtc_update) {

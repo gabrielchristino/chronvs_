@@ -188,9 +188,41 @@ ECO limita o brilho a 35%, o valor do arco também reflete esse teto.
 | `ECO` | 5 s | 15 s |
 
 Ao apagar, o PWM do backlight é configurado para 0%, o timer de atualização do
-mostrador é pausado e o loop principal deixa de consultar RTC e bateria. LVGL e
-touch continuam ativos somente para receber o toque que acorda a tela. Esse
+mostrador e o tick periódico de 2 ms do LVGL são pausados, e o loop principal
+deixa de consultar RTC e bateria. O ESP32-S3 entra em light sleep com a RAM e a
+tela atual preservadas. O sinal `INT` ativo em nível baixo do touch SPD2010,
+ligado internamente ao GPIO 4, e o botão power no GPIO 6 acordam o processador.
+Um timeout de 1 s permite verificar timers, alarmes e lembretes; ele não redesenha
+a interface. Sessões Wi-Fi impedem o sono até que o rádio seja desligado. O
 primeiro toque apenas acorda o relógio; não aciona controles.
+
+No boot, o log informa os níveis dos dois pinos de despertar, e a primeira
+entrada após cada apagamento informa que o light sleep foi habilitado.
+Despertares por toque ou pelo botão registram também o tempo dormido; os
+despertares periódicos por timer não geram log. Isso permite validar o `INT` sem
+manter polling contínuo ou exigir instrumentação de corrente.
+
+A implementação foi validada no relógio: o touch acordou a tela repetidamente
+após 15 s de inatividade, o modo ECO manteve seu limite de brilho e também
+acordou por toque, e um timer de 1 minuto acordou a tela, tocou o aviso e pôde
+ser dispensado normalmente. A redução de corrente e a autonomia total ainda não
+foram quantificadas com instrumento; a comparação prática deve usar ciclos de
+carga completos da bateria de 150 mAh.
+
+### Indicador de carga e percentual
+
+O percentual é uma estimativa da tensão medida no GPIO 8, não uma contagem de
+carga acumulada. A curva atual associa 4,00 V a 80%, 4,10 V a 90% e 4,20 V a
+100%; portanto, 86% corresponde a aproximadamente 4,06 V. No teste após a
+mudança de energia, o LED indicador de carga estava apagado enquanto a interface
+mostrava 86%. Segundo a [documentação da placa](https://docs.waveshare.com/ESP32-S3-Touch-LCD-1.46),
+o LED permanece aceso durante a carga e apaga ao terminar quando a bateria está
+conectada.
+
+Essa diferença ainda não foi classificada como falha: pode refletir calibração
+do ADC, queda sob carga ou a curva usada pelo firmware. A bateria será mantida
+conectada por mais tempo; antes de alterar a curva, é preciso registrar se o LED
+acendeu durante a recarga, o percentual final e a queda logo após desconectar.
 
 Uma superfície transparente global intercepta o primeiro toque com backlight
 apagado também dentro dos apps. Timer ou alarme vencido acorda a tela sem

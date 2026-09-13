@@ -1,4 +1,5 @@
 #include "platform/board.h"
+#include <inttypes.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -8,6 +9,7 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -20,6 +22,7 @@ static const char *TAG = "board";
 
 #define PWR_KEY_Input_PIN   GPIO_NUM_6
 #define PWR_Control_PIN     GPIO_NUM_7
+#define TOUCH_INT_PIN       GPIO_NUM_4
 
 static void scan_onboard_i2c(void) {
     static const uint8_t addresses[] = {0x20, 0x51, 0x53, 0x6A, 0x6B};
@@ -102,6 +105,55 @@ void chronvs_board_init(void) {
     LCD_Init();
     LVGL_Init();
 
+    // The SPD2010 interrupt is wired internally to GPIO4 and is active low.
+    gpio_config_t touch_int_conf = {
+        .pin_bit_mask = (1ULL << TOUCH_INT_PIN),
+        .mode = GPIO_MODE_INPUT,
+        .pull_up_en = GPIO_PULLUP_ENABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type = GPIO_INTR_DISABLE,
+    };
+    ESP_ERROR_CHECK(gpio_config(&touch_int_conf));
+    ESP_ERROR_CHECK(gpio_wakeup_enable(TOUCH_INT_PIN, GPIO_INTR_LOW_LEVEL));
+    ESP_ERROR_CHECK(gpio_wakeup_enable(PWR_KEY_Input_PIN, GPIO_INTR_LOW_LEVEL));
+    ESP_ERROR_CHECK(esp_sleep_enable_gpio_wakeup());
+    ESP_LOGI(TAG, "Wake inputs ready: touch GPIO%d=%d, power GPIO%d=%d",
+             TOUCH_INT_PIN, gpio_get_level(TOUCH_INT_PIN),
+             PWR_KEY_Input_PIN, gpio_get_level(PWR_KEY_Input_PIN));
+
     // 4. Inicia a task do botão em background
     xTaskCreate(power_button_task, "power_button_task", 2048, NULL, 5, NULL);
+}
+
+bool chronvs_board_light_sleep(uint32_t timeout_ms) {
+    if (!timeout_ms || gpio_get_level(TOUCH_INT_PIN) == 0 ||
+        gpio_get_level(PWR_KEY_Input_PIN) == 0) return false;
+
+    ESP_ERROR_CHECK(esp_sleep_enable_timer_wakeup((uint64_t)timeout_ms * 1000));
+    LVGL_Tick_Suspend();
+    const int64_t sleep_started_us = esp_timer_get_time();
+    const esp_err_t result = esp_light_sleep_start();
+    const uint32_t slept_ms = (uint32_t)((esp_timer_get_time() - sleep_started_us) / 1000);
+    LVGL_Tick_Resume();
+    ESP_ERROR_CHECK(esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER));
+    if (result != ESP_OK) {
+        ESP_LOGW(TAG, "Light sleep failed: %s", esp_err_to_name(result));
+        return false;
+    }
+
+    if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_GPIO) {
+        const int touch_level = gpio_get_level(TOUCH_INT_PIN);
+        const int power_level = gpio_get_level(PWR_KEY_Input_PIN);
+        if (touch_level == 0)
+            ESP_LOGI(TAG, "Light sleep wake after %" PRIu32 " ms: touch GPIO%d",
+                     slept_ms, TOUCH_INT_PIN);
+        else if (power_level == 0)
+            ESP_LOGI(TAG, "Light sleep wake after %" PRIu32 " ms: power GPIO%d",
+                     slept_ms, PWR_KEY_Input_PIN);
+        else
+            ESP_LOGI(TAG, "Light sleep wake after %" PRIu32
+                     " ms: GPIO released before sampling",
+                     slept_ms);
+    }
+    return true;
 }

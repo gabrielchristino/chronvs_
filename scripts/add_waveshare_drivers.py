@@ -216,6 +216,41 @@ if current_touch_read != new_touch_read and known_touch_read:
 elif current_touch_read != new_touch_read:
     raise RuntimeError("Could not apply Chronvs touch debounce patch")
 
+# The vendor LVGL tick is a 2 ms periodic esp_timer.  It must be stopped while
+# Chronvs is in explicit light sleep, otherwise it wakes the CPU immediately.
+# Keep the handle and the suspend/resume API in this persistent build patch so
+# a fresh clone of the Waveshare reference receives the same behavior.
+tick_global_anchor = "lv_indev_drv_t indev_drv;"
+tick_global = tick_global_anchor + "\nstatic esp_timer_handle_t lvgl_tick_timer;"
+if tick_global not in lvgl_text:
+    if lvgl_text.count(tick_global_anchor) != 1:
+        raise RuntimeError("Could not locate the Waveshare LVGL driver globals")
+    lvgl_text = lvgl_text.replace(tick_global_anchor, tick_global)
+
+local_tick = "    esp_timer_handle_t lvgl_tick_timer = NULL;"
+lvgl_text = lvgl_text.replace(local_tick, "    lvgl_tick_timer = NULL;")
+
+tick_control = '''void LVGL_Tick_Suspend(void)
+{
+    if (lvgl_tick_timer != NULL && esp_timer_is_active(lvgl_tick_timer)) {
+        ESP_ERROR_CHECK(esp_timer_stop(lvgl_tick_timer));
+    }
+}
+
+void LVGL_Tick_Resume(void)
+{
+    if (lvgl_tick_timer != NULL && !esp_timer_is_active(lvgl_tick_timer)) {
+        ESP_ERROR_CHECK(esp_timer_start_periodic(
+            lvgl_tick_timer, EXAMPLE_LVGL_TICK_PERIOD_MS * 1000));
+    }
+}
+'''
+init_anchor = "void LVGL_Init(void)"
+if tick_control not in lvgl_text:
+    if lvgl_text.count(init_anchor) != 1:
+        raise RuntimeError("Could not locate LVGL_Init for tick control")
+    lvgl_text = lvgl_text.replace(init_anchor, tick_control + "\n" + init_anchor)
+
 with open(lvgl_source, "w", encoding="utf-8", newline="") as source_file:
     source_file.write(lvgl_text)
 
@@ -239,6 +274,13 @@ async_flush_prototype = '''bool example_lvgl_flush_ready(esp_lcd_panel_io_handle
                              void *user_ctx);
 '''
 header_text = header_text.replace(async_flush_prototype, "")
+tick_control_prototypes = '''
+/* Chronvs pauses the periodic tick during explicit light sleep. */
+void LVGL_Tick_Suspend(void);
+void LVGL_Tick_Resume(void);
+'''
+if "void LVGL_Tick_Suspend(void);" not in header_text:
+    header_text = header_text.rstrip() + "\n" + tick_control_prototypes
 with open(lvgl_header, "w", encoding="utf-8", newline="") as header_file:
     header_file.write(header_text)
 

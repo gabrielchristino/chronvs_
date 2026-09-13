@@ -1,6 +1,7 @@
 Import("env")
 from os.path import join
 import os
+import subprocess
 
 # On this PC CC/CXX point to a desktop MinGW GCC. ESP-IDF must let PlatformIO
 # select its bundled Xtensa cross-compiler instead.
@@ -19,6 +20,22 @@ lvgl_dir = join(
     env["PROJECT_DIR"], ".vendor-reference", "example", "ESP-IDF-5.3.2",
     "ESP32-S3-Touch-LCD-1.46-Test", "components", "lvgl__lvgl"
 )
+
+# ESP-SR 1.9.4 links the optional Chinese TTS archives unconditionally. They
+# are unrelated to Vox/MultiNet and that raw -L/-l pair is not resolved by the
+# PlatformIO ESP-IDF linker on Windows. Remove only these optional entries;
+# all speech-recognition archives remain registered as normal prebuilt libs.
+esp_sr_cmake = join(
+    env["PROJECT_DIR"], ".vendor-reference", "example", "ESP-IDF-5.3.2",
+    "ESP32-S3-Touch-LCD-1.46-Test", "components", "espressif__esp-sr",
+    "CMakeLists.txt")
+with open(esp_sr_cmake, "r", encoding="utf-8") as source_file:
+    esp_sr_text = source_file.read()
+patched_esp_sr_text = esp_sr_text.replace("        esp_tts_chinese\n", "")
+patched_esp_sr_text = patched_esp_sr_text.replace("        voice_set_xiaole\n", "")
+if patched_esp_sr_text != esp_sr_text:
+    with open(esp_sr_cmake, "w", encoding="utf-8", newline="") as source_file:
+        source_file.write(patched_esp_sr_text)
 
 # The stock colour test uses 16 bands of 25 px (400 px total), leaving the
 # final 12 rows of the 412 px panel unchanged. Keep the correction here rather
@@ -367,3 +384,27 @@ env.BuildSources(
     lvgl_dir,
     src_filter="+<src/>",
 )
+
+# PlatformIO asks Ninja for the application image rather than CMake's default
+# `all` target, so ESP-SR's ALL custom target is otherwise skipped. Generate
+# the selected model after firmware.bin as part of every normal `pio run`.
+def build_speech_model(source, target, env):
+    project_dir = env["PROJECT_DIR"]
+    build_dir = env.subst("$BUILD_DIR")
+    sdkconfig = join(project_dir, "sdkconfig." + env.subst("$PIOENV"))
+    model_tool = join(
+        project_dir, ".vendor-reference", "example", "ESP-IDF-5.3.2",
+        "ESP32-S3-Touch-LCD-1.46-Test", "components", "espressif__esp-sr",
+        "model", "movemodel.py")
+    subprocess.check_call([
+        env.subst("$PYTHONEXE"), model_tool,
+        "-d1", sdkconfig, "-d2", os.path.dirname(os.path.dirname(model_tool)),
+        "-d3", build_dir,
+    ])
+
+speech_model = env.Command(
+    join("$BUILD_DIR", "srmodels", "srmodels.bin"),
+    join(env["PROJECT_DIR"], "sdkconfig." + env.subst("$PIOENV")),
+    build_speech_model,
+)
+env.Depends(join("$BUILD_DIR", "firmware.bin"), speech_model)

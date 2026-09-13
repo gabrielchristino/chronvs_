@@ -6,6 +6,15 @@ CONFIG_SPIRAM_MODE_OCT=y
 CONFIG_SPIRAM_SPEED_80M=y
 CONFIG_SPIRAM_USE_CAPS_ALLOC=y
 CONFIG_LV_COLOR_16_SWAP=y
+# Vox laboratory: load only the English MultiNet6 model. Recognition starts
+# from an explicit touch, so no always-on wake-word or AFE model is reserved.
+CONFIG_MODEL_IN_FLASH=y
+# CONFIG_MODEL_IN_SDCARD is not set
+# CONFIG_USE_AFE is not set
+# CONFIG_USE_WAKENET is not set
+CONFIG_USE_MULTINET=y
+CONFIG_SR_MN_CN_NONE=y
+CONFIG_SR_MN_EN_MULTINET6_QUANT=y
 # Keep the configuration validated on the physical watch explicit.
 CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
 CONFIG_ESP32S3_INSTRUCTION_CACHE_16KB=y

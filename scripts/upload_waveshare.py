@@ -23,6 +23,7 @@ env.Replace(
         "0x0", join(build_dir, "bootloader.bin"),
         "0x10000", join(build_dir, "partitions.bin"),
         "0x20000", join(build_dir, "firmware.bin"),
+        "0x420000", join(build_dir, "srmodels", "srmodels.bin"),
     ],
     UPLOADCMD='"$PYTHONEXE" "$UPLOADER" $UPLOADERFLAGS',
 )

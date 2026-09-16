@@ -1,8 +1,8 @@
-#include "apps/aion_pages.h"
+#include "apps/Relogio_pages.h"
 #include <stdio.h>
 #include <string.h>
-#include "services/aion_service.h"
-#include "ui/aion_widgets.h"
+#include "services/Relogio_service.h"
+#include "ui/Relogio_widgets.h"
 #include "ui/system_ui.h"
 
 typedef enum { LIST, HOUR, MINUTE, DAYS, DETAIL } alarm_view_t;
@@ -72,12 +72,12 @@ static void arc_changed(lv_event_t *e) {
     /* Text is coalesced by the app's 20 ms UI timer. */
 }
 static void title(const char *text) {
-    lv_obj_t *label = chronvs_aion_label(surface, text, 34, &lv_font_montserrat_24);
+    lv_obj_t *label = chronvs_Relogio_label(surface, text, 34, &lv_font_montserrat_24);
     lv_obj_set_style_text_color(label, lv_color_hex(0xF2B84B), 0);
 }
 static void make_days(bool editable) {
     for (unsigned i = 0; i < 7; ++i) {
-        lv_obj_t *button = chronvs_aion_circle(surface, day_names[i], i, 94,
+        lv_obj_t *button = chronvs_Relogio_circle(surface, day_names[i], i, 94,
                                               editable ? choose_day : noop, i);
         if (days & (1 << i)) lv_obj_add_state(button, LV_STATE_CHECKED);
         if (!editable) lv_obj_clear_flag(button, LV_OBJ_FLAG_CLICKABLE);
@@ -91,14 +91,14 @@ static void rebuild(void) {
     if (page == 1) {
         title("Timer");
         if (chronvs_timer_running()) {
-            timer_text = chronvs_aion_label(surface, "", 150, &lv_font_montserrat_48);
-            chronvs_aion_label(surface, "EM CONTAGEM", 112, &lv_font_montserrat_12);
-            chronvs_aion_action(surface, "Cancelar", 0, 264, CHRONVS_UI_ACTION_WIDTH, true, timer_action, 0);
+            timer_text = chronvs_Relogio_label(surface, "", 150, &lv_font_montserrat_48);
+            chronvs_Relogio_label(surface, "EM CONTAGEM", 112, &lv_font_montserrat_12);
+            chronvs_Relogio_action(surface, "Cancelar", 0, 264, CHRONVS_UI_ACTION_WIDTH, true, timer_action, 0);
         } else {
             const unsigned values[] = {1,5,10,15,30,60,120};
             const char *texts[] = {"1", "5", "10", "15", "30", "60", "120"};
             for (unsigned i = 0; i < 7; ++i)
-                chronvs_aion_circle(surface, texts[i], i, 108, timer_action, values[i]);
+                chronvs_Relogio_circle(surface, texts[i], i, 108, timer_action, values[i]);
         }
         previous_remaining = UINT32_MAX;
         previous_running = chronvs_timer_running();
@@ -108,7 +108,7 @@ static void rebuild(void) {
         title("Alarmes");
         unsigned count = 0;
         for (unsigned i = 0; i < CHRONVS_ALARM_LIMIT; ++i) if (chronvs_alarm_get(i)) ++count;
-        if (!count) chronvs_aion_label(surface, "Nenhum alarme", 170, &lv_font_montserrat_18);
+        if (!count) chronvs_Relogio_label(surface, "Nenhum alarme", 170, &lv_font_montserrat_18);
         lv_obj_t *list = lv_obj_create(surface);
         alarm_list = list;
         lv_obj_remove_style_all(list);
@@ -123,12 +123,12 @@ static void rebuild(void) {
             if (!alarm) continue;
             char text[24];
             snprintf(text, sizeof(text), "%02u:%02u", alarm->hour, alarm->minute);
-            chronvs_aion_button(list, text, 0, row++ * 64, 248, 56, open_alarm, i);
+            chronvs_Relogio_button(list, text, 0, row++ * 64, 248, 56, open_alarm, i);
         }
-        lv_obj_t *new_button = chronvs_aion_action(surface, "Novo alarme", 0, 314, 180, false, open_alarm, -1);
+        lv_obj_t *new_button = chronvs_Relogio_action(surface, "Novo alarme", 0, 314, 180, false, open_alarm, -1);
         if (count == CHRONVS_ALARM_LIMIT) {
             lv_obj_add_state(new_button, LV_STATE_DISABLED);
-            chronvs_aion_label(surface, "Limite de 12 alarmes", 370, &lv_font_montserrat_12);
+            chronvs_Relogio_label(surface, "Limite de 12 alarmes", 370, &lv_font_montserrat_12);
         }
     } else if (view == HOUR || view == MINUTE) {
         title(view == HOUR ? "Escolha a hora" : "Escolha o minuto");
@@ -141,9 +141,9 @@ static void rebuild(void) {
         lv_arc_set_value(arc, view == HOUR ? hour : minute);
         chronvs_ui_style_arc(arc);
         lv_obj_add_event_cb(arc, arc_changed, LV_EVENT_VALUE_CHANGED, NULL);
-        value_text = chronvs_aion_label(surface, "", 176, &lv_font_montserrat_48);
-        chronvs_aion_label(surface, view == HOUR ? "00 - 23" : "00 - 59", 238, &lv_font_montserrat_12);
-        chronvs_aion_label(surface, "Deslize para cima", 370, &lv_font_montserrat_12);
+        value_text = chronvs_Relogio_label(surface, "", 176, &lv_font_montserrat_48);
+        chronvs_Relogio_label(surface, view == HOUR ? "00 - 23" : "00 - 59", 238, &lv_font_montserrat_12);
+        chronvs_Relogio_label(surface, "Deslize para cima", 370, &lv_font_montserrat_12);
     } else {
         if (view == DETAIL) {
             const chronvs_alarm_t *alarm = chronvs_alarm_get(selected);
@@ -154,26 +154,26 @@ static void rebuild(void) {
         snprintf(text, sizeof(text), "%02u:%02u", hour, minute);
         title(text);
         make_days(view == DAYS);
-        create_button = chronvs_aion_action(surface, view == DAYS ? "Criar" : "Excluir", 0,
+        create_button = chronvs_Relogio_action(surface, view == DAYS ? "Criar" : "Excluir", 0,
                                             314, CHRONVS_UI_ACTION_WIDTH, view == DETAIL,
                                             view == DAYS ? next_step : delete_alarm, 0);
         if (view == DAYS && !days) lv_obj_add_state(create_button, LV_STATE_DISABLED);
     }
 }
 
-void chronvs_aion_pages_init(lv_obj_t *parent) {
+void chronvs_Relogio_pages_init(lv_obj_t *parent) {
     surface = lv_obj_create(parent);
-    chronvs_aion_surface(surface);
+    chronvs_Relogio_surface(surface);
     lv_obj_add_flag(surface, LV_OBJ_FLAG_HIDDEN);
 }
-void chronvs_aion_pages_show(unsigned next) {
+void chronvs_Relogio_pages_show(unsigned next) {
     page = next;
     if (!page) { lv_obj_add_flag(surface, LV_OBJ_FLAG_HIDDEN); return; }
     view = LIST;
     lv_obj_clear_flag(surface, LV_OBJ_FLAG_HIDDEN);
     dirty = true;
 }
-bool chronvs_aion_pages_back(void) {
+bool chronvs_Relogio_pages_back(void) {
     if (page != 2 || view == LIST) return false;
     if (view == MINUTE) { minute = lv_arc_get_value(arc); view = HOUR; }
     else if (view == DAYS) view = MINUTE;
@@ -181,8 +181,8 @@ bool chronvs_aion_pages_back(void) {
     dirty = true;
     return true;
 }
-bool chronvs_aion_pages_editing(void) { return page == 2 && view != LIST; }
-bool chronvs_aion_pages_can_swipe_vertical(lv_obj_t *target) {
+bool chronvs_Relogio_pages_editing(void) { return page == 2 && view != LIST; }
+bool chronvs_Relogio_pages_can_swipe_vertical(lv_obj_t *target) {
     if (page != 2 || (view != HOUR && view != MINUTE && view != DAYS)) return false;
     /* The hour/minute arc owns its drag. Vertical navigation starts on the
      * surrounding surface so changing a value cannot also change the step. */
@@ -191,7 +191,7 @@ bool chronvs_aion_pages_can_swipe_vertical(lv_obj_t *target) {
     }
     return true;
 }
-bool chronvs_aion_pages_vertical(int direction) {
+bool chronvs_Relogio_pages_vertical(int direction) {
     if (page != 2) return false;
     if (direction > 0) {
         if (view == HOUR) { hour = lv_arc_get_value(arc); view = MINUTE; }
@@ -207,7 +207,7 @@ bool chronvs_aion_pages_vertical(int direction) {
     dirty = true;
     return true;
 }
-bool chronvs_aion_pages_can_swipe_back(lv_obj_t *target) {
+bool chronvs_Relogio_pages_can_swipe_back(lv_obj_t *target) {
     /* Capture this at press time: scrolling back to the top must not also
      * leave the page in the same contact. Outside the list, always allow it. */
     if (page != 2 || view != LIST) return true;
@@ -216,7 +216,7 @@ bool chronvs_aion_pages_can_swipe_back(lv_obj_t *target) {
     }
     return true;
 }
-void chronvs_aion_pages_refresh(void) {
+void chronvs_Relogio_pages_refresh(void) {
     if (!page || chronvs_system_ui_display_is_off()) return;
     if (page == 1 && previous_running != chronvs_timer_running()) dirty = true;
     if (dirty) rebuild();

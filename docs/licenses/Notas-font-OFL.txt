@@ -1,6 +1,6 @@
 Copyright 2011 The Montserrat Project Authors (https://github.com/JulietaUla/Montserrat)
 
-The Portuguese glyph supplement in src/ui/mnemo_font.c is generated from
+The Portuguese glyph supplement in src/ui/Notas_font.c is generated from
 Montserrat-Medium.ttf supplied with the Waveshare LVGL reference.
 It is distributed under the SIL Open Font License, Version 1.1.
 

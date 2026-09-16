@@ -1,10 +1,10 @@
 /* Headless LVGL 8 render and interaction checks, using the real app sources. */
 #define main service_test_main
-#include "aion_service_test.c"
+#include "Relogio_service_test.c"
 #undef main
-#include "apps/aion_pages.c"
-#include "apps/aion_app.c"
-#include "ui/aion_alert.c"
+#include "apps/Relogio_pages.c"
+#include "apps/Relogio_app.c"
+#include "ui/Relogio_alert.c"
 
 static bool display_off, ringing;
 static lv_indev_state_t contact;
@@ -18,7 +18,7 @@ static void touch(int x, int y, lv_indev_state_t state) {
 }
 static void swipe(int x1, int y1, int x2, int y2) {
     touch(x1,y1,LV_INDEV_STATE_PR); touch(x2,y2,LV_INDEV_STATE_PR);
-    touch(x2,y2,LV_INDEV_STATE_REL); chronvs_aion_pages_refresh();
+    touch(x2,y2,LV_INDEV_STATE_REL); chronvs_Relogio_pages_refresh();
 }
 void chronvs_apps_add(const chronvs_app_t *app) { (void)app; }
 bool chronvs_app_open(const char *id) { (void)id; return true; }
@@ -39,7 +39,7 @@ static void flush(lv_disp_drv_t *driver, const lv_area_t *area, lv_color_t *colo
     lv_disp_flush_ready(driver);
 }
 static void frame(const char *name) {
-    chronvs_aion_pages_refresh();
+    chronvs_Relogio_pages_refresh();
     lv_obj_update_layout(lv_scr_act());
     lv_tick_inc(300);
     lv_timer_handler();
@@ -68,12 +68,12 @@ static lv_obj_t *button_with_text(lv_obj_t *parent, const char *text) {
     return NULL;
 }
 static void click(const char *text) {
-    lv_obj_t *button=button_with_text(aion_root,text); assert(button);
+    lv_obj_t *button=button_with_text(Relogio_root,text); assert(button);
     lv_event_send(button,LV_EVENT_CLICKED,NULL);
-    chronvs_aion_pages_refresh();
+    chronvs_Relogio_pages_refresh();
 }
 int main(void) {
-    lv_init(); chronvs_aion_init();
+    lv_init(); chronvs_Relogio_init();
     static lv_color_t buffer[412*412/20];
     static lv_disp_draw_buf_t draw;
     lv_disp_draw_buf_init(&draw,buffer,NULL,412*412/20);
@@ -83,7 +83,7 @@ int main(void) {
     static lv_indev_drv_t input;
     lv_indev_drv_init(&input); input.type=LV_INDEV_TYPE_POINTER; input.read_cb=read_touch;
     lv_indev_drv_register(&input);
-    create_aion(lv_scr_act()); show_aion(); frame("01-stopwatch");
+    create_Relogio(lv_scr_act()); show_Relogio(); frame("01-stopwatch");
     /* Dragging a stopwatch button navigates without starting the stopwatch. */
     touch(141,291,LV_INDEV_STATE_PR); touch(141,190,LV_INDEV_STATE_PR);
     touch(141,190,LV_INDEV_STATE_REL);
@@ -101,17 +101,17 @@ int main(void) {
     click("120"); assert(chronvs_timer_remaining()==7200);
     click("Cancelar");
     click("5"); assert(chronvs_timer_remaining()==300); frame("03-timer-running");
-    display_off=true; advance(300); chronvs_aion_alert_poll();
+    display_off=true; advance(300); chronvs_Relogio_alert_poll();
     assert(!display_off && !ringing); frame("04-timer-alert");
-    lv_tick_inc(1000); chronvs_aion_alert_poll(); assert(!ringing);
-    lv_tick_inc(1000); chronvs_aion_alert_poll(); assert(ringing);
+    lv_tick_inc(1000); chronvs_Relogio_alert_poll(); assert(!ringing);
+    lv_tick_inc(1000); chronvs_Relogio_alert_poll(); assert(ringing);
     lv_obj_t *extra=button_with_text(overlay,"+120"); assert(extra);
-    lv_event_send(extra,LV_EVENT_CLICKED,NULL); chronvs_aion_alert_poll();
+    lv_event_send(extra,LV_EVENT_CLICKED,NULL); chronvs_Relogio_alert_poll();
     assert(!ringing && chronvs_timer_remaining()==7200);
     select_page(2); frame("05-alarm-empty");
     click("Novo alarme"); assert(view==HOUR); frame("06-alarm-hour");
-    assert(!button_with_text(aion_root,"Voltar"));
-    assert(!button_with_text(aion_root,"Proximo"));
+    assert(!button_with_text(Relogio_root,"Voltar"));
+    assert(!button_with_text(Relogio_root,"Proximo"));
     /* The arc keeps vertical drag for values; the side surface changes steps. */
     swipe(206,280,206,170); assert(view==HOUR);
     swipe(50,170,50,280); assert(view==LIST);
@@ -133,12 +133,12 @@ int main(void) {
     /* A downward swipe starting on an alarm row returns, without opening it. */
     touch(206,116,LV_INDEV_STATE_PR); touch(206,220,LV_INDEV_STATE_PR);
     touch(206,220,LV_INDEV_STATE_REL); assert(current_page==1);
-    select_page(2); chronvs_aion_pages_refresh();
+    select_page(2); chronvs_Relogio_pages_refresh();
     click("07:30"); assert(view==DETAIL); frame("10-alarm-detail");
     click("Excluir"); assert(!chronvs_alarm_get(0));
     /* A scrolled list consumes the downward gesture to scroll, not navigate. */
     for (unsigned i=0; i<6; ++i) assert(chronvs_alarm_create(i,45,127));
-    select_page(2); chronvs_aion_pages_refresh(); lv_obj_update_layout(surface);
+    select_page(2); chronvs_Relogio_pages_refresh(); lv_obj_update_layout(surface);
     lv_obj_scroll_to_y(alarm_list,100,LV_ANIM_OFF);
     touch(206,140,LV_INDEV_STATE_PR); touch(206,250,LV_INDEV_STATE_PR);
     touch(206,250,LV_INDEV_STATE_REL); assert(current_page==2 && view==LIST);
@@ -148,24 +148,24 @@ int main(void) {
     clear_alarms();
     chronvs_timer_cancel(); set_time(26,9,7,7,29,59);
     assert(chronvs_alarm_create(7,30,127)); advance(1);
-    chronvs_aion_alert_poll(); assert(!ringing); frame("11-alarm-alert");
+    chronvs_Relogio_alert_poll(); assert(!ringing); frame("11-alarm-alert");
     /* Dismissing during the silent interval must cancel the delayed sound. */
     lv_obj_t *stop=button_with_text(overlay,"Parar"); assert(stop);
-    lv_event_send(stop,LV_EVENT_CLICKED,NULL); chronvs_aion_alert_poll();
-    lv_tick_inc(2500); chronvs_aion_alert_poll(); assert(!ringing && !overlay);
+    lv_event_send(stop,LV_EVENT_CLICKED,NULL); chronvs_Relogio_alert_poll();
+    lv_tick_inc(2500); chronvs_Relogio_alert_poll(); assert(!ringing && !overlay);
     clear_alarms(); set_time(26,9,11,7,59,59);
     chronvs_reminder_t reminder={.year=26,.month=9,.day=11,.hour=8,
         .title="Reunião de planejamento com a equipe"};
     assert(chronvs_reminder_create(&reminder));
-    display_off=true; advance(1); chronvs_aion_alert_poll();
-    assert(!display_off && overlay && !ringing); frame("26-hemera-alert");
-    lv_tick_inc(2000); chronvs_aion_alert_poll(); assert(ringing);
+    display_off=true; advance(1); chronvs_Relogio_alert_poll();
+    assert(!display_off && overlay && !ringing); frame("26-Calendario-alert");
+    lv_tick_inc(2000); chronvs_Relogio_alert_poll(); assert(ringing);
     stop=button_with_text(overlay,"Concluir"); assert(stop);
-    fail_save=true; lv_event_send(stop,LV_EVENT_CLICKED,NULL); chronvs_aion_alert_poll();
+    fail_save=true; lv_event_send(stop,LV_EVENT_CLICKED,NULL); chronvs_Relogio_alert_poll();
     assert(overlay && ringing && !chronvs_reminder_get(0)->done);
-    fail_save=false; lv_event_send(stop,LV_EVENT_CLICKED,NULL); chronvs_aion_alert_poll();
+    fail_save=false; lv_event_send(stop,LV_EVENT_CLICKED,NULL); chronvs_Relogio_alert_poll();
     assert(!overlay && !ringing && chronvs_reminder_get(0)->done);
     lv_mem_monitor_t memory; lv_mem_monitor(&memory);
-    printf("Aion UI passed. LVGL heap used: %u bytes. Snapshots in .pio/host-tests.\n",(unsigned)(memory.total_size-memory.free_size));
+    printf("Relogio UI passed. LVGL heap used: %u bytes. Snapshots in .pio/host-tests.\n",(unsigned)(memory.total_size-memory.free_size));
     return 0;
 }

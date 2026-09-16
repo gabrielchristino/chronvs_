@@ -6,7 +6,7 @@
 
 #include "core/app_manager.h"
 #include "core/calculator.h"
-#include "ui/aion_widgets.h"
+#include "ui/Relogio_widgets.h"
 #include "ui/app_input.h"
 #include "ui/control_style.h"
 #include "ui/system_ui.h"
@@ -140,9 +140,9 @@ static void back(void) {
 
 static lv_obj_t *create(lv_obj_t *parent) {
     lv_obj_t *root = lv_obj_create(parent);
-    chronvs_aion_surface(root);
+    chronvs_Relogio_surface(root);
 
-    display = chronvs_aion_label(root, "0", 44, &lv_font_montserrat_24);
+    display = chronvs_Relogio_label(root, "0", 44, &lv_font_montserrat_24);
     lv_obj_set_width(display, 240);
     lv_obj_set_height(display, 29);
     lv_obj_align(display, LV_ALIGN_TOP_MID, 0, 44);
@@ -151,7 +151,7 @@ static lv_obj_t *create(lv_obj_t *parent) {
 
     for (unsigned index = 0; index < sizeof(keys) / sizeof(keys[0]); ++index) {
         const calculator_key_t *key = &keys[index];
-        lv_obj_t *button = chronvs_aion_button(root, key->label, key->x, key->y,
+        lv_obj_t *button = chronvs_Relogio_button(root, key->label, key->x, key->y,
                                                54, 54, key_event, (intptr_t)key);
         if (key->accent) lv_obj_add_state(button, LV_STATE_CHECKED);
     }

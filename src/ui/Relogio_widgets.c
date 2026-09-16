@@ -1,6 +1,6 @@
-#include "ui/aion_widgets.h"
+#include "ui/Relogio_widgets.h"
 
-void chronvs_aion_surface(lv_obj_t *obj) {
+void chronvs_Relogio_surface(lv_obj_t *obj) {
     lv_obj_remove_style_all(obj);
     lv_obj_set_size(obj, 412, 412);
     lv_obj_set_style_bg_color(obj, lv_color_hex(CHRONVS_UI_PANEL), 0);
@@ -9,7 +9,7 @@ void chronvs_aion_surface(lv_obj_t *obj) {
     lv_obj_clear_flag(obj, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_flag(obj, LV_OBJ_FLAG_EVENT_BUBBLE);
 }
-lv_obj_t *chronvs_aion_label(lv_obj_t *parent, const char *text, int y, const lv_font_t *font) {
+lv_obj_t *chronvs_Relogio_label(lv_obj_t *parent, const char *text, int y, const lv_font_t *font) {
     lv_obj_t *label = lv_label_create(parent);
     lv_label_set_text(label, text);
     lv_obj_set_style_text_font(label, font, 0);
@@ -32,19 +32,19 @@ static lv_obj_t *create_button(lv_obj_t *parent, const char *text, int x, int y,
     return button;
 }
 
-lv_obj_t *chronvs_aion_button(lv_obj_t *parent, const char *text, int x, int y,
+lv_obj_t *chronvs_Relogio_button(lv_obj_t *parent, const char *text, int x, int y,
                              int width, int height, lv_event_cb_t callback, intptr_t value) {
     return create_button(parent, text, x, y, width, height, callback, value, false);
 }
 
-lv_obj_t *chronvs_aion_circle(lv_obj_t *parent, const char *text, unsigned index,
+lv_obj_t *chronvs_Relogio_circle(lv_obj_t *parent, const char *text, unsigned index,
                              int top, lv_event_cb_t callback, intptr_t value) {
     if (index >= 7) return NULL;
-    return chronvs_aion_button(parent, text, chronvs_ui_hex_offsets[index].x,
+    return chronvs_Relogio_button(parent, text, chronvs_ui_hex_offsets[index].x,
                                top + chronvs_ui_hex_offsets[index].y,
                                CHRONVS_UI_CIRCLE_SIZE, CHRONVS_UI_CIRCLE_SIZE, callback, value);
 }
-lv_obj_t *chronvs_aion_action(lv_obj_t *parent, const char *text, int x, int y,
+lv_obj_t *chronvs_Relogio_action(lv_obj_t *parent, const char *text, int x, int y,
                              int width, bool outline, lv_event_cb_t callback, intptr_t value) {
     return create_button(parent, text, x, y, width, CHRONVS_UI_ACTION_HEIGHT,
                          callback, value, outline);

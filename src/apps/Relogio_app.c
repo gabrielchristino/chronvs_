@@ -6,8 +6,8 @@
 #include "core/app_manager.h"
 #include "lvgl.h"
 #include "ui/system_ui.h"
-#include "apps/aion_pages.h"
-#include "ui/aion_widgets.h"
+#include "apps/Relogio_pages.h"
+#include "ui/Relogio_widgets.h"
 
 #define COLOR_PANEL       0x26302B
 #define COLOR_PANEL_EDGE  0x748173
@@ -17,7 +17,7 @@
 #define SCREEN_SIZE 412
 #define BACK_SWIPE_DISTANCE 80
 
-static lv_obj_t *aion_root;
+static lv_obj_t *Relogio_root;
 static lv_obj_t *stopwatch_page;
 static unsigned current_page;
 static uint32_t last_stopwatch_refresh;
@@ -44,7 +44,7 @@ static void draw_icon_rect(lv_draw_ctx_t *ctx, const lv_area_t *area,
     lv_draw_rect(ctx, &dsc, area);
 }
 
-static void aion_icon_draw_event(lv_event_t *event) {
+static void Relogio_icon_draw_event(lv_event_t *event) {
     lv_draw_ctx_t *ctx = lv_event_get_draw_ctx(event);
     lv_area_t area;
     lv_obj_get_coords(lv_event_get_target(event), &area);
@@ -98,8 +98,8 @@ static void aion_icon_draw_event(lv_event_t *event) {
     draw_icon_rect(ctx, &pivot, COLOR_TEXT, LV_RADIUS_CIRCLE);
 }
 
-static void create_aion_icon(lv_obj_t *parent) {
-    lv_obj_add_event_cb(parent, aion_icon_draw_event, LV_EVENT_DRAW_MAIN, NULL);
+static void create_Relogio_icon(lv_obj_t *parent) {
+    lv_obj_add_event_cb(parent, Relogio_icon_draw_event, LV_EVENT_DRAW_MAIN, NULL);
     lv_obj_invalidate(parent);
 }
 
@@ -126,7 +126,7 @@ static void update_display(void) {
 static void refresh_timer_cb(lv_timer_t *timer) {
     (void)timer;
     if (chronvs_system_ui_display_is_off()) return;
-    chronvs_aion_pages_refresh();
+    chronvs_Relogio_pages_refresh();
     if (!current_page && lv_tick_elaps(last_stopwatch_refresh) >= 100) {
         last_stopwatch_refresh = lv_tick_get();
         update_display();
@@ -137,7 +137,7 @@ static void select_page(unsigned page) {
     current_page = page;
     if (page) lv_obj_add_flag(stopwatch_page, LV_OBJ_FLAG_HIDDEN);
     else lv_obj_clear_flag(stopwatch_page, LV_OBJ_FLAG_HIDDEN);
-    chronvs_aion_pages_show(page);
+    chronvs_Relogio_pages_show(page);
 }
 
 static void start_pause_event(lv_event_t *event) {
@@ -162,7 +162,7 @@ static void reset_event(lv_event_t *event) {
     update_display();
 }
 
-static void aion_touch_event(lv_event_t *event) {
+static void Relogio_touch_event(lv_event_t *event) {
     const lv_event_code_t code = lv_event_get_code(event);
     lv_point_t point;
 
@@ -171,8 +171,8 @@ static void aion_touch_event(lv_event_t *event) {
         gesture_start_x = point.x;
         gesture_start_y = point.y;
         returning_to_list = false;
-        page_back_allowed = chronvs_aion_pages_can_swipe_back(lv_event_get_target(event));
-        page_vertical_allowed = chronvs_aion_pages_can_swipe_vertical(lv_event_get_target(event));
+        page_back_allowed = chronvs_Relogio_pages_can_swipe_back(lv_event_get_target(event));
+        page_vertical_allowed = chronvs_Relogio_pages_can_swipe_vertical(lv_event_get_target(event));
         chronvs_system_ui_notify_activity();
     }
     else if (code == LV_EVENT_PRESSING && !returning_to_list) {
@@ -183,13 +183,13 @@ static void aion_touch_event(lv_event_t *event) {
         if (dx > BACK_SWIPE_DISTANCE && dx > vertical + 20) {
             returning_to_list = true;
             lv_indev_wait_release(lv_indev_get_act());
-            if (!chronvs_aion_pages_back()) chronvs_app_open("apps");
+            if (!chronvs_Relogio_pages_back()) chronvs_app_open("apps");
         }
         else if (vertical > 80 && vertical > (dx < 0 ? -dx : dx) + 20) {
             bool navigated = false;
-            if (chronvs_aion_pages_editing()) {
+            if (chronvs_Relogio_pages_editing()) {
                 if (page_vertical_allowed)
-                    navigated = chronvs_aion_pages_vertical(dy < 0 ? 1 : -1);
+                    navigated = chronvs_Relogio_pages_vertical(dy < 0 ? 1 : -1);
             } else if ((dy < 0 && current_page < 2) ||
                        (dy > 0 && current_page > 0 && page_back_allowed)) {
                 select_page(dy < 0 ? current_page + 1 : current_page - 1);
@@ -203,27 +203,27 @@ static void aion_touch_event(lv_event_t *event) {
     }
 }
 
-static void show_aion(void) {
+static void show_Relogio(void) {
     select_page(0);
     update_display();
     lv_timer_resume(refresh_timer);
 }
 
-static void hide_aion(void) {
+static void hide_Relogio(void) {
     lv_timer_pause(refresh_timer);
 }
 
-static lv_obj_t *create_aion(lv_obj_t *parent) {
-    aion_root = lv_obj_create(parent);
-    lv_obj_remove_style_all(aion_root);
-    lv_obj_set_size(aion_root, SCREEN_SIZE, SCREEN_SIZE);
-    lv_obj_set_style_bg_color(aion_root, lv_color_hex(COLOR_PANEL), 0);
-    lv_obj_set_style_bg_opa(aion_root, LV_OPA_COVER, 0);
-    lv_obj_clear_flag(aion_root, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_add_event_cb(aion_root, aion_touch_event, LV_EVENT_ALL, NULL);
+static lv_obj_t *create_Relogio(lv_obj_t *parent) {
+    Relogio_root = lv_obj_create(parent);
+    lv_obj_remove_style_all(Relogio_root);
+    lv_obj_set_size(Relogio_root, SCREEN_SIZE, SCREEN_SIZE);
+    lv_obj_set_style_bg_color(Relogio_root, lv_color_hex(COLOR_PANEL), 0);
+    lv_obj_set_style_bg_opa(Relogio_root, LV_OPA_COVER, 0);
+    lv_obj_clear_flag(Relogio_root, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(Relogio_root, Relogio_touch_event, LV_EVENT_ALL, NULL);
 
-    stopwatch_page = lv_obj_create(aion_root);
-    chronvs_aion_surface(stopwatch_page);
+    stopwatch_page = lv_obj_create(Relogio_root);
+    chronvs_Relogio_surface(stopwatch_page);
 
     lv_obj_t *title = lv_label_create(stopwatch_page);
     lv_label_set_text(title, "Cronometro");
@@ -241,25 +241,25 @@ static lv_obj_t *create_aion(lv_obj_t *parent) {
     lv_obj_set_style_text_color(elapsed_label, lv_color_hex(COLOR_TEXT), 0);
     lv_obj_align(elapsed_label, LV_ALIGN_CENTER, 0, -35);
 
-    lv_obj_t *start_button = chronvs_aion_action(stopwatch_page, "Iniciar", -66, 264,
+    lv_obj_t *start_button = chronvs_Relogio_action(stopwatch_page, "Iniciar", -66, 264,
                                                 CHRONVS_UI_PAIR_WIDTH, false, start_pause_event, 0);
     start_label = lv_obj_get_child(start_button, 0);
-    chronvs_aion_action(stopwatch_page, "Zerar", 66, 264, CHRONVS_UI_PAIR_WIDTH, true, reset_event, 0);
+    chronvs_Relogio_action(stopwatch_page, "Zerar", 66, 264, CHRONVS_UI_PAIR_WIDTH, true, reset_event, 0);
 
-    chronvs_aion_pages_init(aion_root);
+    chronvs_Relogio_pages_init(Relogio_root);
     refresh_timer = lv_timer_create(refresh_timer_cb, 20, NULL);
     update_display();
-    return aion_root;
+    return Relogio_root;
 }
 
-const chronvs_app_t chronvs_aion_app = {
-    .id = "aion",
-    .name = "Aion",
-    .create_icon = create_aion_icon,
+const chronvs_app_t chronvs_Relogio_app = {
+    .id = "Relogio",
+    .name = "Relogio",
+    .create_icon = create_Relogio_icon,
     .launcher_visible = true,
-    .create = create_aion,
-    .on_show = show_aion,
-    .on_hide = hide_aion,
+    .create = create_Relogio,
+    .on_show = show_Relogio,
+    .on_hide = hide_Relogio,
 };
 
-CHRONVS_REGISTER_APP(chronvs_aion_app)
+CHRONVS_REGISTER_APP(chronvs_Relogio_app)

@@ -5,10 +5,10 @@
 
 #include "core/app_manager.h"
 #include "services/voice_lab_service.h"
-#include "ui/aion_widgets.h"
+#include "ui/Relogio_widgets.h"
 #include "ui/app_input.h"
 #include "ui/control_style.h"
-#include "ui/mnemo_font.h"
+#include "ui/Notas_font.h"
 
 static lv_obj_t *status_label, *text_label, *mic_button, *mic_caption;
 static lv_timer_t *refresh;
@@ -22,7 +22,7 @@ static void back(void) { stop(); chronvs_app_open("apps"); }
 
 static lv_obj_t *centered_label(lv_obj_t *parent, const char *text, int y,
                                 int width, const lv_font_t *font) {
-    lv_obj_t *label = chronvs_aion_label(parent, text, y, font);
+    lv_obj_t *label = chronvs_Relogio_label(parent, text, y, font);
     lv_obj_set_width(label, width);
     lv_obj_set_style_text_align(label, LV_TEXT_ALIGN_CENTER, 0);
     return label;
@@ -98,13 +98,13 @@ static void create_icon(lv_obj_t *parent) {
 
 static lv_obj_t *create(lv_obj_t *parent) {
     lv_obj_t *root = lv_obj_create(parent);
-    chronvs_aion_surface(root);
+    chronvs_Relogio_surface(root);
     lv_obj_t *title = centered_label(root, "VOX", 34, 160, &lv_font_montserrat_24);
     lv_obj_set_style_text_color(title, lv_color_hex(CHRONVS_UI_ACCENT), 0);
-    centered_label(root, "Laboratório offline", 70, 230, &chronvs_mnemo_font);
+    centered_label(root, "Laboratório offline", 70, 230, &chronvs_Notas_font);
 
     text_label = centered_label(root, "As palavras reconhecidas aparecem aqui.",
-                                112, 280, &chronvs_mnemo_font);
+                                112, 280, &chronvs_Notas_font);
     lv_label_set_long_mode(text_label, LV_LABEL_LONG_WRAP);
     lv_obj_set_height(text_label, 120);
 
@@ -121,7 +121,7 @@ static lv_obj_t *create(lv_obj_t *parent) {
     lv_label_set_text(mic_caption, LV_SYMBOL_AUDIO);
     lv_obj_center(mic_caption);
 
-    lv_obj_t *clear = chronvs_aion_action(root, "Limpar", 0, 354,
+    lv_obj_t *clear = chronvs_Relogio_action(root, "Limpar", 0, 354,
         CHRONVS_UI_ACTION_WIDTH, true, clear_event, 0);
     (void)clear;
     input.back = back;

@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 
+#include "esp_timer.h"
 #include "lvgl.h"
 
 #include "apps/watch_app.h"
@@ -39,9 +40,8 @@ static chronvs_time_t displayed_time = {
     .second = 0, .minute = 0, .hour = 12, .day = 18,
     .weekday = 3, .month = 11, .year = 26, .valid = true,
 };
-static uint32_t displayed_time_tick;
+static int64_t displayed_time_us;
 static float ambient_temperature_c = 24.0f;
-static uint32_t render_time_tick;
 
 /* Trim opaque, rectangular siblings entering from an edge. LVGL's normal
  * cover test only skips this custom drawing when a whole buffer is covered.
@@ -375,8 +375,8 @@ static void clock_draw_event(lv_event_t *event) {
     background_dsc.border_opa = LV_OPA_TRANSP;
     lv_draw_rect(ctx, &background_dsc, coords);
 
-    const uint32_t elapsed_ms = render_time_tick - displayed_time_tick;
-    const float elapsed_seconds = elapsed_ms / 1000.0f;
+    const int64_t elapsed_us = esp_timer_get_time() - displayed_time_us;
+    const float elapsed_seconds = (float)elapsed_us / 1000000.0f;
     const float seconds = displayed_time.second + elapsed_seconds;
     const float minutes = displayed_time.minute + seconds / 60.0f;
     const float hours = (displayed_time.hour % 12) + minutes / 60.0f;
@@ -422,7 +422,6 @@ static void clock_draw_event(lv_event_t *event) {
 }
 
 static void animation_timer_cb(lv_timer_t *timer) {
-    render_time_tick = lv_tick_get();
     lv_obj_invalidate((lv_obj_t *)timer->user_data);
 }
 
@@ -434,8 +433,7 @@ static lv_obj_t *create_watch_app(lv_obj_t *parent) {
     lv_obj_clear_flag(clock_face, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(clock_face, clock_draw_event, LV_EVENT_DRAW_MAIN, NULL);
 
-    displayed_time_tick = lv_tick_get();
-    render_time_tick = displayed_time_tick;
+    displayed_time_us = esp_timer_get_time();
     lv_timer_t *animation_timer = lv_timer_create(animation_timer_cb, 1000, clock_face);
     chronvs_system_ui_init(clock_face, animation_timer);
     return clock_face;
@@ -465,13 +463,11 @@ void chronvs_watch_app_set_time(const chronvs_time_t *time) {
     }
 
     displayed_time = *time;
-    displayed_time_tick = lv_tick_get();
-    render_time_tick = displayed_time_tick;
+    displayed_time_us = esp_timer_get_time();
     lv_obj_invalidate(clock_face);
 }
 
 static void show_watch_app(void) {
-    render_time_tick = lv_tick_get();
     if (clock_face != NULL) lv_obj_invalidate(clock_face);
 }
 

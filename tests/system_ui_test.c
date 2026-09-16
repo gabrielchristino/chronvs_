@@ -1,7 +1,7 @@
 /* Render the real watch, launcher and global controls with hardware stubs. */
 #define main service_test_main
-#define nvs_set_blob aion_test_set_blob
-#include "aion_service_test.c"
+#define nvs_set_blob Relogio_test_set_blob
+#include "Relogio_service_test.c"
 #undef main
 #undef nvs_set_blob
 #include "lvgl.h"
@@ -9,18 +9,18 @@
 #include "ui/system_ui.h"
 #include "ui/control_style.h"
 #include "esp_heap_caps.h"
-#include "services/mnemo_service.h"
+#include "services/Notas_service.h"
 #include "services/sound_service.h"
 #include "services/weather_service.h"
 #include "platform/lvgl_memory.h"
-#include "ui/aion_alert.h"
+#include "ui/Relogio_alert.h"
 #include <stdlib.h>
 
 int nvs_set_blob(nvs_handle_t h, const char *k, const void *in, size_t size) {
     if (!strncmp(k,"note",4)) {
-        assert(size==sizeof(mnemo_note_t)); return fail_save ? -1 : 0;
+        assert(size==sizeof(Notas_note_t)); return fail_save ? -1 : 0;
     }
-    return aion_test_set_blob(h,k,in,size);
+    return Relogio_test_set_blob(h,k,in,size);
 }
 
 static lv_indev_state_t contact;
@@ -257,22 +257,22 @@ int main(void) {
     touch(206,30,LV_INDEV_STATE_PR); touch(206,90,LV_INDEV_STATE_PR);
     touch(206,170,LV_INDEV_STATE_PR); touch(206,170,LV_INDEV_STATE_REL); elapse(70);
     assert(!strcmp(chronvs_app_active_id(), "watch"));
-    assert(chronvs_app_open("aion"));
-    assert(chronvs_app_open("mnemo"));capture("15-mnemo-integrated");
+    assert(chronvs_app_open("Relogio"));
+    assert(chronvs_app_open("Notas"));capture("15-Notas-integrated");
     tap(206,341); /* Nova nota. */
     lv_obj_t *text=find_textarea(chronvs_app_content_layer()); assert(text);
     /* Real power timer: continuous typing exceeds both AUTO deadlines. */
     for(unsigned i=0;i<50;++i) {
         tap(76,226); elapse(1000); assert(LCD_Backlight==70);
     }
-    assert(mnemo_text_length(lv_textarea_get_text(text))==50);
+    assert(Notas_text_length(lv_textarea_get_text(text))==50);
     elapse(16000); assert(LCD_Backlight==12);
     tap(150,178); assert(LCD_Backlight==70);
     elapse(46000); assert(chronvs_system_ui_display_is_off() && LCD_Backlight==0);
-    unsigned length=mnemo_text_length(lv_textarea_get_text(text));
+    unsigned length=Notas_text_length(lv_textarea_get_text(text));
     tap(150,178); assert(LCD_Backlight==70);
-    assert(mnemo_text_length(lv_textarea_get_text(text))==length); /* Wake only. */
-    tap(76,226); assert(mnemo_text_length(lv_textarea_get_text(text))==length+1);
+    assert(Notas_text_length(lv_textarea_get_text(text))==length); /* Wake only. */
+    tap(76,226); assert(Notas_text_length(lv_textarea_get_text(text))==length+1);
     /* Toggle the actual ECO control, then hold a key past its 15 s deadline. */
     lv_obj_t *eco=NULL;
     for(unsigned i=0;i<lv_obj_get_child_cnt(panel);++i) {
@@ -285,10 +285,10 @@ int main(void) {
     touch(76,226,LV_INDEV_STATE_REL);
     elapse(6000); assert(LCD_Backlight==5);
     elapse(10000); assert(LCD_Backlight==0);
-    length=mnemo_text_length(lv_textarea_get_text(text));
+    length=Notas_text_length(lv_textarea_get_text(text));
     tap(150,178); assert(LCD_Backlight==35);
-    assert(mnemo_text_length(lv_textarea_get_text(text))==length);
-    capture("16-mnemo-keyboard-integrated");
+    assert(Notas_text_length(lv_textarea_get_text(text))==length);
+    capture("16-Notas-keyboard-integrated");
     lv_mem_monitor_t memory; lv_mem_monitor(&memory);
     assert(memory.free_biggest_size > 16384);
     printf("All apps retained: %u bytes of LVGL heap free.\n", (unsigned)memory.free_size);
@@ -327,8 +327,8 @@ int main(void) {
     touch(220,180,LV_INDEV_STATE_PR); touch(220,180,LV_INDEV_STATE_REL);
     assert(!strcmp(chronvs_app_active_id(),"apps"));
     assert(chronvs_app_open("apps"));
-    assert(chronvs_app_open("aion"));
-    assert(chronvs_app_open("mnemo"));
+    assert(chronvs_app_open("Relogio"));
+    assert(chronvs_app_open("Notas"));
     lv_mem_monitor(&memory); assert(memory.free_biggest_size > 16384);
     /* Closing from the volume button must not change its level on release. */
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_HIDDEN); lv_obj_set_y(panel, 0);
@@ -357,10 +357,10 @@ int main(void) {
         assert(lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN));
         assert(weather_queries==queries_before+1); /* Only on_show requests data. */
     }
-    assert(chronvs_app_open("hemera")); capture("25-hemera-integrated");
+    assert(chronvs_app_open("Calendario")); capture("25-Calendario-integrated");
     assert(find_label_text(chronvs_app_content_layer(),"Setembro"));
     lv_mem_monitor(&memory); assert(memory.free_biggest_size > 16384);
-    printf("Including Hemera: %u bytes free, largest block %u.\n",
+    printf("Including Calendario: %u bytes free, largest block %u.\n",
         (unsigned)memory.free_size, (unsigned)memory.free_biggest_size);
     elapse(16000); assert(LCD_Backlight==0);
     rtc_before=weather_rtc_reads;
@@ -378,23 +378,23 @@ int main(void) {
     touch(86,88,LV_INDEV_STATE_PR); touch(135,88,LV_INDEV_STATE_PR);
     touch(185,88,LV_INDEV_STATE_PR); touch(185,88,LV_INDEV_STATE_REL);
     assert(!strcmp(chronvs_app_active_id(),"apps"));
-    puts("System UI passed: controls, Mnemo typing/hold, Hemera, AUTO/ECO inactivity and wake-only touch.");
-    assert(chronvs_app_open("hemera"));
-    lv_obj_t *hemera=lv_obj_get_child(chronvs_app_content_layer(),-1);
+    puts("System UI passed: controls, Notas typing/hold, Calendario, AUTO/ECO inactivity and wake-only touch.");
+    assert(chronvs_app_open("Calendario"));
+    lv_obj_t *Calendario=lv_obj_get_child(chronvs_app_content_layer(),-1);
     tap(290,197); tap(206,357); tap(206,341);
-    assert(find_label_text(hemera,"Título do lembrete"));
-    capture("27-hemera-editor-integrated");
+    assert(find_label_text(Calendario,"Título do lembrete"));
+    capture("27-Calendario-editor-integrated");
     lv_mem_monitor(&memory);
     printf("Including reminder editor: %u bytes free, largest block %u.\n",
         (unsigned)memory.free_size,(unsigned)memory.free_biggest_size);
     assert(memory.free_biggest_size>8192);
-    chronvs_aion_init(); set_time(26,9,10,12,0,0);
+    chronvs_Relogio_init(); set_time(26,9,10,12,0,0);
     chronvs_reminder_t reminder={.year=26,.month=9,.day=10,.hour=12,.minute=1,.title="Aviso durante a edição"};
-    assert(chronvs_reminder_create(&reminder)); advance(60); chronvs_aion_alert_poll();
-    assert(find_label_text(lv_layer_top(),"Concluir")); capture("28-hemera-alert-integrated");
+    assert(chronvs_reminder_create(&reminder)); advance(60); chronvs_Relogio_alert_poll();
+    assert(find_label_text(lv_layer_top(),"Concluir")); capture("28-Calendario-alert-integrated");
     lv_mem_monitor(&memory); assert(memory.free_biggest_size>4096);
     printf("Editor plus alert: %u bytes free, largest block %u.\n",
         (unsigned)memory.free_size,(unsigned)memory.free_biggest_size);
-    tap(206,307); chronvs_aion_alert_poll(); assert(!reminder_ringing && chronvs_reminder_get(0)->done);
+    tap(206,307); chronvs_Relogio_alert_poll(); assert(!reminder_ringing && chronvs_reminder_get(0)->done);
     return 0;
 }

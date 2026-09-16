@@ -1,10 +1,10 @@
-#include "services/aion_service.h"
+#include "services/Relogio_service.h"
 
 #include <string.h>
 #include "esp_timer.h"
 #include "nvs.h"
 #include "core/calendar.h"
-#include "core/mnemo_text.h"
+#include "core/Notas_text.h"
 
 static chronvs_alarm_t alarms[CHRONVS_ALARM_LIMIT];
 static int64_t last_day[CHRONVS_ALARM_LIMIT];
@@ -20,8 +20,8 @@ static uint32_t reminder_revision;
 static bool reminder_valid(const chronvs_reminder_t *r) {
     if (!r || !chronvs_calendar_valid(2000 + r->year, r->month, r->day) ||
         r->hour > 23 || r->minute > 59 || r->done > 1 ||
-        !mnemo_text_valid(r->title, sizeof(r->title)) ||
-        mnemo_text_length(r->title) > CHRONVS_REMINDER_CHARS || strchr(r->title, '\n')) return false;
+        !Notas_text_valid(r->title, sizeof(r->title)) ||
+        Notas_text_length(r->title) > CHRONVS_REMINDER_CHARS || strchr(r->title, '\n')) return false;
     return r->title[strspn(r->title, " ")] != 0;
 }
 
@@ -41,7 +41,7 @@ static int64_t clock_seconds(void) {
     return anchor_seconds + (esp_timer_get_time() - anchor_us) / 1000000;
 }
 
-void chronvs_aion_init(void) {
+void chronvs_Relogio_init(void) {
     ++reminder_revision;
     memset(alarms, 0, sizeof(alarms));
     memset(pending, 0, sizeof(pending));
@@ -67,7 +67,7 @@ void chronvs_aion_init(void) {
         if (!reminder_valid(&reminders[i])) memset(&reminders[i], 0, sizeof(reminders[i]));
 }
 
-void chronvs_aion_observe_time(const chronvs_time_t *time) {
+void chronvs_Relogio_observe_time(const chronvs_time_t *time) {
     if (!time || !time->valid || !chronvs_calendar_valid(2000 + time->year, time->month, time->day) ||
         time->hour > 23 || time->minute > 59 || time->second > 59) return;
     const int64_t seconds = local_seconds(time);
@@ -79,7 +79,7 @@ void chronvs_aion_observe_time(const chronvs_time_t *time) {
     }
 }
 
-void chronvs_aion_poll(void) {
+void chronvs_Relogio_poll(void) {
     int64_t now = esp_timer_get_time();
     if (timer_deadline && now >= timer_deadline) {
         timer_deadline = 0;
@@ -103,6 +103,44 @@ void chronvs_aion_poll(void) {
             pending[i] = true;
         }
     }
+}
+
+uint32_t chronvs_Relogio_next_wake_ms(uint32_t max_ms) {
+    if (!max_ms) return 0;
+    const int64_t now_us = esp_timer_get_time();
+    int64_t next_us = now_us + (int64_t)max_ms * 1000;
+
+    if (timer_deadline && timer_deadline < next_us) next_us = timer_deadline;
+    for (unsigned i = 0; i < CHRONVS_ALARM_LIMIT; ++i)
+        if (snooze[i] && snooze[i] < next_us) next_us = snooze[i];
+
+    if (clock_valid) {
+        const int64_t seconds = anchor_seconds + (now_us - anchor_us) / 1000000;
+        const int64_t day_start = seconds - seconds % 86400;
+        const unsigned weekday = (day_start / 86400 + 6) % 7;
+
+        for (unsigned i = 0; i < CHRONVS_REMINDER_LIMIT; ++i) {
+            if (!reminders[i].title[0] || reminders[i].done) continue;
+            const int64_t due_seconds = reminder_seconds(&reminders[i]);
+            const int64_t due_us = anchor_us + (due_seconds - anchor_seconds) * 1000000;
+            if (due_us < next_us) next_us = due_us;
+        }
+        for (unsigned i = 0; i < CHRONVS_ALARM_LIMIT; ++i) {
+            if (!alarms[i].days) continue;
+            for (unsigned offset = 0; offset < 7; ++offset) {
+                if (!(alarms[i].days & (1 << ((weekday + offset) % 7)))) continue;
+                const int64_t due_seconds = day_start + (int64_t)offset * 86400 +
+                                            alarms[i].hour * 3600 + alarms[i].minute * 60;
+                if (due_seconds <= seconds) continue;
+                const int64_t due_us = anchor_us + (due_seconds - anchor_seconds) * 1000000;
+                if (due_us < next_us) next_us = due_us;
+                break;
+            }
+        }
+    }
+
+    if (next_us <= now_us) return 1;
+    return (uint32_t)((next_us - now_us + 999) / 1000);
 }
 
 void chronvs_timer_start(uint32_t minutes) {
@@ -146,15 +184,15 @@ bool chronvs_alarm_delete(unsigned index) {
     last_day[index] = -1;
     return true;
 }
-int chronvs_aion_alert(void) {
+int chronvs_Relogio_alert(void) {
     if (timer_pending) return -1;
     for (unsigned i = 0; i < CHRONVS_ALARM_LIMIT; ++i) if (pending[i]) return i;
     for (unsigned i = 0; i < CHRONVS_REMINDER_LIMIT; ++i)
         if (reminder_pending[i]) return CHRONVS_ALARM_LIMIT + i;
     return -2;
 }
-void chronvs_aion_dismiss(uint32_t extra_minutes) {
-    int alert = chronvs_aion_alert();
+void chronvs_Relogio_dismiss(uint32_t extra_minutes) {
+    int alert = chronvs_Relogio_alert();
     if (alert == -1) {
         timer_pending = false;
         if (extra_minutes) chronvs_timer_start(extra_minutes);
@@ -166,7 +204,7 @@ void chronvs_aion_dismiss(uint32_t extra_minutes) {
     }
 }
 
-bool chronvs_aion_time(chronvs_time_t *time) {
+bool chronvs_Relogio_time(chronvs_time_t *time) {
     if (!time || !clock_valid) return false;
     int64_t seconds = clock_seconds();
     if (seconds < 0 || seconds >= (int64_t)36525 * 86400) return false;

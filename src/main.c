@@ -8,19 +8,26 @@
 #include "apps/app_catalog.h"
 #include "apps/watch_app.h"
 #include "core/app_manager.h"
+#include "core/calendar.h"
 #include "platform/board.h"
 #include "services/battery_service.h"
 #include "services/rtc_service.h"
 #include "services/time_sync_service.h"
 #include "services/wifi_session_service.h"
 #include "ui/system_ui.h"
-#include "services/aion_service.h"
-#include "ui/aion_alert.h"
+#include "services/Relogio_service.h"
+#include "ui/Relogio_alert.h"
 
 #define BATTERY_UPDATE_PERIOD_MS 60000
-#define DISPLAY_OFF_SLEEP_MS 1000
+#define DISPLAY_OFF_MAX_SLEEP_MS 300000
 
 static const char *TAG = "chronvs";
+
+static int64_t civil_seconds(const chronvs_time_t *time) {
+    return (int64_t)chronvs_calendar_ordinal(2000 + time->year,
+        time->month, time->day) * 86400 + time->hour * 3600 +
+        time->minute * 60 + time->second;
+}
 
 void app_main(void) {
     ESP_LOGI(TAG, "Chronvs application runtime starting");
@@ -31,7 +38,7 @@ void app_main(void) {
     if (!chronvs_apps_register_all() || !chronvs_app_open("watch")) {
         ESP_LOGE(TAG, "Could not start the watch app");
     }
-    chronvs_aion_init();
+    chronvs_Relogio_init();
     chronvs_wifi_session_init();
     chronvs_time_sync_start();
 
@@ -42,7 +49,7 @@ void app_main(void) {
     while (true) {
         chronvs_time_t synchronized_time;
         if (chronvs_time_sync_take_update(&synchronized_time))
-            chronvs_aion_observe_time(&synchronized_time);
+            chronvs_Relogio_observe_time(&synchronized_time);
         TickType_t now = xTaskGetTickCount();
         const bool display_is_off = chronvs_system_ui_display_is_off();
         if (display_is_off) {
@@ -50,14 +57,36 @@ void app_main(void) {
                 ESP_LOGI(TAG, "Display off: light sleep enabled");
             display_was_off = true;
             if (!chronvs_wifi_session_active()) {
-                chronvs_board_light_sleep(DISPLAY_OFF_SLEEP_MS);
+                chronvs_board_light_sleep(
+                    chronvs_Relogio_next_wake_ms(DISPLAY_OFF_MAX_SLEEP_MS));
                 now = xTaskGetTickCount();
             }
         } else {
             const bool refresh_after_wake = display_was_off;
             if (refresh_after_wake || now >= next_rtc_update) {
-                const chronvs_time_t time = chronvs_rtc_read();
-                chronvs_aion_observe_time(&time);
+                chronvs_time_t time = chronvs_rtc_read();
+                chronvs_time_t estimated;
+                const bool have_estimate = chronvs_Relogio_time(&estimated);
+                bool rtc_usable = time.valid &&
+                    chronvs_calendar_valid(2000 + time.year, time.month, time.day);
+                if (rtc_usable && have_estimate) {
+                    const int64_t difference = civil_seconds(&time) - civil_seconds(&estimated);
+                    if (difference < 0 || difference > 2) {
+                        if (refresh_after_wake)
+                            ESP_LOGW(TAG, "RTC differs from running clock by %lld s",
+                                     (long long)difference);
+                        rtc_usable = false;
+                    }
+                }
+                if (rtc_usable) {
+                    chronvs_Relogio_observe_time(&time);
+                } else if (have_estimate) {
+                    if (refresh_after_wake && !time.valid)
+                        ESP_LOGW(TAG, "RTC read failed after display wake; using running clock");
+                    time = estimated;
+                } else {
+                    time.valid = false;
+                }
                 chronvs_watch_app_set_time(&time);
                 next_rtc_update = now + pdMS_TO_TICKS(1000);
             }
@@ -73,8 +102,8 @@ void app_main(void) {
             display_was_off = false;
         }
 
-        chronvs_aion_poll();
-        chronvs_aion_alert_poll();
+        chronvs_Relogio_poll();
+        chronvs_Relogio_alert_poll();
         lv_timer_handler();
         vTaskDelay(pdMS_TO_TICKS(5));
     }

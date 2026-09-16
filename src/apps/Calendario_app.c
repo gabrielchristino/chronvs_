@@ -4,11 +4,11 @@
 #include <stdlib.h>
 #include "core/calendar.h"
 #include "services/rtc_service.h"
-#include "services/aion_service.h"
-#include "apps/hemera_reminders.h"
-#include "ui/aion_widgets.h"
+#include "services/Relogio_service.h"
+#include "apps/Calendario_reminders.h"
+#include "ui/Relogio_widgets.h"
 #include "ui/app_input.h"
-#include "ui/mnemo_font.h"
+#include "ui/Notas_font.h"
 #include "ui/system_ui.h"
 
 enum { CELL_W = 42, CELL_H = 29, GRID_X = 59, GRID_Y = 154 };
@@ -158,7 +158,7 @@ static void poll(lv_timer_t *timer) {
     (void)timer;
     if (!visible) return;
     if (chronvs_system_ui_display_is_off()) { was_off = true; return; }
-    chronvs_hemera_reminders_poll();
+    chronvs_Calendario_reminders_poll();
     if (reminder_revision != chronvs_reminder_revision()) {
         reminder_revision = chronvs_reminder_revision();
         lv_obj_invalidate(grid);
@@ -169,7 +169,7 @@ static void poll(lv_timer_t *timer) {
     bool changed = now.valid != today.valid || now.year != today.year ||
         now.month != today.month || now.day != today.day;
     today = now;
-    chronvs_aion_observe_time(&now);
+    chronvs_Relogio_observe_time(&now);
     if (today.valid && (reset_month || !year)) {
         year = 2000 + today.year; month = today.month;
         reset_month = false;
@@ -222,7 +222,7 @@ static void create_icon(lv_obj_t *parent) {
 }
 
 static lv_obj_t *label(lv_obj_t *parent, const char *text, int y, int width, const lv_font_t *font) {
-    lv_obj_t *obj = chronvs_aion_label(parent, text, y, font);
+    lv_obj_t *obj = chronvs_Relogio_label(parent, text, y, font);
     lv_obj_set_width(obj, width);
     lv_obj_set_style_text_align(obj, LV_TEXT_ALIGN_CENTER, 0);
     lv_label_set_long_mode(obj, LV_LABEL_LONG_CLIP);
@@ -231,14 +231,14 @@ static lv_obj_t *label(lv_obj_t *parent, const char *text, int y, int width, con
 
 static void open_reminders(lv_event_t *event) {
     if (input.consumed || chronvs_system_ui_display_is_off()) return;
-    chronvs_hemera_reminders_open(lv_obj_get_parent(lv_event_get_target(event)), year, month, selected_day);
+    chronvs_Calendario_reminders_open(lv_obj_get_parent(lv_event_get_target(event)), year, month, selected_day);
 }
 
 static lv_obj_t *create(lv_obj_t *parent) {
-    lv_obj_t *root = lv_obj_create(parent); chronvs_aion_surface(root);
-    month_page = lv_obj_create(root); chronvs_aion_surface(month_page);
-    detail_page = lv_obj_create(root); chronvs_aion_surface(detail_page);
-    month_label = label(month_page, "", 68, 150, &chronvs_mnemo_font);
+    lv_obj_t *root = lv_obj_create(parent); chronvs_Relogio_surface(root);
+    month_page = lv_obj_create(root); chronvs_Relogio_surface(month_page);
+    detail_page = lv_obj_create(root); chronvs_Relogio_surface(detail_page);
+    month_label = label(month_page, "", 68, 150, &chronvs_Notas_font);
     year_label = label(month_page, "", 95, 100, &lv_font_montserrat_18);
     static const char *short_days[] = {"D", "S", "T", "Q", "Q", "S", "S"};
     for (int i = 0; i < 7; ++i) {
@@ -255,14 +255,14 @@ static lv_obj_t *create(lv_obj_t *parent) {
     lv_obj_add_flag(grid, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(grid, draw_grid, LV_EVENT_DRAW_MAIN, NULL);
     lv_obj_add_event_cb(grid, select_date, LV_EVENT_CLICKED, NULL);
-    today_button = chronvs_aion_action(month_page, "Hoje", 0, 342, CHRONVS_UI_ACTION_WIDTH, false, go_today, 0);
+    today_button = chronvs_Relogio_action(month_page, "Hoje", 0, 342, CHRONVS_UI_ACTION_WIDTH, false, go_today, 0);
     unavailable = label(month_page, "RTC indisponivel", 328, 220, &lv_font_montserrat_12);
     detail_day = label(detail_page, "", 115, 200, &lv_font_montserrat_48);
-    detail_month = label(detail_page, "", 184, 290, &chronvs_mnemo_font);
-    detail_weekday = label(detail_page, "", 223, 290, &chronvs_mnemo_font);
-    distance_label = label(detail_page, "", 281, 290, &chronvs_mnemo_font);
+    detail_month = label(detail_page, "", 184, 290, &chronvs_Notas_font);
+    detail_weekday = label(detail_page, "", 223, 290, &chronvs_Notas_font);
+    distance_label = label(detail_page, "", 281, 290, &chronvs_Notas_font);
     lv_obj_set_style_text_color(distance_label, lv_color_hex(CHRONVS_UI_ACCENT), 0);
-    chronvs_aion_action(detail_page, "Lembretes", 0, 330, 180, false, open_reminders, 0);
+    chronvs_Relogio_action(detail_page, "Lembretes", 0, 330, 180, false, open_reminders, 0);
     chronvs_ui_app_input_bind(root, &input);
     refresh = lv_timer_create(poll, 20, NULL);
     lv_timer_pause(refresh);
@@ -271,7 +271,7 @@ static lv_obj_t *create(lv_obj_t *parent) {
 }
 
 static void show(void) {
-    if (chronvs_hemera_reminders_active()) {
+    if (chronvs_Calendario_reminders_active()) {
         visible = dirty = true;
         lv_timer_resume(refresh); poll(refresh); return;
     }
@@ -287,8 +287,8 @@ static void hide(void) {
     lv_timer_pause(refresh);
 }
 
-const chronvs_app_t chronvs_hemera_app = {
-    .id = "hemera", .name = "Hemera", .launcher_visible = true,
+const chronvs_app_t chronvs_Calendario_app = {
+    .id = "Calendario", .name = "Calendario", .launcher_visible = true,
     .create_icon = create_icon, .create = create, .on_show = show, .on_hide = hide,
 };
-CHRONVS_REGISTER_APP(chronvs_hemera_app)
+CHRONVS_REGISTER_APP(chronvs_Calendario_app)

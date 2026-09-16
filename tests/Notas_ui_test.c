@@ -1,14 +1,14 @@
 #define main model_test_main
-#include "mnemo_test.c"
+#include "Notas_test.c"
 #undef main
-#include "apps/mnemo_app.c"
+#include "apps/Notas_app.c"
 
 static bool display_off;
 static lv_indev_state_t contact;
 static lv_point_t contact_point;
 static unsigned flushes;
 static unsigned activity_count, launcher_opens;
-void chronvs_apps_add(const chronvs_app_t *app) { assert(!strcmp(app->id, "mnemo")); }
+void chronvs_apps_add(const chronvs_app_t *app) { assert(!strcmp(app->id, "Notas")); }
 bool chronvs_app_open(const char *id) { assert(!strcmp(id, "apps")); ++launcher_opens; return true; }
 bool chronvs_system_ui_display_is_off(void) { return display_off; }
 void chronvs_system_ui_notify_activity(void) { ++activity_count; display_off = false; }
@@ -58,8 +58,8 @@ int main(void) {
     driver.hor_res=driver.ver_res=412; driver.draw_buf=&draw; driver.flush_cb=flush; lv_disp_drv_register(&driver);
     static lv_indev_drv_t input; lv_indev_drv_init(&input);
     input.type=LV_INDEV_TYPE_POINTER; input.read_cb=read_touch; lv_indev_drv_register(&input);
-    create(lv_scr_act()); show(); frame("mnemo-01-empty");
-    open_editor(0); frame("mnemo-02-editor");
+    create(lv_scr_act()); show(); frame("Notas-01-empty");
+    open_editor(0); frame("Notas-02-editor");
     assert(lv_obj_get_child_cnt(keyboard)==20);
     for (unsigned i=0; i<20; ++i) {
         lv_area_t a; lv_obj_get_coords(lv_obj_get_child(keyboard,i),&a);
@@ -74,19 +74,19 @@ int main(void) {
     assert(activity_count>activity_before);
     assert(!strcmp(editor.text,"a"));
     for (unsigned i=0; i<2; ++i) key(0);
-    assert(!strcmp(editor.text,"á")); frame("mnemo-03-accent-pending");
+    assert(!strcmp(editor.text,"á")); frame("Notas-03-accent-pending");
     lv_event_send(shift_key,LV_EVENT_SHORT_CLICKED,NULL);
     assert(editor.shift && lv_obj_has_state(shift_key,LV_STATE_CHECKED));
     key(1); key(1);
     assert(!strcmp(editor.text,"áD"));
     assert(lv_obj_has_state(shift_key,LV_STATE_CHECKED));
     lv_tick_inc(900); lv_timer_handler(); assert(!lv_obj_has_state(shift_key,LV_STATE_CHECKED));
-    key(19); assert(symbols); frame("mnemo-10-symbols");
+    key(19); assert(symbols); frame("Notas-10-symbols");
     key(4); key(4); assert(editor.text[strlen(editor.text)-1]==')');
     key(19); assert(!symbols);
-    mnemo_editor_load(&editor,"Ação para amanhã:\ncomprar café, pão\ne maçãs.\nÁ À Ã Â Ç É Ê Í\nÓ Ô Õ Ú\nÚltima linha");
-    changed(); frame("mnemo-04-multiline");
-    mnemo_editor_move(&editor,0); update_editor(false);
+    Notas_editor_load(&editor,"Ação para amanhã:\ncomprar café, pão\ne maçãs.\nÁ À Ã Â Ç É Ê Í\nÓ Ô Õ Ú\nÚltima linha");
+    changed(); frame("Notas-04-multiline");
+    Notas_editor_move(&editor,0); update_editor(false);
     lv_obj_update_layout(textarea);
     lv_area_t text_coords; lv_obj_get_coords(lv_textarea_get_label(textarea),&text_coords);
     /* A click at the start of the first line resolves to character zero. */
@@ -98,38 +98,38 @@ int main(void) {
     touch(100,110,LV_INDEV_STATE_PR); touch(148,110,LV_INDEV_STATE_PR); touch(148,110,LV_INDEV_STATE_REL);
     assert(editor.cursor==cursor);
     touch(88,97,LV_INDEV_STATE_PR); touch(88,97,LV_INDEV_STATE_REL);
-    assert(editor.cursor<=mnemo_text_length(editor.text));
+    assert(editor.cursor<=Notas_text_length(editor.text));
     lv_obj_t *toggle=NULL;
     for (unsigned i=0;i<lv_obj_get_child_cnt(page);++i) {
         lv_obj_t *candidate=lv_obj_get_child(page,i);
         if (lv_obj_check_type(candidate,&lv_btn_class) && lv_obj_get_x(candidate)==90) toggle=candidate;
     }
     assert(toggle);
-    mnemo_editor_move(&editor,1); update_editor(false);
+    Notas_editor_move(&editor,1); update_editor(false);
     key(18);
     assert(editor.text[1]=='\n' && editor.cursor==2);
     key(16);
     assert(editor.text[1]!='\n' && editor.cursor==1);
     key(17); key(17); assert(editor.text[1]==' ' && editor.text[2]==' ');
     /* Holding delete keeps reporting activity, while repeating deletion. */
-    unsigned length=mnemo_text_length(editor.text);
+    unsigned length=Notas_text_length(editor.text);
     activity_before=activity_count;
     touch(290,322,LV_INDEV_STATE_PR);
     for (unsigned i=0;i<40;++i) touch(290,322,LV_INDEV_STATE_PR);
     touch(290,322,LV_INDEV_STATE_REL);
-    assert(activity_count>activity_before+30 && mnemo_text_length(editor.text)<length);
+    assert(activity_count>activity_before+30 && Notas_text_length(editor.text)<length);
     lv_event_send(toggle,LV_EVENT_SHORT_CLICKED,NULL);
-    assert(reading && lv_obj_has_flag(keyboard,LV_OBJ_FLAG_HIDDEN)); frame("mnemo-05-reading");
+    assert(reading && lv_obj_has_flag(keyboard,LV_OBJ_FLAG_HIDDEN)); frame("Notas-05-reading");
     lv_event_send(toggle,LV_EVENT_SHORT_CLICKED,NULL);
     fail_write=true; assert(!save_note()); swipe(100,110); assert(slot==0 && dirty);
-    frame("mnemo-06-save-failure"); fail_write=false;
+    frame("Notas-06-save-failure"); fail_write=false;
     hide(); assert(!dirty && refresh->paused); show();
-    frame("mnemo-07-resumed");
+    frame("Notas-07-resumed");
     display_off=true; lv_tick_inc(2000); lv_timer_handler(); lv_refr_now(NULL);
     unsigned before=flushes;
     for (unsigned i=0; i<20; ++i) { lv_tick_inc(100); lv_timer_handler(); }
     assert(flushes==before); display_off=false; lv_tick_inc(100); lv_timer_handler();
-    swipe(100,110); assert(slot==-1); frame("mnemo-08-list");
+    swipe(100,110); assert(slot==-1); frame("Notas-08-list");
     /* Starting on a note row returns without opening it on release. */
     unsigned opens=launcher_opens; swipe(90,114);
     assert(slot==-1 && launcher_opens==opens+1);
@@ -140,20 +140,20 @@ int main(void) {
         if (lv_obj_check_type(obj,&lv_btn_class) && lv_obj_get_x(obj)==286) trash=obj;
     }
     assert(trash); lv_event_send(trash,LV_EVENT_SHORT_CLICKED,NULL);
-    assert(dialog); frame("mnemo-09-delete");
+    assert(dialog); frame("Notas-09-delete");
     fail_write=true;
     lv_event_send(lv_obj_get_child(dialog,2),LV_EVENT_SHORT_CLICKED,NULL);
-    assert(dialog && slot==0 && chronvs_mnemo_get(0)); fail_write=false;
+    assert(dialog && slot==0 && chronvs_Notas_get(0)); fail_write=false;
     swipe(100,248);
-    assert(!dialog && slot==0 && chronvs_mnemo_get(0));
+    assert(!dialog && slot==0 && chronvs_Notas_get(0));
     /* A keyboard swipe saves and returns without inserting its starting key. */
-    length=mnemo_text_length(editor.text); swipe(94,226);
-    assert(slot==-1 && mnemo_text_length(chronvs_mnemo_get(0)->text)==length);
+    length=Notas_text_length(editor.text); swipe(94,226);
+    assert(slot==-1 && Notas_text_length(chronvs_Notas_get(0)->text)==length);
     lv_mem_monitor_t initial, final; lv_mem_monitor(&initial);
     for(unsigned i=0;i<40;++i) { open_editor(0); back(); }
     lv_mem_monitor(&final); assert(final.free_size>=initial.free_size);
     lv_font_glyph_dsc_t glyph;
-    assert(lv_font_get_glyph_dsc(&chronvs_mnemo_font,&glyph,0xE3,0) && !glyph.is_placeholder);
-    printf("Mnemo UI passed. Heap used: %u bytes.\n",(unsigned)(final.total_size-final.free_size));
+    assert(lv_font_get_glyph_dsc(&chronvs_Notas_font,&glyph,0xE3,0) && !glyph.is_placeholder);
+    printf("Notas UI passed. Heap used: %u bytes.\n",(unsigned)(final.total_size-final.free_size));
     return 0;
 }

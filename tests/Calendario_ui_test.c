@@ -2,9 +2,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
-#include "apps/hemera_app.c"
-#define main aion_service_tests
-#include "aion_service_test.c"
+#include "apps/Calendario_app.c"
+#define main Relogio_service_tests
+#include "Relogio_service_test.c"
 #undef main
 
 static bool display_off;
@@ -15,7 +15,7 @@ static lv_indev_state_t contact;
 static lv_obj_t *root;
 static unsigned char pixels[412*412*3];
 
-void chronvs_apps_add(const chronvs_app_t *app) { assert(!strcmp(app->id,"hemera")); }
+void chronvs_apps_add(const chronvs_app_t *app) { assert(!strcmp(app->id,"Calendario")); }
 bool chronvs_app_open(const char *id) { assert(!strcmp(id,"apps")); ++opens; hide(); return true; }
 bool chronvs_system_ui_display_is_off(void) { return display_off; }
 void chronvs_system_ui_notify_activity(void) { ++activity; }
@@ -34,7 +34,7 @@ static void flush(lv_disp_drv_t *driver, const lv_area_t *area, lv_color_t *colo
 
 static void frame(const char *name) {
     lv_obj_update_layout(root); lv_refr_now(NULL);
-    char path[160]; snprintf(path,sizeof(path),".pio/host-tests/hemera-%s.bmp",name);
+    char path[160]; snprintf(path,sizeof(path),".pio/host-tests/Calendario-%s.bmp",name);
     FILE *file=fopen(path,"wb"); assert(file);
     unsigned char header[54]={'B','M'};
     uint32_t size=sizeof(pixels)+54,offset=54,dib=40,dim=412;
@@ -88,7 +88,7 @@ static void click_caption(const char *caption) {
 }
 static void reminder_ui_tests(void) {
     date_tap(11); click_caption("Lembretes"); frame("08-reminder-list");
-    assert(chronvs_hemera_reminders_active()); click_caption("Criar");
+    assert(chronvs_Calendario_reminders_active()); click_caption("Criar");
     lv_obj_t *textarea=find_class(root,&lv_textarea_class); assert(textarea);
     tap(154,322); /* Shift. */
     tap(128,226); tap(76,226); tap(232,274); tap(76,226); /* Casa. */
@@ -121,14 +121,14 @@ static void reminder_ui_tests(void) {
     click_caption("Excluir"); fail_save=true; click_caption("Excluir");
     assert(chronvs_reminder_get(0) && find_caption(root,"Falha ao excluir"));
     fail_save=false; click_caption("Excluir"); assert(!chronvs_reminder_get(0));
-    swipe(100,180); assert(!chronvs_hemera_reminders_active() && detail);
+    swipe(100,180); assert(!chronvs_Calendario_reminders_active() && detail);
     back(); lv_refr_now(NULL); lv_mem_monitor_t a,b; lv_mem_monitor(&a);
     for (unsigned i=0;i<20;++i) {
         date_tap(11); click_caption("Lembretes"); click_caption("Criar");
         swipe(100,140); click_caption("Descartar"); swipe(100,180); back();
     }
     lv_refr_now(NULL); lv_mem_monitor(&b); assert(a.free_size==b.free_size);
-    printf("Hemera reminder flow: touch, gestures, draft, persistence failures and stable memory (%u bytes free).\n",(unsigned)b.free_size);
+    printf("Calendario reminder flow: touch, gestures, draft, persistence failures and stable memory (%u bytes free).\n",(unsigned)b.free_size);
 }
 
 static void calendar_tests(void) {
@@ -157,7 +157,7 @@ static void calendar_tests(void) {
 
 int main(void) {
     calendar_tests();
-    chronvs_aion_init();
+    chronvs_Relogio_init();
     lv_init();
     static lv_color_t buffer[412*412/20]; static lv_disp_draw_buf_t draw;
     lv_disp_draw_buf_init(&draw,buffer,NULL,412*412/20);
@@ -249,10 +249,10 @@ int main(void) {
     lv_mem_monitor_t a,b; lv_mem_monitor(&a);
     for (int i=0;i<100;++i) { date_tap(10); back(); hide(); show(); }
     lv_refr_now(NULL); lv_mem_monitor(&b);
-    printf("Hemera LVGL free before/after 100 visits: %u / %u bytes.\n",
+    printf("Calendario LVGL free before/after 100 visits: %u / %u bytes.\n",
         (unsigned)a.free_size, (unsigned)b.free_size);
     assert(a.free_size==b.free_size);
     reminder_ui_tests();
-    puts("Hemera: all 36525 dates, month bounds, leap days, touch/back, RTC recovery, off/hidden and stable LVGL memory passed.");
+    puts("Calendario: all 36525 dates, month bounds, leap days, touch/back, RTC recovery, off/hidden and stable LVGL memory passed.");
     return 0;
 }

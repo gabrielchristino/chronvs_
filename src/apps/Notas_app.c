@@ -1,7 +1,7 @@
 #include "apps/app_catalog.h"
-#include "services/mnemo_service.h"
+#include "services/Notas_service.h"
 #include "ui/control_style.h"
-#include "ui/mnemo_font.h"
+#include "ui/Notas_font.h"
 #include "ui/system_ui.h"
 #include "ui/app_input.h"
 #include <stdio.h>
@@ -10,7 +10,7 @@
 
 static lv_obj_t *root, *page, *textarea, *status, *keyboard, *shift_key, *dialog;
 static lv_timer_t *refresh;
-static mnemo_editor_t editor;
+static Notas_editor_t editor;
 static int slot = -1;
 static bool dirty, save_error, reading, active, cursor_visible, was_off, symbols;
 static uint32_t changed_at, blink_at;
@@ -32,10 +32,10 @@ static void draw_pending(lv_event_t *event) {
     lv_point_t position;
     lv_label_get_letter_pos(text_label, editor.cursor - 1, &position);
     lv_area_t area; lv_obj_get_coords(text_label, &area);
-    size_t offset = mnemo_text_offset(editor.text, editor.cursor - 1);
+    size_t offset = Notas_text_offset(editor.text, editor.cursor - 1);
     const unsigned char *text = (const unsigned char *)editor.text + offset;
     uint32_t character = text[0] < 128 ? text[0] : ((text[0] & 31u) << 6) | (text[1] & 63u);
-    lv_coord_t width = lv_font_get_glyph_width(&chronvs_mnemo_font, character, 0);
+    lv_coord_t width = lv_font_get_glyph_width(&chronvs_Notas_font, character, 0);
     lv_point_t start = {area.x1 + position.x, area.y1 + position.y + 23};
     lv_point_t end = {start.x + (width > 1 ? width - 1 : 1), start.y};
     lv_draw_line_dsc_t line; lv_draw_line_dsc_init(&line);
@@ -90,15 +90,15 @@ static void new_page(void) {
     page = lv_obj_create(root); lv_obj_remove_style_all(page);
     lv_obj_set_size(page, 412, 412);
     lv_obj_clear_flag(page, LV_OBJ_FLAG_SCROLLABLE);
-    lv_obj_t *title = label(page, "Mnemo", 140, 34, 132);
+    lv_obj_t *title = label(page, "Notas", 140, 34, 132);
     lv_obj_set_style_text_font(title, &lv_font_montserrat_24, 0);
     lv_obj_set_style_text_color(title, lv_color_hex(CHRONVS_UI_ACCENT), 0);
     lv_obj_set_style_text_align(title, LV_TEXT_ALIGN_CENTER, 0);
 }
 static bool save_note(void) {
-    mnemo_editor_confirm(&editor);
+    Notas_editor_confirm(&editor);
     if (!dirty || slot < 0) return true;
-    save_error = !chronvs_mnemo_save((unsigned)slot, editor.text);
+    save_error = !chronvs_Notas_save((unsigned)slot, editor.text);
     if (!save_error) dirty = false;
     return !save_error;
 }
@@ -111,34 +111,34 @@ static void back(void) {
 static void row_event(lv_event_t *event) {
     if (lv_event_get_code(event) != LV_EVENT_SHORT_CLICKED) return;
     int index = (int)(intptr_t)lv_event_get_user_data(event);
-    if (index < 0) index = chronvs_mnemo_free_slot();
+    if (index < 0) index = chronvs_Notas_free_slot();
     if (index >= 0) open_editor(index);
 }
 static void show_list(void) {
     new_page();
-    bool ready = chronvs_mnemo_init();
+    bool ready = chronvs_Notas_init();
     lv_obj_t *list = lv_obj_create(page); lv_obj_remove_style_all(list);
     lv_obj_set_pos(list, 66, 90); lv_obj_set_size(list, 280, 210);
     lv_obj_set_scroll_dir(list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_AUTO);
-    unsigned order[MNEMO_NOTE_LIMIT], count = 0;
-    for (unsigned i = 0; i < MNEMO_NOTE_LIMIT; ++i) {
-        const mnemo_note_t *note = chronvs_mnemo_get(i); if (!note) continue;
+    unsigned order[Notas_NOTE_LIMIT], count = 0;
+    for (unsigned i = 0; i < Notas_NOTE_LIMIT; ++i) {
+        const Notas_note_t *note = chronvs_Notas_get(i); if (!note) continue;
         unsigned j = count++;
-        while (j && chronvs_mnemo_get(order[j-1])->revision < note->revision) {
+        while (j && chronvs_Notas_get(order[j-1])->revision < note->revision) {
             order[j] = order[j-1]; --j;
         }
         order[j] = i;
     }
     for (unsigned i = 0; i < count; ++i) {
-        const char *text = chronvs_mnemo_get(order[i])->text;
-        char title[90]; size_t n = mnemo_text_offset(text, 36);
+        const char *text = chronvs_Notas_get(order[i])->text;
+        char title[90]; size_t n = Notas_text_offset(text, 36);
         memcpy(title, text, n); title[n] = 0;
         char *newline = strchr(title, '\n'); if (newline) *newline = 0;
         lv_obj_t *row = button(list, *title ? title : "Nota", 0, (int)i*64, 280, 56,
                                row_event, order[i], false);
         lv_obj_t *caption = lv_obj_get_child(row, 0);
-        lv_obj_set_style_text_font(caption, &chronvs_mnemo_font, 0);
+        lv_obj_set_style_text_font(caption, &chronvs_Notas_font, 0);
         lv_obj_set_width(caption, 244); lv_label_set_long_mode(caption, LV_LABEL_LONG_DOT);
         lv_obj_center(caption);
     }
@@ -147,8 +147,8 @@ static void show_list(void) {
         lv_obj_set_style_text_align(empty, LV_TEXT_ALIGN_CENTER, 0);
     }
     lv_obj_t *create = button(page, "Nova nota", 116, 314, 180, 54, row_event, -1, false);
-    if (!ready || count == MNEMO_NOTE_LIMIT) lv_obj_add_state(create, LV_STATE_DISABLED);
-    char count_text[32]; snprintf(count_text, sizeof(count_text), "%u / %u notas", count, MNEMO_NOTE_LIMIT);
+    if (!ready || count == Notas_NOTE_LIMIT) lv_obj_add_state(create, LV_STATE_DISABLED);
+    char count_text[32]; snprintf(count_text, sizeof(count_text), "%u / %u notas", count, Notas_NOTE_LIMIT);
     lv_obj_t *counter = label(page, count_text, 136, 376, 140);
     lv_obj_set_style_text_font(counter, &lv_font_montserrat_12, 0);
     lv_obj_set_style_text_align(counter, LV_TEXT_ALIGN_CENTER, 0);
@@ -172,7 +172,7 @@ static void update_editor(bool text_changed) {
     }
     char message[64];
     snprintf(message, sizeof(message), "%s  %u/%u", save_error ? "Falha ao salvar" :
-             dirty ? "Salvando" : "Salvo", mnemo_text_length(editor.text), MNEMO_MAX_CHARS);
+             dirty ? "Salvando" : "Salvo", Notas_text_length(editor.text), Notas_MAX_CHARS);
     lv_label_set_text(status, message);
     if (editor.shift || (editor.pending_key >= 0 && editor.pending_shift)) lv_obj_add_state(shift_key, LV_STATE_CHECKED);
     else lv_obj_clear_state(shift_key, LV_STATE_CHECKED);
@@ -188,15 +188,15 @@ static void key_event(lv_event_t *event) {
     unsigned key = (unsigned)(uintptr_t)lv_event_get_user_data(event);
     lv_event_code_t code = lv_event_get_code(event);
     if (code != LV_EVENT_SHORT_CLICKED) return;
-    if (symbols && key < MNEMO_LETTER_KEYS) key += MNEMO_SYMBOL_FIRST;
-    if (mnemo_editor_key(&editor, key, lv_tick_get())) changed();
+    if (symbols && key < Notas_LETTER_KEYS) key += Notas_SYMBOL_FIRST;
+    if (Notas_editor_key(&editor, key, lv_tick_get())) changed();
 }
 static void text_event(lv_event_t *event) {
     lv_indev_t *input = lv_indev_get_act(); if (!input) return;
     lv_point_t point; lv_indev_get_point(input, &point);
     lv_event_code_t code = lv_event_get_code(event);
     if (code == LV_EVENT_PRESSED) {
-        mnemo_editor_confirm(&editor); text_start = point;
+        Notas_editor_confirm(&editor); text_start = point;
         start_scroll = lv_obj_get_scroll_y(textarea); text_dragged = false;
         update_editor(false);
         lv_obj_scroll_to_y(textarea, start_scroll, LV_ANIM_OFF);
@@ -207,7 +207,7 @@ static void text_event(lv_event_t *event) {
             lv_obj_t *text_label = lv_textarea_get_label(textarea);
             lv_area_t coords; lv_obj_get_coords(text_label, &coords);
             lv_point_t relative = {point.x-coords.x1, point.y-coords.y1};
-            mnemo_editor_move(&editor, lv_label_get_letter_on(text_label, &relative)); update_editor(false);
+            Notas_editor_move(&editor, lv_label_get_letter_on(text_label, &relative)); update_editor(false);
         }
     }
 }
@@ -215,34 +215,34 @@ static void toolbar_event(lv_event_t *event) {
     lv_event_code_t code = lv_event_get_code(event);
     int action = (int)(intptr_t)lv_event_get_user_data(event);
     if (code != LV_EVENT_SHORT_CLICKED && !(action == 0 && code == LV_EVENT_LONG_PRESSED_REPEAT)) return;
-    if (action == 0) { if (mnemo_editor_backspace(&editor)) changed(); }
-    else if (action == 1) { if (mnemo_editor_insert(&editor, "\n")) changed(); }
+    if (action == 0) { if (Notas_editor_backspace(&editor)) changed(); }
+    else if (action == 1) { if (Notas_editor_insert(&editor, "\n")) changed(); }
     else if (action == 2) {
-        mnemo_editor_confirm(&editor); reading = !reading;
+        Notas_editor_confirm(&editor); reading = !reading;
         if (reading) lv_obj_add_flag(keyboard, LV_OBJ_FLAG_HIDDEN);
         else lv_obj_clear_flag(keyboard, LV_OBJ_FLAG_HIDDEN);
         lv_obj_set_height(textarea, reading ? 218 : 112);
         update_editor(true);
     } else if (action == 3) {
-        mnemo_editor_shift(&editor); update_editor(false);
+        Notas_editor_shift(&editor); update_editor(false);
     } else if (action == 4) {
-        if (mnemo_editor_insert(&editor, " ")) changed();
+        if (Notas_editor_insert(&editor, " ")) changed();
     } else if (action == 5) {
-        mnemo_editor_confirm(&editor); symbols = !symbols; update_editor(false);
+        Notas_editor_confirm(&editor); symbols = !symbols; update_editor(false);
     }
 }
 static void delete_event(lv_event_t *event) {
     if (lv_event_get_code(event) != LV_EVENT_SHORT_CLICKED) return;
     int action = (int)(intptr_t)lv_event_get_user_data(event);
     if (action == 1) {
-        if (!chronvs_mnemo_save((unsigned)slot, "")) {
+        if (!chronvs_Notas_save((unsigned)slot, "")) {
             lv_obj_t *message = lv_obj_get_child(dialog, 0);
             lv_label_set_text(message, "Falha ao excluir"); return;
         }
         dirty = false; slot = -1; show_list(); return;
     }
     if (action == 2) { lv_obj_del(dialog); dialog = NULL; return; }
-    mnemo_editor_confirm(&editor);
+    Notas_editor_confirm(&editor);
     dialog = lv_obj_create(page); lv_obj_remove_style_all(dialog); lv_obj_set_size(dialog, 412, 412);
     lv_obj_set_style_bg_color(dialog, lv_color_hex(CHRONVS_UI_PANEL), 0);
     lv_obj_set_style_bg_opa(dialog, LV_OPA_COVER, 0);
@@ -253,8 +253,8 @@ static void delete_event(lv_event_t *event) {
     chronvs_ui_app_input_bind(dialog, &input_state);
 }
 static void open_editor(int index) {
-    slot = index; const mnemo_note_t *note = chronvs_mnemo_get((unsigned)index);
-    mnemo_editor_load(&editor, note ? note->text : "");
+    slot = index; const Notas_note_t *note = chronvs_Notas_get((unsigned)index);
+    Notas_editor_load(&editor, note ? note->text : "");
     dirty = save_error = reading = symbols = false;
     new_page();
     button(page, LV_SYMBOL_TRASH, 286, 42, 36, 36, delete_event, 0, true);
@@ -265,7 +265,7 @@ static void open_editor(int index) {
     textarea = lv_textarea_create(page); lv_obj_remove_style_all(textarea);
     lv_obj_set_pos(textarea, 66, 82); lv_obj_set_size(textarea, 280, 112);
     lv_obj_set_style_pad_all(textarea, 6, 0);
-    lv_obj_set_style_text_font(textarea, &chronvs_mnemo_font, 0);
+    lv_obj_set_style_text_font(textarea, &chronvs_Notas_font, 0);
     lv_obj_set_style_text_color(textarea, lv_color_hex(CHRONVS_UI_TEXT), 0);
     lv_obj_set_style_text_line_space(textarea, 1, 0);
     lv_obj_set_style_border_width(textarea, 1, 0);
@@ -285,7 +285,7 @@ static void open_editor(int index) {
     keyboard = lv_obj_create(page); lv_obj_remove_style_all(keyboard);
     lv_obj_set_pos(keyboard, 54, 204); lv_obj_set_size(keyboard, 304, 188);
     lv_obj_clear_flag(keyboard, LV_OBJ_FLAG_SCROLLABLE);
-    for (unsigned i = 0; i < MNEMO_LETTER_KEYS; ++i) {
+    for (unsigned i = 0; i < Notas_LETTER_KEYS; ++i) {
         int row = i / 6;
         int column = i % 6;
         lv_obj_t *key = button(keyboard, "", (row == 2 ? 26 : 0)+column*52, row*48,
@@ -314,7 +314,7 @@ static void update_keys(void) {
     static const char *upper[13] = {"AB", "CD", "EF", "GH", "IJ", "KL", "MN", "OP", "QR", "ST", "UV", "WX", "YZ"};
     static const char *marks[13] = {".,", "?!", ":;", "\"'", "()", "[]", "{}", "<>", "+-=", "*/\\", "_@", "#$%", "&|~^`"};
     bool shifted = editor.shift || (editor.pending_key >= 0 && editor.pending_shift);
-    for (unsigned i = 0; i < MNEMO_LETTER_KEYS; ++i) {
+    for (unsigned i = 0; i < Notas_LETTER_KEYS; ++i) {
         lv_obj_t *key = lv_obj_get_child(keyboard, i);
         lv_obj_t *caption = lv_obj_get_child(key, 0), *sub = lv_obj_get_child(key, 1);
         const char *text = symbols ? marks[i] : shifted ? upper[i] : letters[i];
@@ -334,7 +334,7 @@ static void poll(lv_timer_t *timer) {
     (void)timer;
     if (!active || slot < 0) return;
     uint32_t now = lv_tick_get();
-    bool expired = mnemo_editor_expire(&editor, now);
+    bool expired = Notas_editor_expire(&editor, now);
     bool saved = false;
     if (dirty && (uint32_t)(now-changed_at) >= (save_error ? 10000u : 1500u)) {
         save_note(); changed_at = now; saved = true;
@@ -376,8 +376,8 @@ static void show(void) {
 static void hide(void) {
     save_note(); active = false; lv_timer_pause(refresh);
 }
-const chronvs_app_t chronvs_mnemo_app = {
-    .id = "mnemo", .name = "Mnemo", .create_icon = create_icon, .launcher_visible = true,
+const chronvs_app_t chronvs_Notas_app = {
+    .id = "Notas", .name = "Notas", .create_icon = create_icon, .launcher_visible = true,
     .create = create, .on_show = show, .on_hide = hide,
 };
-CHRONVS_REGISTER_APP(chronvs_mnemo_app)
+CHRONVS_REGISTER_APP(chronvs_Notas_app)

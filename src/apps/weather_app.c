@@ -5,9 +5,9 @@
 #include "core/app_manager.h"
 #include "services/weather_data.h"
 #include "services/weather_service.h"
-#include "ui/aion_widgets.h"
+#include "ui/Relogio_widgets.h"
 #include "ui/app_input.h"
-#include "ui/mnemo_font.h"
+#include "ui/Notas_font.h"
 #include "ui/system_ui.h"
 #include "ui/weather_icon.h"
 
@@ -81,7 +81,7 @@ static void poll(lv_timer_t *timer) {
 }
 
 static lv_obj_t *label(lv_obj_t *parent, const char *text, int y, int width, const lv_font_t *font) {
-    lv_obj_t *obj = chronvs_aion_label(parent,text,y,font);
+    lv_obj_t *obj = chronvs_Relogio_label(parent,text,y,font);
     lv_obj_set_width(obj,width);
     lv_obj_set_style_text_align(obj,LV_TEXT_ALIGN_CENTER,0);
     lv_label_set_long_mode(obj,LV_LABEL_LONG_CLIP);
@@ -90,10 +90,10 @@ static lv_obj_t *label(lv_obj_t *parent, const char *text, int y, int width, con
 
 static lv_obj_t *create(lv_obj_t *parent) {
     lv_obj_t *root = lv_obj_create(parent);
-    chronvs_aion_surface(root);
+    chronvs_Relogio_surface(root);
     lv_obj_t *title = label(root,"CLIMA",34,180,&lv_font_montserrat_24);
     lv_obj_set_style_text_color(title,lv_color_hex(CHRONVS_UI_ACCENT),0);
-    label(root,"São Paulo",68,200,&chronvs_mnemo_font);
+    label(root,"São Paulo",68,200,&chronvs_Notas_font);
     symbol = lv_obj_create(root);
     lv_obj_remove_style_all(symbol);
     lv_obj_set_size(symbol,56,48);
@@ -101,12 +101,12 @@ static lv_obj_t *create(lv_obj_t *parent) {
     lv_obj_clear_flag(symbol,LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(symbol,draw_symbol,LV_EVENT_DRAW_MAIN,NULL);
     temperature = label(root,"--°C",151,280,&lv_font_montserrat_48);
-    condition = label(root,"Sem dados",210,300,&chronvs_mnemo_font);
-    apparent = label(root,"",241,280,&chronvs_mnemo_font);
-    humidity = label(root,"",266,280,&chronvs_mnemo_font);
-    range = label(root,"",291,280,&chronvs_mnemo_font);
-    age = label(root,"Sem dados",324,270,&chronvs_mnemo_font);
-    status = label(root,"",349,240,&chronvs_mnemo_font);
+    condition = label(root,"Sem dados",210,300,&chronvs_Notas_font);
+    apparent = label(root,"",241,280,&chronvs_Notas_font);
+    humidity = label(root,"",266,280,&chronvs_Notas_font);
+    range = label(root,"",291,280,&chronvs_Notas_font);
+    age = label(root,"Sem dados",324,270,&chronvs_Notas_font);
+    status = label(root,"",349,240,&chronvs_Notas_font);
     label(root,"Open-Meteo",380,140,&lv_font_montserrat_12);
     chronvs_ui_app_input_bind(root,&input);
     refresh = lv_timer_create(poll,250,NULL);

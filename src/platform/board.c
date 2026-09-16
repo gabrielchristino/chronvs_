@@ -129,12 +129,17 @@ bool chronvs_board_light_sleep(uint32_t timeout_ms) {
     if (!timeout_ms || gpio_get_level(TOUCH_INT_PIN) == 0 ||
         gpio_get_level(PWR_KEY_Input_PIN) == 0) return false;
 
+    // Battery power depends on GPIO7 staying high while the GPIO domain sleeps.
+    ESP_ERROR_CHECK(gpio_set_level(PWR_Control_PIN, 1));
+    ESP_ERROR_CHECK(gpio_hold_en(PWR_Control_PIN));
     ESP_ERROR_CHECK(esp_sleep_enable_timer_wakeup((uint64_t)timeout_ms * 1000));
     LVGL_Tick_Suspend();
     const int64_t sleep_started_us = esp_timer_get_time();
     const esp_err_t result = esp_light_sleep_start();
     const uint32_t slept_ms = (uint32_t)((esp_timer_get_time() - sleep_started_us) / 1000);
     LVGL_Tick_Resume();
+    ESP_ERROR_CHECK(gpio_set_level(PWR_Control_PIN, 1));
+    ESP_ERROR_CHECK(gpio_hold_dis(PWR_Control_PIN));
     ESP_ERROR_CHECK(esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_TIMER));
     if (result != ESP_OK) {
         ESP_LOGW(TAG, "Light sleep failed: %s", esp_err_to_name(result));

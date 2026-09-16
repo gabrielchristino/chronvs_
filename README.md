@@ -2,7 +2,7 @@
 
 Bring-up em PlatformIO/ESP-IDF para a **Waveshare ESP32-S3-Touch-LCD-1.46**. A placa é uma ESP32-S3R8 com 16 MB de Flash e 8 MB de PSRAM OPI; portanto não é compatível com a definição genérica `esp32-s3-devkitc-1` N8.
 
-O firmware atual inicializa o barramento I2C, o expansor de GPIO, a tela redonda SPD2010 por QSPI e o touch. Em seguida, apresenta um mostrador orbital inspirado no Ressence Type 3, com hora, data, dia da semana e segundos lidos diretamente do RTC PCF85063.
+O firmware inicializa o barramento I2C, o expansor de GPIO, a tela redonda SPD2010 por QSPI e o touch. Em seguida, apresenta um mostrador orbital inspirado no Ressence Type 3. O PCF85063 fornece a hora de referência; o mostrador a mantém avançando durante o sono da tela.
 
 O código é organizado como um runtime de aplicativos: o núcleo registra e troca
 apps, serviços isolam RTC e bateria, a camada de plataforma inicializa a placa e
@@ -11,13 +11,13 @@ o mostrador vive em `src/apps/watch_app.c` como o primeiro app. Consulte
 [`docs/interface.md`](docs/interface.md) para a navegação, energia e limites
 de renderização do painel.
 
-Além do mostrador, Aion reúne cronômetro, timer e alarmes. Mnemo oferece notas
+Além do mostrador, Relogio reúne cronômetro, timer e alarmes. Notas oferece notas
 persistentes com teclado multi-tap e edição de texto na tela circular; seu
 layout e interação foram validados no dispositivo. A calculadora
 é um app nativo com operações básicas, precedência e parênteses.
-Hemera oferece calendário mensal offline, destaque de hoje e consulta do dia
+Calendario oferece calendário mensal offline, destaque de hoje e consulta do dia
 da semana e da distância até uma data. Veja os detalhes em
-[`docs/interface.md`](docs/interface.md#hemera--calendário).
+[`docs/interface.md`](docs/interface.md#calendario--calendário).
 
 Clima mostra as condições de São Paulo pela Open-Meteo, com atualização ao ser
 aberto, cache persistente e fallback para a última leitura. Compartilha sessões
@@ -34,9 +34,9 @@ registram o diagnóstico das listras e distinguem o heap de objetos dos buffers 
 - A tela recebe comandos QSPI e exibe o mostrador de relógio.
 - Interface vetorial LVGL validada no painel circular de 412 × 412 pixels, incluindo animação contínua, submostradores orbitais e contra-rotação da tipografia.
 - Sincronização NTP validada em hardware: conexão WPA2, horário local UTC−3 gravado no PCF85063 e rádio Wi-Fi desligado em seguida.
-- Partição de aplicação ampliada de 1 MiB para 4 MiB; o firmware com Wi-Fi ocupa aproximadamente 1,10 MiB.
+- Partição de aplicação ampliada de 1 MiB para 4 MiB.
 - O target padrão `pio run -t upload` grava as três imagens no mapa correto e reinicia a placa automaticamente; o conteúdo gravado foi confirmado por checksum.
-- Light sleep validado no relógio: touch no GPIO 4 e timer acordam a tela, o aviso sonoro funciona e o modo ECO preserva o limite de brilho.
+- Light sleep validado no relógio: toque no GPIO 4 acorda a tela e atualiza a hora mesmo após 5 minutos; um timer de 1 minuto disparou com a tela apagada. O modo ECO preserva o limite de brilho.
 - O QMI8658 em `0x6A` sem resposta é esperado nesta unidade: o endereço ativo é `0x6B`.
 
 ## Pinagem interna confirmada
@@ -150,7 +150,7 @@ O mostrador inteiro funciona como superfície de toque:
 
 A tensão da bateria é lida pelo ADC1 no GPIO 8, usando o divisor 3:1 da placa e a calibração do ESP-IDF. O firmware tira oito amostras, calcula uma estimativa por curva de descarga de uma célula Li-ion e atualiza o percentual uma vez por minuto ou imediatamente ao reativar a tela. A leitura fica suspensa enquanto a tela está apagada e o valor aparece somente no botão superior direito do painel.
 
-O mostrador é redesenhado uma vez por segundo, tanto em brilho normal quanto reduzido. Quando a iluminação é apagada, o PWM do backlight é colocado em 0%, o timer de animação, o tick periódico do LVGL e as leituras do RTC e bateria são suspensos. O ESP32-S3 entra em light sleep e acorda pelo `INT` do touch no GPIO 4, pelo botão power no GPIO 6 ou a cada segundo para verificar timers, alarmes e lembretes. No toque que reativa a tela, o RTC é lido imediatamente para desenhar a hora atual. Sessões Wi-Fi mantêm o processador acordado até o rádio ser desligado.
+O mostrador é redesenhado uma vez por segundo, tanto em brilho normal quanto reduzido. Quando a iluminação é apagada, o PWM do backlight é colocado em 0%, o timer de animação, o tick periódico do LVGL e as leituras do RTC e bateria são suspensos. O ESP32-S3 entra em light sleep e acorda pelo touch, pelo botão power, por um aviso agendado ou pelo timeout máximo de 5 minutos. A hora continua a avançar durante o sono e o RTC é consultado ao reativar a tela. Sessões Wi-Fi mantêm o processador acordado até que o rádio seja desligado. A autonomia com bateria de 150 mAh ainda não foi medida.
 
 ### Halo de pixels na borda
 

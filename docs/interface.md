@@ -10,16 +10,16 @@ lv_scr_act()
 ├── content_layer                 apps ativos e prévias de navegação
 │   ├── watch                     mostrador
 │   ├── apps                      lista de aplicativos
-│   ├── aion                      cronômetro, timer e alarmes
-│   ├── mnemo                     notas, editor e teclado multi-tap
+│   ├── Relogio                   cronômetro, timer e alarmes
+│   ├── Notas                     notas, editor e teclado multi-tap
 │   ├── calculator                calculadora
 │   ├── weather                   clima de São Paulo
-│   └── hemera                    calendário mensal e detalhe da data
+│   └── Calendario                calendário mensal e detalhe da data
 └── settings_panel                painel global de acessos rápidos
 
 lv_layer_top()
 ├── wake_guard                    consome o primeiro toque com tela apagada
-└── aion_alert                    aviso opaco em tela cheia
+└── Relogio_alert             aviso opaco em tela cheia
 ```
 
 `content_layer` é administrada por `core/app_manager.c`. Cada app é criado
@@ -36,19 +36,19 @@ disponível sobre o mostrador sem pertencer a um app.
 | Acessos rápidos | Arrastar para cima | Fecha o painel. O limiar é 5 px e vale também sobre o arco de brilho. |
 | Lista de apps | Tocar uma linha | Abre o app selecionado. |
 | Lista de apps | Arrastar para baixo a partir do topo | Fecha a lista acompanhando o dedo; o gesto precisa avançar 120 px. |
-| Aion | Arrastar 80 px para a direita | Volta à lista de apps. |
-| Aion: cronômetro / timer | Arrastar 80 px para cima | Avança para timer / alarmes. |
-| Aion: timer / alarmes | Arrastar 80 px para baixo | Retorna para cronômetro / timer. Pode começar no meio da tela ou sobre uma linha de alarme quando a lista está no topo. Se estiver rolada, o gesto dentro da lista apenas rola o conteúdo; um novo arraste no topo retorna ao timer. Fora da lista, o retorno é direto. |
-| Aion: criação de alarme | Arrastar 80 px para cima / para baixo fora do arco | Avança da hora para os minutos e para os dias / retorna à etapa anterior. O arco recebe o arraste exclusivamente para selecionar o valor. |
-| Aion: criação / detalhe de alarme | Arrastar 80 px para a direita | Volta à etapa anterior / lista de alarmes. |
-| Mnemo: lista | Arrastar para a direita | Volta ao launcher, inclusive iniciando sobre uma linha. |
-| Mnemo: editor / leitura | Arrastar para a direita | Salva e volta à lista de notas, inclusive sobre texto e teclado. Falha de gravação mantém o editor aberto. |
-| Mnemo: confirmação de exclusão | Arrastar para a direita | Cancela a confirmação. |
+| Relogio | Arrastar 80 px para a direita | Volta à lista de apps. |
+| Relogio: cronômetro / timer | Arrastar 80 px para cima | Avança para timer / alarmes. |
+| Relogio: timer / alarmes | Arrastar 80 px para baixo | Retorna para cronômetro / timer. Pode começar no meio da tela ou sobre uma linha de alarme quando a lista está no topo. Se estiver rolada, o gesto dentro da lista apenas rola o conteúdo; um novo arraste no topo retorna ao timer. Fora da lista, o retorno é direto. |
+| Relogio: criação de alarme | Arrastar 80 px para cima / para baixo fora do arco | Avança da hora para os minutos e para os dias / retorna à etapa anterior. O arco recebe o arraste exclusivamente para selecionar o valor. |
+| Relogio: criação / detalhe de alarme | Arrastar 80 px para a direita | Volta à etapa anterior / lista de alarmes. |
+| Notas: lista | Arrastar para a direita | Volta ao launcher, inclusive iniciando sobre uma linha. |
+| Notas: editor / leitura | Arrastar para a direita | Salva e volta à lista de notas, inclusive sobre texto e teclado. Falha de gravação mantém o editor aberto. |
+| Notas: confirmação de exclusão | Arrastar para a direita | Cancela a confirmação. |
 | Clima | Arrastar para a direita | Volta ao launcher, inclusive começando no ícone ou nos textos. |
-| Hemera: mês / detalhe | Arrastar para a direita | Volta ao launcher / ao mês consultado, inclusive sobre grade e controles. |
-| Hemera: mês | Arrastar para cima / para baixo | Avança / retorna um mês, inclusive sobre a grade e Hoje. |
+| Calendario: mês / detalhe | Arrastar para a direita | Volta ao launcher / ao mês consultado, inclusive sobre grade e controles. |
+| Calendario: mês | Arrastar para cima / para baixo | Avança / retorna um mês, inclusive sobre a grade e Hoje. |
 
-Todo novo app deve adotar o retorno da esquerda para a direita do Aion, sem
+Todo novo app deve adotar o retorno da esquerda para a direita do Relogio, sem
 botão Voltar no topo. O gesto confirma com deslocamento horizontal maior que
 80 px e maior que o deslocamento vertical absoluto mais 20 px. Ao confirmar,
 consome o contato até soltar, evitando acionar o controle sob o dedo. A tela
@@ -85,7 +85,7 @@ legendas e estados compactos, Montserrat 12. Os valores dos atalhos podem
 usar 18/24 conforme seu conteúdo. O mostrador mantém sua composição vetorial:
 submostradores redondos são instrumentos de leitura, não botões de ação.
 
-O teclado do Mnemo tem **20 círculos de 44 px em 6–6–5–3**, abaixo do texto,
+O teclado do Notas tem **20 círculos de 44 px em 6–6–5–3**, abaixo do texto,
 em um contêiner de 304 × 188 px em (54, 204). As linhas começam em y=204,
 252, 300 e 348, com 52 px entre centros na horizontal e linhas centradas
 em x=206. Essa é uma exceção específica ao tamanho dos atalhos. As 13 teclas
@@ -118,7 +118,7 @@ mostram a primeira linha das notas mais recentes; Nova nota usa 180 × 54 px
 em y=314 e fica desabilitado ao atingir 12 notas. O primeiro toque com a tela
 apagada continua reservado ao despertar pela camada global.
 
-Toques, arrastes e contatos prolongados no Mnemo reiniciam o prazo global de
+Toques, arrastes e contatos prolongados no Notas reiniciam o prazo global de
 inatividade, incluindo lista, editor, teclado e diálogos. Sem contato, os
 perfis normais e ECO continuam reduzindo e apagando a iluminação. Animação do
 cursor e salvamento automático não prolongam o prazo. Novos apps devem manter
@@ -191,17 +191,29 @@ ECO limita o brilho a 35%, o valor do arco também reflete esse teto.
 Ao apagar, o PWM do backlight é configurado para 0%, o timer de atualização do
 mostrador e o tick periódico de 2 ms do LVGL são pausados, e o loop principal
 deixa de consultar RTC e bateria. O ESP32-S3 entra em light sleep com a RAM e a
-tela atual preservadas. O sinal `INT` ativo em nível baixo do touch SPD2010,
+tela atual preservadas. O GPIO 7, que sustenta a alimentação pela bateria, fica
+travado em nível alto durante cada intervalo de sono e é liberado ao acordar.
+O sinal `INT` ativo em nível baixo do touch SPD2010,
 ligado internamente ao GPIO 4, e o botão power no GPIO 6 acordam o processador.
-Um timeout de 1 s permite verificar timers, alarmes e lembretes; ele não redesenha
-a interface. Sessões Wi-Fi impedem o sono até que o rádio seja desligado. O
-primeiro toque apenas acorda o relógio; não aciona controles.
+Os testes em hardware confirmaram o despertar por toque após 2 s, 30 s e
+5 min, sempre com a hora atualizada. Um timer de 1 min disparou com a tela
+apagada. O loop LVGL continua normal após cada despertar. O timeout máximo é
+5 min; se timer, soneca, alarme ou lembrete vencer antes, o sono termina no
+prazo desse evento. Os binários das etapas testadas estão preservados em
+`.pio/diagnostics/`. Sessões Wi-Fi impedem o sono até que o rádio seja
+desligado. O primeiro toque apenas acorda o relógio; não aciona controles.
+O mostrador interpola a hora com `esp_timer_get_time()`, que inclui o tempo
+passado em light sleep. Ao voltar, uma leitura válida do RTC ajusta a hora;
+se ela falhar ou vier atrasada em relação ao relógio em execução, o mostrador
+usa a hora monotônica já mantida pelo serviço de alarmes.
+Esses testes confirmam o funcionamento do despertar e do timer, mas não medem
+a corrente nem a autonomia da bateria de 150 mAh.
 
 No boot, o log informa os níveis dos dois pinos de despertar, e a primeira
 entrada após cada apagamento informa que o light sleep foi habilitado.
 Despertares por toque ou pelo botão registram também o tempo dormido; os
 despertares periódicos por timer não geram log. Isso permite validar o `INT` sem
-manter polling contínuo ou exigir instrumentação de corrente.
+exigir instrumentação de corrente.
 
 A implementação foi validada no relógio: o touch acordou a tela repetidamente
 após 15 s de inatividade, o modo ECO manteve seu limite de brilho e também
@@ -231,7 +243,7 @@ exigir toque e mantém a iluminação ativa enquanto o aviso estiver pendente,
 respeitando o limite de brilho do modo ECO. Ao dispensar o último aviso, o
 tempo de inatividade começa novamente.
 
-## Aion: cronômetro, timer e alarmes
+## Relogio: cronômetro, timer e alarmes
 
 O app abre sempre no cronômetro. A contagem existente continua ao sair.
 Deslizar de baixo para cima abre o timer; repetir abre os alarmes. Deslizar
@@ -260,7 +272,7 @@ qualquer app, preservando a tela anterior quando fechado.
 O padrão hexagonal **2–3–2** é a identidade para conjuntos de sete opções
 circulares que caibam na tela, como acessos rápidos, tempos e dias da semana.
 Novas telas devem seguir essa distribuição; ações complementares ficam abaixo.
-O painel rápido e as telas do Aion compartilham os deslocamentos dos sete
+O painel rápido e as telas do Relogio compartilham os deslocamentos dos sete
 círculos em `ui/control_style.c`.
 
 A lista de alarmes possui rolagem e um botão fixo `Novo alarme`. Até 12 alarmes
@@ -354,7 +366,7 @@ avança pelo contador monotônico e pelo último horário válido, sem ler RTC o
 bateria e sem atualizar os objetos visuais do app. Uma correção NTP chega por
 uma caixa de mensagem protegida, inclusive com a tela apagada.
 
-Validação no dispositivo: criar alarme para o minuto seguinte, sair do Aion,
+Validação no dispositivo: criar alarme para o minuto seguinte, sair do Relogio,
 aguardar a tela apagar e confirmar despertar, som, adiamento e parada; repetir
 com timer. Confirmar que o primeiro toque apagado não inicia nem exclui algo,
 que todos os círculos são tocáveis no painel redondo e que a lista persiste
@@ -377,7 +389,7 @@ driver não podem ser copiados diretamente.
   `.vendor-reference/`, pois o script é a fonte persistente da configuração.
 - Wi-Fi é usado pelo NTP e por uma consulta ao abrir Clima, em sessões
   exclusivas; o rádio é desligado ao encerrar cada sessão. Apps
-  devem pausar timers em `on_hide` quando não forem necessários; `Aion` já faz
+  devem pausar timers em `on_hide` quando não forem necessários; `Relogio` já faz
   isso para seu timer de interface.
 - O desenho vetorial do mostrador recorta as regiões cobertas por superfícies
   retangulares opacas acima dele (painel rápido e lista de apps). O recorte
@@ -444,7 +456,7 @@ mostra essa pressão. Preserve as correções QSPI e use fases/logs para diagnos
 um sintoma visual semelhante não comprova a mesma causa. A investigação e as
 regras de prevenção estão em [`weather.md`](weather.md#dificuldades-soluções-e-prevenção).
 
-Após a inclusão do Mnemo, foram relatadas listras novamente já no boot, antes
+Após a inclusão do Notas, foram relatadas listras novamente já no boot, antes
 de abrir o app. Como teste isolado, a opção global `LV_LABEL_TEXT_SELECTION`
 foi restaurada ao padrão anterior; o destaque da composição passou a ser um
 sublinhado local do editor. Buffers, QSPI, caches e espera síncrona foram
@@ -482,7 +494,7 @@ abrir painéis sem interação real.
 silêncio em zero, inicialização tardia, cinco ganhos crescentes sem overflow,
 canais estéreo iguais, silenciamento durante um aviso e prévia finita de
 120 ms, sem fila e cancelada pelo nível zero.
-`tests/run_aion_ui.ps1 -System` cobre restauração da preferência, ciclo completo,
+`tests/run_Relogio_ui.ps1 -System` cobre restauração da preferência, ciclo completo,
 salvamento, primeiro toque para despertar e arraste sobre o controle sem alterar
 volume ou tocar prévia. O usuário confirmou o controle de volume no relógio.
 O novo bip de confirmação e a ausência de distorção no nível máximo precisam
@@ -494,8 +506,8 @@ Os ícones compartilham a paleta e o desenho vetorial, mas cada app deve ter
 silhueta e elemento central próprios, legíveis no contêiner de 44 × 44 px.
 Evite repetir uma caixa com pequenos quadrados para representar funções
 diferentes. Compare sempre o conjunto no tamanho real do launcher.
-Calculadora usa operadores abertos; Hemera, uma folha com argolas e data
-grande; Mnemo, uma folha com linhas; Aion, um cronômetro; Clima, sol e nuvem.
+Calculadora usa operadores abertos; Calendario, uma folha com argolas e data
+grande; Notas, uma folha com linhas; Relogio, um cronômetro; Clima, sol e nuvem.
 
 O launcher mostra ícone e nome diretamente sobre o fundo, sem título fixo.
 As linhas têm 64 px de altura e centros separados por 82 px. O centro dos
@@ -512,7 +524,7 @@ Os 60 px superiores continuam reservados para puxar o launcher para baixo:
 120 px confirmam o retorno ao relógio; movimentos menores cancelam.
 Contatos reiniciam a inatividade; a animação de rolagem não conta como atividade.
 
-Verificação: `tests/run_aion_ui.ps1 -System` cobre deslocamento pelo arco,
+Verificação: `tests/run_Relogio_ui.ps1 -System` cobre deslocamento pelo arco,
 rolagem por toque sem abertura acidental, abertura por ícone/nome e fechamento
 confirmado/cancelado. Build e gravação passaram. O usuário confirmou no relógio
 que a lista em arco ficou correta, aprovando o comportamento visual e a interação.
@@ -525,7 +537,7 @@ Clima abre numa tela única: título `CLIMA` em Montserrat 24 amarelo a y=34,
 localização `São Paulo` a y=68 e ícone vetorial em área de 56 × 48 px a y=99.
 A temperatura usa Montserrat 48 a y=151. Condição, sensação, umidade e
 mínima/máxima ocupam y=210/241/266/291. Os textos de 18 px usam o complemento
-de acentos já presente no Mnemo. Não há botões nem animação de carregamento.
+de acentos já presente no Notas. Não há botões nem animação de carregamento.
 
 A idade fica a y=324 e o estado a y=349: `Atualizando...`, `Falha ao atualizar`
 com cache ou a causa resumida sem cache. Sem leitura válida, mostra `--°C` e
@@ -556,20 +568,20 @@ global consome o primeiro contato com a tela apagada.
 
 `tests/run_weather_tests.ps1 -UI` cobre layout, cache, retorno sobre conteúdo
 e ícone, contatos prolongados, pausa ao sair/apagar e resultados tardios.
-`tests/run_aion_ui.ps1 -System` inclui Clima no launcher, no orçamento LVGL e
+`tests/run_Relogio_ui.ps1 -System` inclui Clima no launcher, no orçamento LVGL e
 no teste do primeiro arraste após despertar. A renderização simulada foi
 inspecionada; a consulta real e a memória durante TLS foram observadas no relógio.
 Consumo, fluidez e picos de memória em outros cenários ainda exigem medição no
 dispositivo. Os parâmetros do SPD2010 foram preservados.
 
-## Hemera — Calendário
+## Calendario — Calendário
 
 O ícone vetorial tem uma folha de 34 × 36 px, incluindo duas argolas claras,
 contorno amarelo de 2 px e canto inferior direito dobrado. Um `31` fixo em
 Montserrat 18 identifica o calendário; é um símbolo, não a data atual.
 Não há grade de pequenos quadrados, para diferenciá-lo da calculadora.
 
-Hemera funciona offline e abre no mês atual do RTC. A semana começa no domingo;
+Calendario funciona offline e abre no mês atual do RTC. A semana começa no domingo;
 meses de 2000 a 2099 incluem anos bissextos e até seis linhas. As telas de mês
 e detalhe não exibem o nome do app no topo, deixando essa área livre para
 respiro visual; mês e ano ficam a y=68/95. Não há setas. Arrastar de baixo para
@@ -602,8 +614,8 @@ do dia. Não há rede, animação em repouso ou leitura/renderização com tela
 apagada. Contatos reais, inclusive prolongados, reiniciam a inatividade via
 `ui/app_input.h`; o primeiro contato com tela apagada somente acorda.
 
-Verificação no host: `tests/run_hemera_tests.ps1` e
-`tests/run_aion_ui.ps1 -System`; capturas em `.pio/host-tests/hemera-*.bmp`.
+Verificação no host: `tests/run_Calendario_tests.ps1` e
+`tests/run_Relogio_ui.ps1 -System`; capturas em `.pio/host-tests/Calendario-*.bmp`.
 No relógio, validar toque nos dias das extremidades e sexta linha, retorno
 sobre grade e Hoje, troca de mês por gestos, legibilidade e apagar/acordar.
 Esses testes físicos permanecem pendentes; buffers, QSPI e pool LVGL mantêm
@@ -633,9 +645,9 @@ amarelo. O ícone é formado pelos operadores `+`, `−`, `×` e `=`, sem moldur
 mais e igual em amarelo, menos e multiplicação em texto claro. Traços de 3 px
 com pontas arredondadas ocupam uma área de 36 × 36 px dentro do contêiner de
 44 px. O desenho vetorial direto substitui o antigo corpo retangular com
-visor e teclas, evitando semelhança com Hemera e Mnemo.
+visor e teclas, evitando semelhança com Calendario e Notas.
 
-Os novos ícones da calculadora e do Hemera foram inspecionados junto ao
+Os novos ícones da calculadora e do Calendario foram inspecionados junto ao
 conjunto em renderização LVGL no host, com build e testes de integração
 aprovados. A legibilidade no painel físico ainda precisa ser confirmada.
 

@@ -54,17 +54,18 @@ conflitos com conteúdo rolável e documente exceções e mapeamentos por app.
 Preserve estes contratos, salvo pedido explícito do usuário:
 
 - Mostrador: arrastar da borda superior para baixo abre acessos rápidos;
-  arrastar para a esquerda abre a lista de apps.
+  arrastar para cima abre a lista de apps.
 - Painel rápido: arrastar para cima fecha, inclusive quando iniciado no arco
   de brilho.
-- Lista de apps: tocar abre um item; arrastar para a direita volta ao relógio.
+- Lista de apps: tocar abre um item; arrastar para baixo a partir dos 60 px
+  superiores volta ao relógio após 120 px de movimento.
 - Todo novo app deve voltar por arraste da esquerda para a direita, como o
-  Aion: mais de 80 px, com deslocamento horizontal maior que o vertical
+  Relogio: mais de 80 px, com deslocamento horizontal maior que o vertical
   absoluto mais 20 px. Na tela inicial, volta ao launcher; em subetapas,
   volta à etapa anterior; em confirmações, cancela. Não use botão Voltar no
   topo. Consuma o contato ao reconhecer o gesto para evitar clique ao soltar.
 - O gesto deve funcionar no conteúdo e nos controles; exceções para controles
-  que exigem arraste próprio devem ser documentadas. No Mnemo, toque posiciona
+  que exigem arraste próprio devem ser documentadas. No Notas, toque posiciona
   o cursor, arraste vertical rola e arraste para a direita volta.
 - Todo app deve registrar atividade real durante toques e contatos prolongados
   para reiniciar a inatividade. Use `ui/app_input.h` nos novos apps, vinculando
@@ -80,7 +81,7 @@ visível ou parâmetros de interface.
   identidade visual. Ações complementares, como `Criar` e `Parar`, ficam abaixo.
 - Opções e atalhos usam círculos de 70 px; ações textuais (`Criar`, `Excluir`,
   `Parar`, `Voltar`, `Iniciar` etc.) usam pílulas de 54 px de altura. Use os
-  estilos compartilhados de `ui/control_style.h` e os construtores do Aion;
+  estilos compartilhados de `ui/control_style.h` e os construtores do Relogio;
   não escolha proporções diferentes para a mesma categoria de controle.
 
 ## Display e desempenho — regras críticas

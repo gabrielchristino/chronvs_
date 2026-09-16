@@ -122,14 +122,12 @@ rede e não retira resultados pendentes do app. Sem nova consulta bem-sucedida,
 conserva a leitura salva. Os ícones vetoriais são compartilhados com o app e o
 launcher por `ui/weather_icon.c`, com escala para o círculo de 70 px.
 
-O teste integrado `tests/run_aion_ui.ps1 -System` cobre ausência/cache válido,
+O teste integrado `tests/run_Relogio_ui.ps1 -System` cobre ausência/cache válido,
 atualização do indicador, falha preservando dados, ausência de consultas e
 consumo de resultados, pausa oculto/apagado, abertura pelo texto/ícone/temperatura,
 primeiro toque reservado ao despertar, gesto de fechamento sem abrir o app
 e os sete símbolos com temperaturas extremas dentro do círculo. Build e testes
-no host passaram. O firmware foi gravado na COM3, com hashes de bootloader,
-partições e aplicação verificados. Após a gravação da versão com abertura por
-toque, o usuário aprovou o resultado e solicitou seu registro e publicação no Git.
+no host passaram. A versão com abertura pelo atalho foi validada no relógio.
 
 ## Testes
 
@@ -223,7 +221,7 @@ Os dois buffers de pixels continuam em PSRAM com `1/20` da tela, QSPI de 2 KiB,
 refresh de 20 ms e espera síncrona. TLS continua na RAM interna. O atraso de
 2 s e os logs foram mantidos na primeira comparação no dispositivo.
 
-O teste integrado `tests/run_aion_ui.ps1 -System` usa esse mesmo hook com
+O teste integrado `tests/run_Relogio_ui.ps1 -System` usa esse mesmo hook com
 alocação simulada: confirma uma única reserva de 128 KiB, reutilização do pool,
 todos os apps, navegação e proteção de despertar.
 
@@ -254,10 +252,11 @@ Com `-UI`, compila LVGL 8 e a tela real, verifica o recorte circular, idade de
 3 h, estados sem dados/cache/erro, retorno por conteúdo e ícone, contatos
 prolongados, ausência de consultas periódicas e pausa ao sair ou apagar a tela.
 As capturas ficam em `.pio/host-tests/weather-*.bmp`.
-`tests/run_aion_ui.ps1 -System` cobre o registro no launcher, a proteção do
+`tests/run_Relogio_ui.ps1 -System` cobre o registro no launcher, a proteção do
 primeiro contato após despertar e memória LVGL com todos os apps criados.
 
-O build PlatformIO passou (aproximadamente 1,51 MB de aplicação, 36,1% da partição).
+O build PlatformIO passou na etapa registrada; o tamanho atual da aplicação deve
+ser consultado no resultado do build.
 Uma consulta HTTPS pública pelo host retornou HTTP 200 com os campos e unidades
 esperados; isso não valida a conexão TLS/Wi-Fi do ESP32.
 No relógio foram confirmados dados e ausência de listras após a correção de

@@ -17,7 +17,6 @@
 #include "freertos/task.h"
 #include "model_path.h"
 
-#define SILENCE_TIMEOUT_US 3000000LL
 #define DUPLICATE_GUARD_US 800000LL
 
 typedef struct {
@@ -353,20 +352,22 @@ static void voice_task(void *argument) {
         const int64_t now = esp_timer_get_time();
         if (detected == ESP_MN_STATE_DETECTED) {
             esp_mn_results_t *found = multinet->get_results(model);
-            if (found && found->num > 0 && found->command_id[0] >= 1 &&
-                found->command_id[0] <= CHRONVS_VOICE_LAB_WORDS &&
+            if (found && found->num > 0 &&
                 (found->command_id[0] != last_id || now - last_detection >= DUPLICATE_GUARD_US)) {
-                const unsigned index = (unsigned)found->command_id[0] - 1;
-                chronvs_voice_result_t result = {
-                    .id = index, .confidence = found->prob[0],
-                };
-                snprintf(result.text, sizeof(result.text), "%s", words[index].text);
-                xQueueSend(results, &result, 0);
-                last_id = found->command_id[0];
-                last_detection = now;
+                chronvs_voice_result_t result = {0};
+                const char *start = found->string;
+                size_t length = strnlen(start, sizeof(found->string));
+                while (length && *start == ' ') { ++start; --length; }
+                while (length && start[length - 1] == ' ') --length;
+                if (length) {
+                    snprintf(result.text, sizeof(result.text), "%.*s", (int)length, start);
+                    ESP_LOGI(TAG, "VOX: %s", result.text);
+                    xQueueSend(results, &result, 0);
+                    last_id = found->command_id[0];
+                    last_detection = now;
+                }
             }
         }
-        if (last_detection && now - last_detection >= SILENCE_TIMEOUT_US) break;
     }
 
 cleanup:
@@ -379,7 +380,6 @@ cleanup:
     free(samples);
     free(raw);
     if (model && multinet) multinet->destroy(model);
-    esp_mn_commands_free();
     if (models) esp_srmodel_deinit(models);
     atomic_store(&stop_requested, false);
     if (chronvs_voice_lab_state() != CHRONVS_VOICE_ERROR)
@@ -412,4 +412,3 @@ void chronvs_voice_lab_stop(void) {
         atomic_store(&state, CHRONVS_VOICE_IDLE);
     }
 }
-

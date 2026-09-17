@@ -13,7 +13,7 @@
 static lv_obj_t *status_label, *text_label, *mic_button, *mic_caption;
 static lv_timer_t *refresh;
 static bool visible;
-static char phrase[280];
+static char phrase[512];
 static chronvs_voice_state_t shown_state;
 static chronvs_ui_app_input_t input;
 
@@ -53,9 +53,9 @@ static void mic_event(lv_event_t *event) {
 }
 
 static void clear_event(lv_event_t *event) {
-    if (lv_event_get_code(event) != LV_EVENT_SHORT_CLICKED || input.consumed) return;
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || input.consumed) return;
     phrase[0] = '\0';
-    lv_label_set_text(text_label, "As palavras reconhecidas aparecem aqui.");
+    lv_label_set_text(text_label, "A saída do modelo aparece aqui.");
 }
 
 static void append_result(const chronvs_voice_result_t *result) {
@@ -103,7 +103,7 @@ static lv_obj_t *create(lv_obj_t *parent) {
     lv_obj_set_style_text_color(title, lv_color_hex(CHRONVS_UI_ACCENT), 0);
     centered_label(root, "Laboratório offline", 70, 230, &chronvs_Notas_font);
 
-    text_label = centered_label(root, "As palavras reconhecidas aparecem aqui.",
+    text_label = centered_label(root, "A saída do modelo aparece aqui.",
                                 112, 280, &chronvs_Notas_font);
     lv_label_set_long_mode(text_label, LV_LABEL_LONG_WRAP);
     lv_obj_set_height(text_label, 120);

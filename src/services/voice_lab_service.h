@@ -14,9 +14,7 @@ typedef enum {
 } chronvs_voice_state_t;
 
 typedef struct {
-    unsigned id;
-    float confidence;
-    char text[24];
+    char text[257];
 } chronvs_voice_result_t;
 
 /* Loads I2S and MultiNet only for an explicit laboratory session. */
@@ -26,4 +24,3 @@ chronvs_voice_state_t chronvs_voice_lab_state(void);
 const char *chronvs_voice_lab_error(void);
 bool chronvs_voice_lab_take_result(chronvs_voice_result_t *result);
 const char *chronvs_voice_lab_word(unsigned index);
-

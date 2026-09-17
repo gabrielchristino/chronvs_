@@ -29,6 +29,12 @@ disponível sobre o mostrador sem pertencer a um app.
 
 ## Navegação por gesto
 
+No Vox, o texto exibido e registrado na serial é a saída textual do MultiNet,
+sem conversão para a palavra portuguesa cadastrada. Tocar em **Limpar** apaga
+o texto exibido. O botão do microfone inicia ou interrompe a escuta contínua;
+arrastar para a direita volta à lista de apps. O procedimento de teste está em
+[`vox-test.md`](vox-test.md).
+
 | Tela atual | Gesto | Resultado |
 | --- | --- | --- |
 | Mostrador | Arrastar da borda superior para baixo | Abre os acessos rápidos sobre o mostrador, acompanhando o dedo com ganho visual 2×; menos de 120 px cancela a abertura. |

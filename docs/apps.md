@@ -87,6 +87,12 @@ operação, sem enfileirar outra. `on_hide` pausa o timer visual. A tarefa de re
 termina e salva o resultado mesmo fora da tela, sem acessar LVGL. A atualização
 fica pendente até a próxima leitura pela UI; não muda o app ativo.
 
+O app Vox usa `services/voice_lab_service.c` para carregar o MultiNet6 apenas
+quando o usuário inicia a escuta. O serviço entrega à UI o campo `string` do
+resultado, sem mapear o ID para uma palavra portuguesa, e registra a mesma
+saída na serial com prefixo `VOX:`. A escuta continua até o usuário interromper
+ou sair do app; `on_hide` solicita a parada e o timer visual é pausado.
+
 `services/weather_service.c` mantém cache NVS e uma caixa de resultado sob mutex.
 `services/weather_data.c` valida JSON, horário civil e códigos WMO sem acessar
 hardware. `services/wifi_session_service.c` centraliza rádio, credenciais e

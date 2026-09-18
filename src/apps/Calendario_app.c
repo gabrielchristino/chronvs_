@@ -185,6 +185,18 @@ static void draw_icon(lv_event_t *event) {
     int x = a.x1 + (lv_area_get_width(&a) - 34) / 2;
     int y = a.y1 + (lv_area_get_height(&a) - 36) / 2;
     lv_draw_ctx_t *ctx = lv_event_get_draw_ctx(event);
+    lv_draw_rect_dsc_t page; lv_draw_rect_dsc_init(&page);
+    page.radius = 3;
+    page.bg_color = lv_color_hex(0x526158);
+    page.bg_grad.stops[0].color = lv_color_hex(0xA6B09F);
+    page.bg_grad.stops[1].color = lv_color_hex(0x526158);
+    page.bg_grad.dir = LV_GRAD_DIR_VER;
+    page.shadow_color = lv_color_hex(0x101813);
+    page.shadow_width = 4;
+    page.shadow_ofs_y = 2;
+    page.shadow_opa = LV_OPA_50;
+    lv_area_t page_area = {x, y + 5, x + 33, y + 35};
+    lv_draw_rect(ctx, &page, &page_area);
     /* Bound page with a folded corner and one large date, never a key grid. */
     static const lv_point_t outline[] = {
         {0, 5}, {33, 5}, {33, 27}, {25, 35}, {0, 35}, {0, 5},

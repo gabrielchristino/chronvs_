@@ -175,8 +175,16 @@ static lv_obj_t *create_app_list(lv_obj_t *parent) {
         lv_obj_set_size(badge, 60, 60);
         lv_obj_align(badge, LV_ALIGN_LEFT_MID, 2, 0);
         lv_obj_set_style_radius(badge, LV_RADIUS_CIRCLE, 0);
-        lv_obj_set_style_bg_color(badge, lv_color_hex(COLOR_PANEL_EDGE), 0);
+        lv_obj_set_style_bg_color(badge, lv_color_hex(0x334139), 0);
+        lv_obj_set_style_bg_grad_color(badge, lv_color_hex(0x7D8C7C), 0);
+        lv_obj_set_style_bg_grad_dir(badge, LV_GRAD_DIR_VER, 0);
         lv_obj_set_style_bg_opa(badge, LV_OPA_COVER, 0);
+        lv_obj_set_style_border_width(badge, 1, 0);
+        lv_obj_set_style_border_color(badge, lv_color_hex(0xA8B6A4), 0);
+        lv_obj_set_style_shadow_color(badge, lv_color_hex(0x080E0A), 0);
+        lv_obj_set_style_shadow_width(badge, 6, 0);
+        lv_obj_set_style_shadow_ofs_y(badge, 3, 0);
+        lv_obj_set_style_shadow_opa(badge, LV_OPA_50, 0);
         lv_obj_clear_flag(badge, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
         lv_obj_t *icon = lv_obj_create(badge);
         lv_obj_remove_style_all(icon);

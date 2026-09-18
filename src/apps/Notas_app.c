@@ -350,7 +350,15 @@ static void create_icon(lv_obj_t *parent) {
     lv_obj_t *paper = lv_obj_create(parent); lv_obj_remove_style_all(paper);
     lv_obj_set_size(paper, 28, 36); lv_obj_center(paper);
     lv_obj_set_style_radius(paper, 4, 0);
-    lv_obj_set_style_border_width(paper, 2, 0);
+    lv_obj_set_style_bg_color(paper, lv_color_hex(0x526158), 0);
+    lv_obj_set_style_bg_grad_color(paper, lv_color_hex(0xA6B09F), 0);
+    lv_obj_set_style_bg_grad_dir(paper, LV_GRAD_DIR_VER, 0);
+    lv_obj_set_style_bg_opa(paper, LV_OPA_COVER, 0);
+    lv_obj_set_style_shadow_color(paper, lv_color_hex(0x101813), 0);
+    lv_obj_set_style_shadow_width(paper, 4, 0);
+    lv_obj_set_style_shadow_ofs_y(paper, 2, 0);
+    lv_obj_set_style_shadow_opa(paper, LV_OPA_50, 0);
+    lv_obj_set_style_border_width(paper, 1, 0);
     lv_obj_set_style_border_color(paper, lv_color_hex(CHRONVS_UI_ACCENT), 0);
     lv_obj_clear_flag(paper, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
     for (unsigned i = 0; i < 3; ++i) {

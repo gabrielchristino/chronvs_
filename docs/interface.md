@@ -508,12 +508,17 @@ ser avaliados no speaker do relógio.
 
 ## Lista de apps em arco
 
-Os ícones compartilham a paleta e o desenho vetorial, mas cada app deve ter
+Os ícones compartilham a paleta; os símbolos continuam vetoriais, exceto o
+Clima, que usa uma imagem local. Cada app deve ter
 silhueta e elemento central próprios, legíveis no contêiner de 44 × 44 px.
 Evite repetir uma caixa com pequenos quadrados para representar funções
 diferentes. Compare sempre o conjunto no tamanho real do launcher.
 Calculadora usa operadores abertos; Calendario, uma folha com argolas e data
 grande; Notas, uma folha com linhas; Relogio, um cronômetro; Clima, sol e nuvem.
+O disco de 60 px tem gradiente verde, aro claro e sombra curta para sugerir
+relevo sem mudar a área de toque ou as dimensões da linha. As folhas do Notas
+e Calendario também têm preenchimento graduado e sombra; o Clima usa a arte
+de sol e nuvem em RGB565 com transparência.
 
 O launcher mostra ícone e nome diretamente sobre o fundo, sem título fixo.
 As linhas têm 64 px de altura e centros separados por 82 px. O centro dos
@@ -539,16 +544,61 @@ e `.pio/host-tests/20-launcher-scrolled.bmp`.
 
 ## Clima
 
-Clima abre numa tela única: título `CLIMA` em Montserrat 24 amarelo a y=34,
-localização `São Paulo` a y=68 e ícone vetorial em área de 56 × 48 px a y=99.
-A temperatura usa Montserrat 48 a y=151. Condição, sensação, umidade e
-mínima/máxima ocupam y=210/241/266/291. Os textos de 18 px usam o complemento
-de acentos já presente no Notas. Não há botões nem animação de carregamento.
+Clima abre numa tela única assimétrica: `São Paulo` fica centralizada no alto.
+A idade da leitura aparece abaixo, à esquerda, com um marcador verde para
+`Agora`, amarelo para `Há N min` e terracota para `Há N h` ou dias. Sem horário
+válido, o marcador fica cinza e o texto diz `Sem horário`. A imagem
+meteorológica de 88 × 88 px e seu encaixe circular ficam à direita, mais
+abaixo, imediatamente acima do painel de umidade.
+A temperatura, em Montserrat 48, ancora o meio à esquerda, com a condição logo
+abaixo. Quatro imagens locais compõem a face: fundo com aro e textura,
+encaixe circular, painel esquerdo e painel direito. A barra divisória foi
+retirada. O fundo foi derivado da referência com os quatro relevos removidos;
+as peças restantes retêm os pixels da composição aprovada e têm bordas suaves para se sobrepor ao
+fundo. A base é ampliada em torno do centro (zoom LVGL 270/256) para o verde
+alcançar o diâmetro de 412 px. O perímetro externo mantém uma faixa preta
+opaca; isso impede que os pixels claros do quadro quadrado e das peças
+inferiores apareçam na borda física.
+`scripts/flatten_weather_outer.py` aplica essa máscara à base, e o gerador
+reduz a opacidade das outras peças perto da mesma borda. Textos, valores
+e fenômeno permanecem dinâmicos. A temperatura tem uma
+sombra de texto discreta. Os fundos decorativos
+podem ultrapassar o círculo, mas textos e fenômeno ficam dentro dele. Sensação
+e umidade ficam juntos no painel esquerdo, sob `AGORA`, indicados por um
+termômetro e uma gota. Máxima e mínima ficam juntas no painel direito, sob
+`HOJE`, indicadas por setas para cima e para baixo. Os quatro valores usam
+Montserrat 24 e ficam em duas linhas por painel, recuados para caber no
+recorte circular. No painel esquerdo, os dois valores são alinhados à direita
+na mesma coluna e os ícones ficam logo antes deles; no painel direito, os
+valores seguem alinhados à esquerda. O indicador de idade começa em x=81,
+abaixo da cidade.
+Os textos de 18 px usam o complemento de acentos já presente no Notas.
+Não há botões nem animação de carregamento.
 
-A idade fica a y=324 e o estado a y=349: `Atualizando...`, `Falha ao atualizar`
+O estado fica à esquerda a y=130: `Atualizando...`, `Falha ao atualizar`
 com cache ou a causa resumida sem cache. Sem leitura válida, mostra `--°C` e
-`Sem dados`. A fonte dos dados, `Open-Meteo`, aparece em Montserrat 12 a y=380.
-As larguras variam de 140 a 300 px para caber no painel circular.
+`Sem dados`, ocultando a imagem, idade e métricas secundárias. As larguras e posições respeitam o recorte
+circular. Sete artes locais cobrem sol, parcialmente nublado, nuvem,
+neblina, chuva, neve e tempestade. A mesma arte de parcialmente nublado aparece
+no launcher em 44 × 44 px. As fontes PNG estão em `assets/weather/`; o script
+`scripts/generate_weather_art.py` gera os descritores RGB565A8 em
+`src/ui/weather_art.c`. `scripts/generate_weather_face.py` recorta as peças de
+`weather_face.png`, usa `weather_face_base.png` como fundo e gera descritores em
+`src/ui/weather_face.c`: RGB565 para o fundo e RGB565A8 para as peças com
+transparência. O descritor da barra permanece gerado, mas não é exibido. Os
+pixels ficam na flash e são desenhados pelos buffers
+parciais LVGL existentes; não há framebuffer permanente adicional nem
+transferência de imagem pela rede. Fluidez e ausência de listras com as quatro
+camadas devem ser confirmadas no relógio.
+
+O teste isolado `tests/run_weather_tests.ps1 -UI`, a captura em 412 × 412 px
+e o build PlatformIO passaram nesta versão. A suíte integrada
+`tests/run_Relogio_ui.ps1 -System` chegou ao editor de lembretes do Calendario
+com os apps anteriores retidos e esgotou o pool LVGL de 128 KiB durante a
+criação do teclado. O Clima acrescenta cerca de 4 KiB de objetos a essa
+sequência. A pressão de memória conjunta e a fluidez do fundo ampliado ainda
+precisam de teste e ajuste no dispositivo antes da expansão visual aos demais
+apps.
 
 Após relato de listras imediatamente ao abrir, um teste com atraso de 2 s
 mostrou falhas SPI antes da rede, pouca RAM interna livre e falha de alocação
@@ -561,7 +611,7 @@ o funcionamento da versão final sem atraso, com dados e sem listras. O procedim
 
 O cache permanece visível durante a consulta e após falhas. A idade parte do
 horário local da medição; inclui minutos, horas ou dias. Se o RTC estiver
-inválido ou anterior à medição, mostra `Horário indisponível`. Um timer de 250 ms
+inválido ou anterior à medição, mostra `Sem horário`. Um timer de 250 ms
 aplica resultados e só altera textos quando mudam. A idade é revista na abertura,
 no resultado, ao despertar e a cada minuto com tela ativa. Com backlight apagado,
 não lê RTC nem altera objetos; `on_hide` pausa o timer. A consulta em andamento
@@ -574,11 +624,29 @@ global consome o primeiro contato com a tela apagada.
 
 `tests/run_weather_tests.ps1 -UI` cobre layout, cache, retorno sobre conteúdo
 e ícone, contatos prolongados, pausa ao sair/apagar e resultados tardios.
-`tests/run_Relogio_ui.ps1 -System` inclui Clima no launcher, no orçamento LVGL e
-no teste do primeiro arraste após despertar. A renderização simulada foi
+`tests/run_Relogio_ui.ps1 -System` inclui Clima no launcher e
+no teste do primeiro arraste após despertar, mas atualmente falha no orçamento
+LVGL ao abrir o editor de lembretes depois dos outros apps. A renderização simulada foi
 inspecionada; a consulta real e a memória durante TLS foram observadas no relógio.
 Consumo, fluidez e picos de memória em outros cenários ainda exigem medição no
 dispositivo. Os parâmetros do SPD2010 foram preservados.
+
+## Padrão visual para os próximos apps
+
+- Use o diâmetro de 412 px como limite visual da superfície principal. Confira
+  os quatro extremos e mantenha texto e controles dentro do recorte circular.
+- Separe fundo, encaixes e painéis em camadas para que cada peça possa ser
+  posicionada sem deslocar os dados. Mantenha valores e estados como objetos
+  LVGL independentes das imagens decorativas.
+- Agrupe informações pelo significado antes de escolher as colunas. No Clima,
+  condições atuais ficam à esquerda e extremos do dia à direita; números
+  relacionados compartilham alinhamento e tamanho.
+- Use símbolos pequenos quando forem legíveis no tamanho real da tela. O
+  significado também deve ser recuperável pela posição e pelo contexto, sem
+  depender apenas de cor.
+- Para texturas ou artes, use descritores em flash e os buffers parciais LVGL
+  existentes. Verifique captura em 412 × 412 px, memória, gestos e fluidez no
+  relógio antes de repetir o tratamento visual em outros apps.
 
 ## Calendario — Calendário
 

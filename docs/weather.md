@@ -119,15 +119,23 @@ O painel chama `chronvs_weather_init` para restaurar NVS uma vez e
 `chronvs_weather_get_snapshot` para ler a cópia protegida por mutex. Não chama
 `chronvs_weather_request_update` nem `chronvs_weather_take_result`: não inicia
 rede e não retira resultados pendentes do app. Sem nova consulta bem-sucedida,
-conserva a leitura salva. Os ícones vetoriais são compartilhados com o app e o
-launcher por `ui/weather_icon.c`, com escala para o círculo de 70 px.
+conserva a leitura salva. O painel usa o símbolo vetorial compacto de
+`ui/weather_icon.c`; a tela do Clima e o launcher usam as artes locais de
+`ui/weather_art.c`, geradas a partir dos PNGs de `assets/weather/`. A tela do
+Clima compõe quatro imagens em flash (`ui/weather_face.c`) derivadas da
+referência visual: fundo RGB565, encaixe e dois painéis RGB565A8. O divisor
+ainda existe no arquivo gerado, mas não é desenhado.
+Os dados meteorológicos continuam em elementos LVGL separados.
 
 O teste integrado `tests/run_Relogio_ui.ps1 -System` cobre ausência/cache válido,
 atualização do indicador, falha preservando dados, ausência de consultas e
 consumo de resultados, pausa oculto/apagado, abertura pelo texto/ícone/temperatura,
 primeiro toque reservado ao despertar, gesto de fechamento sem abrir o app
-e os sete símbolos com temperaturas extremas dentro do círculo. Build e testes
-no host passaram. A versão com abertura pelo atalho foi validada no relógio.
+e os sete símbolos com temperaturas extremas dentro do círculo. Esses cenários
+passaram antes da nova face do Clima; agora a suíte completa esgota o pool LVGL
+ao montar o teclado do editor de lembretes depois de abrir os outros apps. O
+teste isolado de Clima e o build continuam passando. A versão com abertura
+pelo atalho foi validada no relógio.
 
 ## Testes
 

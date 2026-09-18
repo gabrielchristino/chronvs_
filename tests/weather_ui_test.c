@@ -76,22 +76,47 @@ int main(void) {
     static lv_indev_drv_t indev; lv_indev_drv_init(&indev);
     indev.type=LV_INDEV_TYPE_POINTER; indev.read_cb=touch_read; lv_indev_drv_register(&indev);
     root=create(lv_scr_act()); show(); frame("01-loading");
+    for (unsigned i=0, child_index=0;i<5;++i) {
+        if (i==2) continue;
+        lv_obj_t *layer=lv_obj_get_child(root,child_index++);
+        assert(lv_obj_check_type(layer,&lv_img_class));
+        assert(lv_img_get_src(layer)==chronvs_weather_face_layers[i].image);
+        if (i==0) assert(lv_img_get_zoom(layer)==270);
+        assert(lv_obj_get_x(layer)==chronvs_weather_face_layers[i].x+(i==1?13:0));
+        assert(lv_obj_get_y(layer)==chronvs_weather_face_layers[i].y+(i==1?75:0));
+    }
     assert(queries==1 && !strcmp(lv_label_get_text(status),"Atualizando..."));
     complete(false); frame("02-no-data");
     assert(!strcmp(lv_label_get_text(condition),"Sem dados") && !strcmp(lv_label_get_text(status),"Sem Wi-Fi"));
+    assert(lv_obj_has_flag(metric_chrome[0],LV_OBJ_FLAG_HIDDEN));
     FILE *file=fopen("tests/fixtures/weather.json","rb"); assert(file);
     char json[4096]; size_t length=fread(json,1,sizeof(json),file); fclose(file);
     assert(chronvs_weather_parse(json,length,&mock_snapshot));
     show(); frame("03-cached-loading");
-    assert(!strcmp(lv_label_get_text(age),"Atualizado há 3 h"));
+    assert(!strcmp(lv_label_get_text(age),"Há 3 h"));
     complete(true); frame("04-success");
+    const lv_point_t edge_points[]={{206,2},{409,206},{206,409},{2,206}};
+    for (unsigned i=0;i<4;++i) {
+        const unsigned char *pixel=&pixels[3*((411-edge_points[i].y)*412+edge_points[i].x)];
+        assert(pixel[0]+pixel[1]+pixel[2]>30);
+    }
     assert(!strcmp(lv_label_get_text(temperature),"23°C"));
+    assert(lv_obj_get_x(symbol)==264 && lv_obj_get_y(symbol)==144);
+    assert(!lv_obj_has_flag(metric_chrome[0],LV_OBJ_FLAG_HIDDEN));
+    rtc.hour=12; age_tick=lv_tick_get()-60000; poll(refresh);
+    assert(!strcmp(lv_label_get_text(age),"Agora"));
+    rtc.minute=8; age_tick=lv_tick_get()-60000; poll(refresh);
+    assert(!strcmp(lv_label_get_text(age),"Há 8 min"));
+    rtc.hour=15; rtc.minute=0; age_tick=lv_tick_get()-60000; poll(refresh);
+    assert(!strcmp(lv_label_get_text(age),"Há 3 h"));
     /* All label rectangles fit the round display and text stays within them. */
     for (unsigned i=0;i<lv_obj_get_child_cnt(root);++i) {
         lv_obj_t *child=lv_obj_get_child(root,i); lv_area_t a; lv_obj_get_coords(child,&a);
-        for (int x=a.x1;x<=a.x2;x+=a.x2-a.x1)
-            for (int y=a.y1;y<=a.y2;y+=a.y2-a.y1)
-                assert((x-206)*(x-206)+(y-206)*(y-206)<=206*206);
+        if (lv_obj_check_type(child,&lv_label_class) || child == symbol) {
+            for (int x=a.x1;x<=a.x2;x+=LV_MAX(1,a.x2-a.x1))
+                for (int y=a.y1;y<=a.y2;y+=LV_MAX(1,a.y2-a.y1))
+                    assert((x-206)*(x-206)+(y-206)*(y-206)<=206*206);
+        }
         if (lv_obj_check_type(child,&lv_label_class)) {
             lv_point_t size;
             lv_txt_get_size(&size,lv_label_get_text(child),lv_obj_get_style_text_font(child,0),0,0,1000,LV_TEXT_FLAG_NONE);
@@ -117,6 +142,7 @@ int main(void) {
     touch(160,240,LV_INDEV_STATE_REL); assert(activity>touches+30);
     swipe(120,180); assert(opens==1 && refresh->paused && input.consumed);
     show(); swipe(170,125); assert(opens==2); /* Icon is a separate touch target. */
+    show(); swipe(100,300); assert(opens==3); /* Decorative panel keeps back gesture. */
     puts("Weather UI: circular layout, cache/age, no refresh while hidden/off, touch and back passed");
     return 0;
 }

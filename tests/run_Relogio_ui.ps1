@@ -20,7 +20,7 @@ try {
             'src/apps/Notas_app.c','src/services/Notas_service.c','src/ui/app_input.c')
         $arguments += @('-lm')
         $jsonRoot = Join-Path $env:USERPROFILE '.platformio/packages/framework-espidf/components/json/cJSON'
-        $arguments += @('src/apps/weather_app.c','src/ui/weather_icon.c','src/services/weather_data.c',"$jsonRoot/cJSON.c",'-I',$jsonRoot)
+        $arguments += @('src/apps/weather_app.c','src/ui/weather_icon.c','src/ui/weather_art.c','src/ui/weather_face.c','src/services/weather_data.c',"$jsonRoot/cJSON.c",'-I',$jsonRoot)
         $arguments += @('src/apps/Calendario_app.c','src/apps/Calendario_reminders.c','src/ui/Relogio_alert.c')
         $arguments += @('src/platform/lvgl_memory.c','-DLV_MEM_POOL_ALLOC=chronvs_lvgl_pool_alloc',
             '-include','src/platform/lvgl_memory.h')

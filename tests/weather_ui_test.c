@@ -18,6 +18,9 @@ bool chronvs_app_open(const char *id) { assert(!strcmp(id,"apps")); ++opens; hid
 bool chronvs_system_ui_display_is_off(void) { return display_off; }
 void chronvs_system_ui_notify_activity(void) { ++activity; }
 chronvs_time_t chronvs_rtc_read(void) { assert(!display_off); ++rtc_reads; return rtc; }
+bool chronvs_Relogio_time(chronvs_time_t *out) {
+    assert(!display_off); *out=rtc; return rtc.valid;
+}
 bool chronvs_weather_init(void) { return true; }
 bool chronvs_weather_get_snapshot(chronvs_weather_snapshot_t *out) { *out=mock_snapshot; return out->valid; }
 chronvs_weather_state_t chronvs_weather_state(void) { return mock_state; }
@@ -86,6 +89,12 @@ int main(void) {
     assert(!strcmp(lv_label_get_text(age),"Atualizado há 3 h"));
     complete(true); frame("04-success");
     assert(!strcmp(lv_label_get_text(temperature),"23°C"));
+    rtc.valid=false; age_tick-=60000; poll(NULL);
+    assert(!strcmp(lv_label_get_text(age),"Horário indisponível"));
+    rtc.valid=true; rtc.hour=16; age_tick-=60000; poll(NULL);
+    assert(!strcmp(lv_label_get_text(age),"Atualizado há 4 h"));
+    rtc.hour=15; age_tick-=60000; poll(NULL);
+    assert(!strcmp(lv_label_get_text(age),"Atualizado há 3 h"));
     /* All label rectangles fit the round display and text stays within them. */
     for (unsigned i=0;i<lv_obj_get_child_cnt(root);++i) {
         lv_obj_t *child=lv_obj_get_child(root,i); lv_area_t a; lv_obj_get_coords(child,&a);
@@ -118,5 +127,6 @@ int main(void) {
     swipe(120,180); assert(opens==1 && refresh->paused && input.consumed);
     show(); swipe(170,125); assert(opens==2); /* Icon is a separate touch target. */
     puts("Weather UI: circular layout, cache/age, no refresh while hidden/off, touch and back passed");
+    assert(rtc_reads==0); /* Age updates never read the hardware RTC. */
     return 0;
 }

@@ -129,6 +129,13 @@ compartilha os símbolos vetoriais entre app, launcher e painel rápido.
 Tocar no atalho abre `weather` pelo gerenciador e fecha o painel. O `on_show`
 do app solicita a atualização; a visualização do atalho continua usando só cache.
 
+Clima e Calendario consultam `chronvs_Relogio_time()` para idade dos dados e
+data atual. Somente o loop principal faz a leitura periódica de RTC, com
+tela acesa, e alimenta o serviço compartilhado; NTP entrega suas correções
+pela caixa de resultado. Os apps não leem I2C nem reancoram a hora. A abertura,
+Hoje e a atualização após despertar reutilizam a contagem monotônica,
+preservando a referência válida quando uma leitura posterior de RTC falha.
+
 O diagnóstico de listras usou uma espera de 2 s antes da sessão Wi-Fi.
 Após corrigir a pressão de memória e confirmar a tela no relógio, o atraso
 foi retirado; os logs de memória nas etapas de rede/TLS foram mantidos.

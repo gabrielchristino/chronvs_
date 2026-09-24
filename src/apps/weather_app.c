@@ -5,6 +5,7 @@
 #include "core/app_manager.h"
 #include "services/weather_data.h"
 #include "services/weather_service.h"
+#include "services/Relogio_service.h"
 #include "ui/Relogio_widgets.h"
 #include "ui/app_input.h"
 #include "ui/Notas_font.h"
@@ -72,7 +73,7 @@ static void poll(lv_timer_t *timer) {
     if (update_age) {
         char text[80];
         chronvs_time_t time = {0};
-        if (snapshot.valid) time = chronvs_rtc_read();
+        if (snapshot.valid) chronvs_Relogio_time(&time);
         chronvs_weather_age(&snapshot,chronvs_weather_local_epoch(&time),text,sizeof(text));
         set_text(age,text);
         age_tick = lv_tick_get();

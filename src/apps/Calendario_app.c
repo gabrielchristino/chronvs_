@@ -164,12 +164,11 @@ static void poll(lv_timer_t *timer) {
         lv_obj_invalidate(grid);
     }
     if (!dirty && !was_off && lv_tick_elaps(read_tick) < 60000) return;
-    chronvs_time_t now = chronvs_rtc_read();
-    now.valid = now.valid && chronvs_calendar_valid(2000 + now.year, now.month, now.day);
+    chronvs_time_t now = {0};
+    chronvs_Relogio_time(&now);
     bool changed = now.valid != today.valid || now.year != today.year ||
         now.month != today.month || now.day != today.day;
     today = now;
-    chronvs_Relogio_observe_time(&now);
     if (today.valid && (reset_month || !year)) {
         year = 2000 + today.year; month = today.month;
         reset_month = false;

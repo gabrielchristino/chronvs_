@@ -335,3 +335,33 @@ testes". A etapa NTP passa a integrar a base validada pelo usuário. O relato
 não discrimina os cenários executados nem confirma individualmente a espera
 de 12 horas. A recuperação de memória é deduzida do ciclo de vida da tarefa;
 não houve medição fornecida de RAM interna, maior bloco DMA, consumo ou FPS.
+
+## Próxima revisão: hora compartilhada nos apps
+
+Após o NTP validado e publicado em `3015f4c`, Clima e Calendario passaram
+a usar `chronvs_Relogio_time()` para consultar idade dos dados e data atual.
+Foram removidas as leituras extras de RTC desses apps na abertura, nos
+resultados, em Hoje, após despertar e nas consultas periódicas. Calendario
+também deixou de reancorar a hora a partir de uma leitura própria.
+
+O loop principal continua lendo RTC uma vez por segundo com tela acesa e
+após despertar, com a política existente de validação/fallback. O serviço
+compartilhado incorpora as correções NTP e avança por tempo monotônico,
+incluindo light sleep. Falhas posteriores do RTC não retiram uma referência
+válida dos apps. Sem referência desde o boot, os estados de hora/data
+indisponível permanecem. A cadência visual dos apps não mudou.
+
+Build padrão e suítes de Calendario, Clima e interface integrada passaram.
+Os testes verificam zero chamadas de RTC pelos apps, data após suspensão,
+rejeição de data inválida preservando a referência anterior, idade dos dados,
+gestos, inatividade e memória estável. O custo evitado são as operações I2C
+extras, cujo timeout configurado é 100 ms; não se afirma um ganho fixo de
+100 ms por abertura. A leitura periódica do main ainda pode bloquear e
+alterá-la exige uma avaliação separada.
+
+Após testar esta revisão no relógio, o usuário confirmou: "tudo certo nos
+testes". A hora compartilhada no Clima e Calendario passa a integrar a base
+validada pelo usuário, sem detalhamento individual dos cenários ou medição
+de latência e consumo. Próximo candidato: medir e consolidar as invalidações
+do mostrador em repouso, preservando a prévia dos gestos. Comparação com
+CrowPanel e mudanças na cadência do touch continuam adiadas.

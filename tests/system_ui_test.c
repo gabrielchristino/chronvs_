@@ -136,6 +136,8 @@ static void capture(const char *name) {
 int main(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
     lv_init();
+    chronvs_Relogio_init();
+    set_time(26,9,10,12,0,0); /* Main runtime seeds the shared clock at boot. */
     assert(lvgl_pool_allocations==1);
     assert(chronvs_lvgl_pool_alloc(LV_MEM_SIZE)==chronvs_lvgl_pool_alloc(LV_MEM_SIZE));
     assert(lvgl_pool_allocations==1); /* Reinitialization keeps the same arena. */
@@ -403,5 +405,6 @@ int main(void) {
     printf("Editor plus alert: %u bytes free, largest block %u.\n",
         (unsigned)memory.free_size,(unsigned)memory.free_biggest_size);
     tap(206,307); chronvs_Relogio_alert_poll(); assert(!reminder_ringing && chronvs_reminder_get(0)->done);
+    assert(weather_rtc_reads==0); /* Apps use the shared clock, never I2C. */
     return 0;
 }

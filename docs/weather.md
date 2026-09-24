@@ -69,6 +69,9 @@ falhas de gravação preservam o cache em RAM e não removem a chave anterior.
 `updated_epoch` representa `current.time`: segundos civis locais desde
 1970-01-01, sem conversão de fuso implícita. Não é um timestamp UTC. O cálculo
 da idade usa o mesmo referencial do PCF85063, inclusive após reinício sem NTP.
+O app consulta a hora compartilhada de `Relogio_service`, sem nova operação
+I2C. Após obter uma referência válida, o contador monotônico preserva a idade
+mesmo se leituras posteriores do RTC falharem; correções NTP vêm pelo runtime.
 Só existe uma requisição; estado e resultado pendente são protegidos por mutex.
 
 ## Interface

@@ -169,7 +169,7 @@ int main(void) {
     rtc.valid=false; show(); frame("01-no-rtc");
     assert(!year && lv_obj_has_state(today_button,LV_STATE_DISABLED));
     vertical_swipe(206,270,-100); assert(!year && !detail);
-    rtc.valid=true; elapse(60000); frame("02-month");
+    rtc.valid=true; chronvs_Relogio_observe_time(&rtc); elapse(60000); frame("02-month");
     assert(year==2026 && month==9 && !detail);
     for (unsigned i=0;i<lv_obj_get_child_cnt(month_page);++i) {
         lv_obj_t *child=lv_obj_get_child(month_page,i);
@@ -227,16 +227,16 @@ int main(void) {
     for (int i=0;i<10;++i) elapse(1000);
     assert(flushes==drawn);
     display_off=true; elapse(250); before=reads;
-    rtc.day=11;
+    now_us+=86400000000LL; /* Sleep advances the shared monotonic clock. */
     for (int i=0;i<10;++i) elapse(60000);
     assert(reads==before && flushes==drawn);
-    display_off=false; elapse(250); assert(reads==before+1 && today.day==11);
-    date_tap(11); rtc.day=12; elapse(60000);
+    display_off=false; elapse(250); assert(reads==before && today.day==11);
+    date_tap(11); rtc.day=12; chronvs_Relogio_observe_time(&rtc); elapse(60000);
     assert(!strcmp(lv_label_get_text(distance_label),"Ontem"));
-    rtc.month=2;rtc.day=31; elapse(60000);
-    assert(!today.valid && !strcmp(lv_label_get_text(distance_label),"Data atual indisponível"));
-    back(); frame("07-invalid-rtc");
-    rtc.month=9;rtc.day=10;show();
+    rtc.month=2;rtc.day=31; chronvs_Relogio_observe_time(&rtc); elapse(60000);
+    assert(today.valid && today.day==12 && !strcmp(lv_label_get_text(distance_label),"Ontem"));
+    back(); frame("07-invalid-rtc"); /* Invalid RTC sample preserves the trusted clock. */
+    rtc.month=9;rtc.day=10;chronvs_Relogio_observe_time(&rtc);show();
     unsigned touches=activity; touch(80,168,LV_INDEV_STATE_PR);
     for (int i=0;i<40;++i) touch(80,168,LV_INDEV_STATE_PR);
     touch(80,168,LV_INDEV_STATE_REL); assert(activity>touches+30);
@@ -254,5 +254,6 @@ int main(void) {
     assert(a.free_size==b.free_size);
     reminder_ui_tests();
     puts("Calendario: all 36525 dates, month bounds, leap days, touch/back, RTC recovery, off/hidden and stable LVGL memory passed.");
+    assert(reads==0); /* Calendar navigation never reads the hardware RTC. */
     return 0;
 }

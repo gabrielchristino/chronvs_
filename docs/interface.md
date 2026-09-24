@@ -576,8 +576,9 @@ o funcionamento da versão final sem atraso, com dados e sem listras. O procedim
 [`weather.md`](weather.md#listras-ao-abrir--teste-de-isolamento).
 
 O cache permanece visível durante a consulta e após falhas. A idade parte do
-horário local da medição; inclui minutos, horas ou dias. Se o RTC estiver
-inválido ou anterior à medição, mostra `Horário indisponível`. Um timer de 250 ms
+horário local da medição; inclui minutos, horas ou dias. Sem hora compartilhada
+válida ou se ela for anterior à medição, mostra `Horário indisponível`. Depois
+de uma referência válida, a contagem continua mesmo se o RTC falhar. Um timer de 250 ms
 aplica resultados e só altera textos quando mudam. A idade é revista na abertura,
 no resultado, ao despertar e a cada minuto com tela ativa. Com backlight apagado,
 não lê RTC nem altera objetos; `on_hide` pausa o timer. A consulta em andamento
@@ -603,7 +604,8 @@ contorno amarelo de 2 px e canto inferior direito dobrado. Um `31` fixo em
 Montserrat 18 identifica o calendário; é um símbolo, não a data atual.
 Não há grade de pequenos quadrados, para diferenciá-lo da calculadora.
 
-Calendario funciona offline e abre no mês atual do RTC. A semana começa no domingo;
+Calendario funciona offline e abre no mês do relógio compartilhado, alimentado
+pelo RTC/NTP e avançado por tempo monotônico. A semana começa no domingo;
 meses de 2000 a 2099 incluem anos bissextos e até seis linhas. As telas de mês
 e detalhe não exibem o nome do app no topo, deixando essa área livre para
 respiro visual; mês e ano ficam a y=68/95. Não há setas. Arrastar de baixo para
@@ -619,7 +621,7 @@ Os cabeçalhos `D S T Q Q S S`, em Montserrat 12, começam a y=132. A grade tem
 atalho, necessária para leitura de um mês inteiro; não são sete opções em
 2–3–2. Números usam Montserrat 18; hoje recebe disco amarelo de 28 px e texto
 escuro. Células fora do mês ficam vazias e não recebem seleção. A pílula Hoje,
-de 140 × 54 px a y=342, relê o RTC e retorna ao mês atual.
+de 140 × 54 px a y=342, consulta essa hora e retorna ao mês atual sem leitura I2C.
 
 Toque curto em um dia abre número ampliado, mês/ano, dia da semana e distância
 até hoje (`Hoje`, `Amanhã`, `Ontem`, `Daqui a N dias` ou `Há N dias`). Arrastar
@@ -628,9 +630,11 @@ usa mais de 80 px e predominância horizontal de 20 px, em toda a árvore,
 consumindo a liberação. Deslocamento de mais de 12 px na grade cancela a seleção.
 Não há botão Voltar no topo.
 
-Sem RTC válido, Hoje fica desabilitado e aparece `RTC indisponivel`. Se ainda
+Sem referência de hora válida, Hoje fica desabilitado e aparece `RTC indisponivel`. Se ainda
 não houve data válida, o cabeçalho mostra `Sem data`; caso contrário, preserva
-o mês consultado sem destacar hoje. A data é verificada a cada minuto, ao
+o mês consultado sem destacar hoje. Após obter uma referência válida, falhas
+posteriores do RTC não apagam a data: a contagem compartilhada continua,
+inclusive durante suspensão. A data é verificada a cada minuto, ao
 abrir, ao despertar e em Hoje; o mês consultado permanece estável na virada
 do dia. Não há rede, animação em repouso ou leitura/renderização com tela
 apagada. Contatos reais, inclusive prolongados, reiniciam a inatividade via

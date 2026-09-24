@@ -280,6 +280,11 @@ falhar ao inicializar, a interface continua funcionando e o erro vai ao log.
 I2S e a tarefa de som são criados sob demanda no primeiro pedido de bip,
 sem inicialização de áudio no boot. Após a espera síncrona QSPI aplicada no
 driver, o usuário confirmou boot, aviso e extensão `+1` sem artefatos físicos.
+Quando ociosa ou em mute, a tarefa desabilita o canal e bloqueia em uma
+notificação FreeRTOS, sem polling periódico. Mudanças de volume/alerta e
+pedidos de prévia a acordam; um comando anterior à espera fica pendente,
+evitando perder a retomada. As flags atômicas continuam sendo a fonte do
+estado atual. Canal e pilha permanecem reservados após a primeira utilização.
 Durante o diagnóstico, `ui/Relogio_alert.c` espera 2 s após criar o aviso antes
 de solicitar áudio. A espera usa ticks e não bloqueia LVGL; dispensar o aviso
 cancela o pedido. O teste no host cobre também esse cancelamento.

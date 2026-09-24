@@ -2,7 +2,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #define CHRONVS_SOUND_MAX_VOLUME 5
-/* Five audible levels plus mute. Level 1 preserves the original alert gain. */
+/* Five audible levels plus mute. Level 1 preserves the original alert gain.
+ * Setters and preview are called only by the main/UI task. */
 uint8_t chronvs_sound_volume(void);
 void chronvs_sound_set_volume(uint8_t level);
 /* Main task only. One 120 ms beep at the current volume; mute is silent.

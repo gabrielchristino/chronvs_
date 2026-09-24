@@ -13,6 +13,8 @@ static bool drain_preview;
 static unsigned audible_frames;
 static unsigned restart_at;
 static int audible_peak;
+static unsigned notifications, waits, delays;
+static bool preview_on_wait;
 int i2s_new_channel(const i2s_chan_config_t *config, i2s_chan_handle_t *out, void *rx) {
     (void)rx; assert(config->dma_frame_num == 160); ++allocations; *out = (void *)1; return 0;
 }
@@ -22,10 +24,19 @@ int i2s_channel_init_std_mode(i2s_chan_handle_t h, const i2s_std_config_t *cfg) 
 int i2s_channel_enable(i2s_chan_handle_t h) { (void)h; return 0; }
 int i2s_channel_disable(i2s_chan_handle_t h) { (void)h; ++disables; return 0; }
 int i2s_del_channel(i2s_chan_handle_t h) { (void)h; return 0; }
-int xTaskCreate(void (*fn)(void *), const char *name, unsigned stack, void *arg, unsigned priority, void *handle) {
-    (void)fn; (void)name; (void)stack; (void)arg; (void)priority; (void)handle; return pdPASS;
+int xTaskCreate(void (*fn)(void *), const char *name, unsigned stack, void *arg, unsigned priority, TaskHandle_t *handle) {
+    (void)fn; (void)name; (void)stack; (void)arg; (void)priority;
+    *handle = (void *)1; return pdPASS;
 }
-void vTaskDelay(unsigned ticks) { (void)ticks; longjmp(iteration, 1); }
+void xTaskNotifyGive(TaskHandle_t handle) { assert(handle == (void *)1); ++notifications; }
+unsigned ulTaskNotifyTake(int clear, unsigned timeout) {
+    assert(clear == pdTRUE && timeout == portMAX_DELAY); ++waits;
+    if (preview_on_wait) { preview_on_wait = false; chronvs_sound_preview(); }
+    unsigned count = notifications; notifications = 0;
+    if (count) return count;
+    longjmp(iteration, 1); /* The real task remains blocked here. */
+}
+void vTaskDelay(unsigned ticks) { (void)ticks; ++delays; longjmp(iteration, 1); }
 int i2s_channel_write(i2s_chan_handle_t h, const void *data, size_t size, size_t *written, int timeout) {
     (void)h; (void)timeout;
     const int16_t *samples = data; measured_peak = 0; ++writes;
@@ -81,5 +92,24 @@ int main(void) {
     mute_after_write = true;
     chronvs_sound_preview(); run_iteration(); assert(writes == old_writes + 1);
     assert(!atomic_load(&requested));
-    puts("Sound passed: mute, lazy initialization, five gains, stereo bounds, finite preview, retrigger and live mute.");
+    mute_after_write = false;
+    chronvs_sound_set_volume(2);
+    old_writes = writes;
+    preview_on_wait = true; run_iteration();
+    assert(writes == old_writes + 16); /* Command between idle check and wait. */
+    unsigned old_waits = waits;
+    run_iteration(); assert(waits == old_waits + 1 && delays == 0);
+    chronvs_sound_set_ringing(false);
+    assert(notifications == 0); /* Repeating an unchanged state does not wake it. */
+    drain_preview = false;
+    old_writes = writes;
+    chronvs_sound_set_ringing(true); assert(notifications > 0);
+    run_iteration(); assert(writes == old_writes + 1);
+    chronvs_sound_set_volume(0); run_iteration();
+    old_writes = writes;
+    chronvs_sound_set_volume(4); assert(notifications > 0);
+    run_iteration(); assert(writes == old_writes + 1 && measured_peak == 19660);
+    chronvs_sound_set_ringing(false); run_iteration();
+    assert(notifications == 0 && delays == 0);
+    puts("Sound passed: gains, preview/retrigger, live mute, idle blocking, boundary notification and alert resume.");
 }

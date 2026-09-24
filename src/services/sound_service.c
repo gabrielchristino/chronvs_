@@ -11,6 +11,11 @@ static atomic_bool preview_requested;
 static atomic_uchar volume = 1;
 static i2s_chan_handle_t channel;
 static bool initialization_attempted;
+static TaskHandle_t sound_worker;
+
+static void wake_sound(void) {
+    if (sound_worker) xTaskNotifyGive(sound_worker);
+}
 
 static void sound_task(void *arg) {
     (void)arg;
@@ -30,7 +35,8 @@ static void sound_task(void *arg) {
         if ((!ringing && preview_frames == 0) || level == 0) {
             if (enabled) { i2s_channel_disable(channel); enabled = false; }
             frame = 0;
-            vTaskDelay(pdMS_TO_TICKS(20));
+            /* Notifications retain a command arriving just before this wait. */
+            ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
             continue;
         }
         if (!enabled) {
@@ -72,18 +78,20 @@ static void initialize_sound(void) {
     };
     err = i2s_channel_init_std_mode(channel, &standard);
     if (err != ESP_OK) goto failed;
-    if (xTaskCreate(sound_task, "timer_beep", 3072, NULL, 2, NULL) == pdPASS) return;
+    if (xTaskCreate(sound_task, "timer_beep", 3072, NULL, 2, &sound_worker) == pdPASS) return;
+    sound_worker = NULL;
     err = ESP_ERR_NO_MEM;
 failed:
     ESP_LOGE("sound", "Speaker unavailable: %s", esp_err_to_name(err));
     if (channel) { i2s_del_channel(channel); channel = NULL; }
 }
 void chronvs_sound_set_ringing(bool ringing) {
-    atomic_store(&requested, ringing);
+    const bool changed = atomic_exchange(&requested, ringing) != ringing;
     if (ringing && atomic_load(&volume) > 0 && !initialization_attempted) {
         initialization_attempted = true;
         initialize_sound();
     }
+    if (changed) wake_sound();
 }
 
 uint8_t chronvs_sound_volume(void) { return atomic_load(&volume); }
@@ -95,12 +103,14 @@ void chronvs_sound_preview(void) {
         initialization_attempted = true;
         initialize_sound();
     }
+    wake_sound();
 }
 
 void chronvs_sound_set_volume(uint8_t level) {
     if (level > CHRONVS_SOUND_MAX_VOLUME) return;
-    atomic_store(&volume, level);
+    const bool changed = atomic_exchange(&volume, level) != level;
     if (level == 0) atomic_store(&preview_requested, false);
     /* Unmuting an already active alert starts its audio lazily. */
     if (level && atomic_load(&requested)) chronvs_sound_set_ringing(true);
+    if (changed) wake_sound();
 }

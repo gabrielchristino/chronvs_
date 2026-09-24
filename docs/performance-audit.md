@@ -250,3 +250,27 @@ nessa suíte, o heap ocupado caiu de 20.504 para 17.848 bytes. Após testar
 essa revisão no relógio, o usuário confirmou "tudo perfeito nos meus testes
 aqui". A redução de memória passa a integrar a base validada fisicamente;
 o relato não quantifica memória, FPS ou autonomia no dispositivo.
+
+## Próxima revisão: áudio ocioso
+
+Após a base validada `c9363e3`, a espera periódica de 20 ms do áudio foi
+substituída por notificação de tarefa. Com canal desabilitado e sem som,
+a tarefa bloqueia até receber mudança de estado ou pedido de prévia. As
+notificações ficam pendentes se chegarem antes da espera; flags atômicas
+preservam o comando mais recente e pedidos repetidos de prévia continuam
+reiniciando o bip. Repetir o estado atual do alerta não gera notificação.
+
+Isso elimina o polling ocioso, que antes podia ocorrer 50 vezes por segundo
+enquanto a CPU estava acordada. Não mede economia de bateria nem reduz a
+pilha de 3.072 bytes ou a reserva do canal I2S. Forma de onda, ganhos,
+duração dos bips e espera histórica de 2 s do aviso permanecem iguais.
+
+Os testes do serviço real com I2S/FreeRTOS simulados cobrem prévia finita,
+reinício, mute durante reprodução, comando na fronteira da espera,
+retomada de alerta e ausência de delay periódico no fluxo normal.
+O build padrão PlatformIO passou com essa alteração.
+O usuário testou as últimas alterações de áudio e confirmou que estava
+tudo certo. Essa etapa passa a integrar a base validada no relógio, sem
+medição quantitativa de consumo e sem detalhamento individual dos cenários.
+Os próximos candidatos continuam sendo agenda, NTP, RTC, mostrador e launcher;
+mudanças que alterem sua cadência exigem medição e um teste isolado.

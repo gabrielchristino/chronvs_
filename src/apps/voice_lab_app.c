@@ -7,6 +7,7 @@
 #include "services/voice_lab_service.h"
 #include "ui/Relogio_widgets.h"
 #include "ui/app_input.h"
+#include "ui/system_ui.h"
 #include "ui/control_style.h"
 #include "ui/Notas_font.h"
 
@@ -69,7 +70,7 @@ static void append_result(const chronvs_voice_result_t *result) {
 
 static void poll(lv_timer_t *timer) {
     (void)timer;
-    if (!visible) return;
+    if (!visible || chronvs_system_ui_display_is_off()) return;
     chronvs_voice_result_t result;
     while (chronvs_voice_lab_take_result(&result)) append_result(&result);
     chronvs_voice_state_t state = chronvs_voice_lab_state();

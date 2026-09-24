@@ -32,7 +32,9 @@ disponível sobre o mostrador sem pertencer a um app.
 No Vox, o texto exibido e registrado na serial é a saída textual do MultiNet,
 sem conversão para a palavra portuguesa cadastrada. Tocar em **Limpar** apaga
 o texto exibido. O botão do microfone inicia ou interrompe a escuta contínua;
-arrastar para a direita volta à lista de apps. O procedimento de teste está em
+arrastar para a direita volta à lista de apps. Ao apagar a tela em AUTO/ECO,
+a escuta é encerrada; acordar não a reinicia automaticamente. Toque no
+microfone para iniciar outra sessão. O procedimento de teste está em
 [`vox-test.md`](vox-test.md).
 
 | Tela atual | Gesto | Resultado |
@@ -251,7 +253,8 @@ tempo de inatividade começa novamente.
 
 ## Relogio: cronômetro, timer e alarmes
 
-O app abre sempre no cronômetro. A contagem existente continua ao sair.
+O app abre sempre no cronômetro. A contagem existente continua ao sair e
+durante a suspensão com tela apagada; ao acordar, exibe o tempo total decorrido.
 Deslizar de baixo para cima abre o timer; repetir abre os alarmes. Deslizar
 de cima para baixo volta de alarmes para timer e de timer para cronômetro.
 Não há labels com setas indicando a próxima página. Um gesto confirmado consome o contato para evitar

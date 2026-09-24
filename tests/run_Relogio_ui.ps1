@@ -5,7 +5,8 @@ try {
     New-Item -ItemType Directory -Force '.pio/host-tests' | Out-Null
     $lvglRoot = '.vendor-reference/example/ESP-IDF-5.3.2/ESP32-S3-Touch-LCD-1.46-Test/components/lvgl__lvgl'
     $sources = @(rg --files "$lvglRoot/src" -g '*.c')
-    $arguments = @('-std=c11', '-O0', '-DLV_CONF_INCLUDE_SIMPLE', '-I', 'src', '-I', 'tests/Relogio_stubs', '-I', $lvglRoot,
+    # Fail host assertions immediately instead of LVGL's embedded infinite loop.
+    $arguments = @('-std=c11', '-O0', '-g', '-DLV_ASSERT_HANDLER=abort();', '-include', 'stdlib.h', '-DLV_CONF_INCLUDE_SIMPLE', '-I', 'src', '-I', 'tests/Relogio_stubs', '-I', $lvglRoot,
         'tests/Relogio_ui_test.c', 'src/services/Relogio_service.c', 'src/core/calendar.c', 'src/core/Notas_text.c', 'src/ui/Notas_font.c', 'src/ui/Relogio_widgets.c', 'src/ui/control_style.c') + $sources + @('-o', '.pio/host-tests/Relogio_ui_test.exe')
     $executable = '.pio/host-tests/Relogio_ui_test.exe'
     if ($System) {

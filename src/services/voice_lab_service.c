@@ -245,6 +245,7 @@ static const voice_word_t words[CHRONVS_VOICE_LAB_WORDS] = {
 static const char *TAG = "voice_lab";
 static atomic_int state = CHRONVS_VOICE_IDLE;
 static atomic_bool stop_requested;
+static atomic_bool worker_active;
 static QueueHandle_t results;
 static const char *last_error = "";
 
@@ -258,6 +259,8 @@ chronvs_voice_state_t chronvs_voice_lab_state(void) {
 
 const char *chronvs_voice_lab_error(void) { return last_error; }
 
+bool chronvs_voice_lab_active(void) { return atomic_load(&worker_active); }
+
 bool chronvs_voice_lab_take_result(chronvs_voice_result_t *result) {
     return result && results && xQueueReceive(results, result, 0) == pdTRUE;
 }
@@ -269,9 +272,11 @@ static void fail(const char *message) {
 }
 
 static bool configure_commands(const esp_mn_iface_t *multinet,
-                               model_iface_data_t *model) {
+                               model_iface_data_t *model, bool *allocated) {
     if (esp_mn_commands_alloc(multinet, model) != ESP_OK) return false;
+    *allocated = true;
     for (unsigned i = 0; i < CHRONVS_VOICE_LAB_WORDS; ++i) {
+        if (atomic_load(&stop_requested)) return false;
         if (esp_mn_commands_add((int)i + 1, words[i].approximation) != ESP_OK) {
             ESP_LOGE(TAG, "Invalid approximation for %s: %s",
                      words[i].text, words[i].approximation);
@@ -314,16 +319,22 @@ static void voice_task(void *argument) {
     i2s_chan_handle_t microphone = NULL;
     int32_t *raw = NULL;
     int16_t *samples = NULL;
+    bool commands_allocated = false;
 
+    if (atomic_load(&stop_requested)) goto cleanup;
     models = esp_srmodel_init("model");
     char *model_name = models ? esp_srmodel_filter(models, ESP_MN_PREFIX, ESP_MN_ENGLISH) : NULL;
     if (!model_name) { fail("Modelo MultiNet não encontrado"); goto cleanup; }
+    if (atomic_load(&stop_requested)) goto cleanup;
     multinet = esp_mn_handle_from_name(model_name);
     model = multinet ? multinet->create(model_name, 3000) : NULL;
     if (!model) { fail("Falha ao carregar MultiNet"); goto cleanup; }
-    if (!configure_commands(multinet, model)) {
-        fail("Vocabulário fonético inválido"); goto cleanup;
+    if (atomic_load(&stop_requested)) goto cleanup;
+    if (!configure_commands(multinet, model, &commands_allocated)) {
+        if (!atomic_load(&stop_requested)) fail("Vocabulário fonético inválido");
+        goto cleanup;
     }
+    if (atomic_load(&stop_requested)) goto cleanup;
 
     const int chunk = multinet->get_samp_chunksize(model);
     if (chunk <= 0 || microphone_open(&microphone, (unsigned)chunk) != ESP_OK) {
@@ -333,18 +344,25 @@ static void voice_task(void *argument) {
     samples = malloc((size_t)chunk * sizeof(*samples));
     if (!raw || !samples) { fail("Memória insuficiente"); goto cleanup; }
 
-    last_error = "";
-    atomic_store(&state, CHRONVS_VOICE_LISTENING);
+    int expected = CHRONVS_VOICE_STARTING;
+    if (!atomic_compare_exchange_strong(&state, &expected, CHRONVS_VOICE_LISTENING))
+        goto cleanup;
     int last_id = -1;
     int64_t last_detection = 0;
+    size_t collected = 0;
+    const size_t chunk_bytes = (size_t)chunk * sizeof(*raw);
     while (!atomic_load(&stop_requested)) {
         size_t read = 0;
-        esp_err_t err = i2s_channel_read(microphone, raw,
-            (size_t)chunk * sizeof(*raw), &read, pdMS_TO_TICKS(100));
-        if (err == ESP_ERR_TIMEOUT) continue;
-        if (err != ESP_OK || read != (size_t)chunk * sizeof(*raw)) {
+        /* I2S takes milliseconds and may return partial data on timeout. */
+        esp_err_t err = i2s_channel_read(microphone, (uint8_t *)raw + collected,
+            chunk_bytes - collected, &read, 100);
+        if ((err != ESP_OK && err != ESP_ERR_TIMEOUT) || read > chunk_bytes - collected) {
             fail("Falha ao ler microfone"); break;
         }
+        collected += read;
+        if (atomic_load(&stop_requested)) break;
+        if (collected != chunk_bytes) continue;
+        collected = 0;
         /* The board microphone carries its significant signed bits in the
          * upper portion of the 32-bit right slot, as in the vendor example. */
         for (int i = 0; i < chunk; ++i) samples[i] = (int16_t)(raw[i] >> 14);
@@ -379,20 +397,25 @@ cleanup:
     }
     free(samples);
     free(raw);
+    if (commands_allocated) esp_mn_commands_free();
     if (model && multinet) multinet->destroy(model);
     if (models) esp_srmodel_deinit(models);
     atomic_store(&stop_requested, false);
     if (chronvs_voice_lab_state() != CHRONVS_VOICE_ERROR)
         atomic_store(&state, CHRONVS_VOICE_IDLE);
+    /* No shared resource or state writes after releasing ownership. */
+    atomic_store(&worker_active, false);
     vTaskDelete(NULL);
 }
 
 bool chronvs_voice_lab_start(void) {
-    chronvs_voice_state_t current = chronvs_voice_lab_state();
-    if (current == CHRONVS_VOICE_STARTING || current == CHRONVS_VOICE_LISTENING ||
-        current == CHRONVS_VOICE_STOPPING) return false;
+    if (atomic_exchange(&worker_active, true)) return false;
     if (!results) results = xQueueCreate(8, sizeof(chronvs_voice_result_t));
-    if (!results) { fail("Memória insuficiente"); return false; }
+    if (!results) {
+        fail("Memória insuficiente");
+        atomic_store(&worker_active, false);
+        return false;
+    }
     xQueueReset(results);
     last_error = "";
     atomic_store(&stop_requested, false);
@@ -400,14 +423,17 @@ bool chronvs_voice_lab_start(void) {
     if (xTaskCreatePinnedToCore(voice_task, "vox_multinet", 6144, NULL, 4, NULL, 0) == pdPASS)
         return true;
     fail("Memória insuficiente");
+    atomic_store(&worker_active, false);
     return false;
 }
 
 void chronvs_voice_lab_stop(void) {
-    chronvs_voice_state_t current = chronvs_voice_lab_state();
-    if (current == CHRONVS_VOICE_STARTING || current == CHRONVS_VOICE_LISTENING) {
-        atomic_store(&state, CHRONVS_VOICE_STOPPING);
+    int current = atomic_load(&state);
+    if (chronvs_voice_lab_active()) {
         atomic_store(&stop_requested, true);
+        while (current == CHRONVS_VOICE_STARTING || current == CHRONVS_VOICE_LISTENING) {
+            if (atomic_compare_exchange_weak(&state, &current, CHRONVS_VOICE_STOPPING)) break;
+        }
     } else if (current == CHRONVS_VOICE_ERROR) {
         atomic_store(&state, CHRONVS_VOICE_IDLE);
     }

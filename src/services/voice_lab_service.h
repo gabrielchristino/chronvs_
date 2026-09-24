@@ -20,6 +20,8 @@ typedef struct {
 /* Loads I2S and MultiNet only for an explicit laboratory session. */
 bool chronvs_voice_lab_start(void);
 void chronvs_voice_lab_stop(void);
+/* Includes startup and cleanup, even when the visible state is ERROR. */
+bool chronvs_voice_lab_active(void);
 chronvs_voice_state_t chronvs_voice_lab_state(void);
 const char *chronvs_voice_lab_error(void);
 bool chronvs_voice_lab_take_result(chronvs_voice_result_t *result);

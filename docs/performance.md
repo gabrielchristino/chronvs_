@@ -132,3 +132,13 @@ Mensagens representativas de boot, navegação, Vox, drivers e profiling ficaram
 ausentes do binário padrão e presentes nos diagnósticos (onde aplicável).
 O binário padrão passou de 1.775.120 para 1.659.376 bytes, cerca de 113 KiB a
 menos; essa redução não é uma medição de fluidez ou autonomia.
+
+## Validação das correções de runtime
+
+Em 24/09/2026, o usuário confirmou "tudo certo nos meus testes" após as
+correções da espera do loop, contagem do cronômetro durante suspensão,
+redraws em pausa e ciclo de vida/captura do Vox. Os defaults também foram
+alinhados à configuração local validada. Essa revisão é a nova base física,
+sem mudança nos parâmetros críticos do display e sem medição quantitativa
+de desempenho. A análise, os testes automatizados e a pendência de memória
+no teste integrado do host estão em [`performance-audit.md`](performance-audit.md).

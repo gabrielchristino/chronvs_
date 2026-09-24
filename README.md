@@ -175,7 +175,7 @@ estão em [`docs/performance.md`](docs/performance.md).
 
 - O driver Arduino-ESP32 distribuído com esta versão do PlatformIO não expõe o modo QSPI de quatro linhas necessário ao SPD2010. Por isso o projeto usa ESP-IDF e o driver oficial, que define `quad_mode = 1`.
 - O build padrão compila somente o LVGL com `-O2`, após validação de fluidez e funcionamento no relógio. Aplicação e drivers mantêm o modo debug, com `-Og` efetivo apesar do `-O0` declarado no INI. O histórico e os diagnósticos estão em [`docs/performance.md`](docs/performance.md).
-- `CONFIG_SPIRAM_USE_CAPS_ALLOC=y` permite que os buffers LVGL sejam alocados corretamente na PSRAM OPI.
+- `CONFIG_SPIRAM_USE_MALLOC=y` mantém a política de PSRAM validada no relógio; buffers e pool LVGL continuam solicitando PSRAM explicitamente. Os defaults preservam 32 KiB de reserva interna e o limiar de 16 KiB do alocador.
 - A partição e o Flash são explicitamente configurados para 16 MB; a mensagem de “Expected 16MB, found 2MB” deixa de ocorrer com `sdkconfig.defaults` aplicado.
 - A fonte de referência da Waveshare está em `.vendor-reference/`, ignorada pelo Git. Não a remova enquanto quiser compilar localmente.
 - `partitions.csv` mantém NVS em `0x11000`, dados PHY em `0x17000` e a aplicação em `0x20000`, agora com 4 MiB disponíveis dentro da Flash física de 16 MB.

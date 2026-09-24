@@ -92,6 +92,14 @@ quando o usuário inicia a escuta. O serviço entrega à UI o campo `string` do
 resultado, sem mapear o ID para uma palavra portuguesa, e registra a mesma
 saída na serial com prefixo `VOX:`. A escuta continua até o usuário interromper
 ou sair do app; `on_hide` solicita a parada e o timer visual é pausado.
+Apagar a tela em AUTO/ECO também solicita a parada. O loop só entra em light
+sleep depois que `chronvs_voice_lab_active()` indica o fim da limpeza. Esse
+indicador protege toda a vida da tarefa, inclusive após publicar um erro,
+impedindo reinício enquanto modelo, vocabulário e I2S ainda são liberados.
+A UI não altera objetos enquanto a tela está apagada. Leituras I2S usam
+timeout de 100 ms e acumulam dados parciais até completar um quadro.
+`tests/run_voice_tests.ps1` cobre cancelamento, erro, reinício, exclusão
+durante limpeza e leituras parciais com timeout usando o serviço real.
 Essa saída serial, assim como os logs de apps e memória, só fica habilitada
 nos builds de diagnóstico. O firmware padrão mantém o texto do Vox na tela,
 com logs e consoles desativados; veja [`performance.md`](performance.md).
@@ -267,7 +275,10 @@ cancela o pedido. O teste no host cobre também esse cancelamento.
 
 `apps/Relogio_pages.c` implementa timer e criação/lista/detalhe dos alarmes como
 filhos do app. Um timer visual de 20 ms agrupa mudanças de página e texto do
-arco. O cronômetro atualiza décimos a cada 100 ms, a regressiva somente quando
+arco. O cronômetro consulta décimos a cada 100 ms e só altera textos quando
+o valor ou estado muda; pausado, não produz redraw periódico. A contagem usa
+`esp_timer_get_time()` em `Relogio_service`, com acumulador de 64 bits,
+incluindo light sleep, independentemente do tick LVGL. A regressiva muda somente quando
 muda o segundo. `on_hide` pausa o timer visual; com backlight apagado seu
 callback retorna sem alterar objetos. `on_show` reabre o cronômetro, enquanto
 o estado dos serviços continua vivo.

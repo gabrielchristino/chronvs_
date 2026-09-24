@@ -12,6 +12,8 @@ static int64_t snooze[CHRONVS_ALARM_LIMIT];
 static bool pending[CHRONVS_ALARM_LIMIT], timer_pending;
 static int64_t timer_deadline, anchor_us, anchor_seconds;
 static bool clock_valid;
+static bool stopwatch_running;
+static int64_t stopwatch_elapsed_us, stopwatch_started_us;
 static nvs_handle_t storage;
 static chronvs_reminder_t reminders[CHRONVS_REMINDER_LIMIT];
 static bool reminder_pending[CHRONVS_REMINDER_LIMIT];
@@ -50,6 +52,8 @@ void chronvs_Relogio_init(void) {
     memset(reminders, 0, sizeof(reminders));
     clock_valid = timer_pending = false;
     timer_deadline = 0;
+    stopwatch_running = false;
+    stopwatch_elapsed_us = stopwatch_started_us = 0;
     for (unsigned i = 0; i < CHRONVS_ALARM_LIMIT; ++i) last_day[i] = -1;
     if (nvs_open("aion", NVS_READWRITE, &storage) != ESP_OK) return;
     size_t size = sizeof(alarms);
@@ -149,6 +153,26 @@ void chronvs_timer_start(uint32_t minutes) {
     timer_deadline = esp_timer_get_time() + (int64_t)minutes * 60000000;
 }
 void chronvs_timer_cancel(void) { timer_deadline = 0; timer_pending = false; }
+void chronvs_stopwatch_start(void) {
+    if (stopwatch_running) return;
+    stopwatch_started_us = esp_timer_get_time();
+    stopwatch_running = true;
+}
+void chronvs_stopwatch_pause(void) {
+    if (!stopwatch_running) return;
+    stopwatch_elapsed_us += esp_timer_get_time() - stopwatch_started_us;
+    stopwatch_running = false;
+}
+void chronvs_stopwatch_reset(void) {
+    stopwatch_elapsed_us = 0;
+    if (stopwatch_running) stopwatch_started_us = esp_timer_get_time();
+}
+bool chronvs_stopwatch_running(void) { return stopwatch_running; }
+uint64_t chronvs_stopwatch_elapsed_ms(void) {
+    const int64_t elapsed = stopwatch_elapsed_us + (stopwatch_running ?
+        esp_timer_get_time() - stopwatch_started_us : 0);
+    return (uint64_t)(elapsed / 1000);
+}
 bool chronvs_timer_running(void) { return timer_deadline != 0; }
 uint32_t chronvs_timer_remaining(void) {
     int64_t remaining = timer_deadline - esp_timer_get_time();

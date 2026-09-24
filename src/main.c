@@ -15,6 +15,7 @@
 #include "services/rtc_service.h"
 #include "services/time_sync_service.h"
 #include "services/wifi_session_service.h"
+#include "services/voice_lab_service.h"
 #include "ui/system_ui.h"
 #include "services/Relogio_service.h"
 #include "ui/Relogio_alert.h"
@@ -47,6 +48,8 @@ void app_main(void) {
     TickType_t next_rtc_update = 0;
     TickType_t next_battery_update = 0;
     bool display_was_off = false;
+    /* At 100 Hz, pdMS_TO_TICKS(5) is zero: always block for at least one tick. */
+    const TickType_t ui_delay = pdMS_TO_TICKS(5) > 0 ? pdMS_TO_TICKS(5) : 1;
 
     while (true) {
         chronvs_time_t synchronized_time;
@@ -58,7 +61,9 @@ void app_main(void) {
             if (!display_was_off)
                 ESP_LOGI(TAG, "Display off: light sleep enabled");
             display_was_off = true;
-            if (!chronvs_wifi_session_active()) {
+            /* AUTO/ECO stops capture; let the worker release I2S/model before sleep. */
+            if (chronvs_voice_lab_active()) chronvs_voice_lab_stop();
+            if (!chronvs_wifi_session_active() && !chronvs_voice_lab_active()) {
                 chronvs_board_light_sleep(
                     chronvs_Relogio_next_wake_ms(DISPLAY_OFF_MAX_SLEEP_MS));
                 now = xTaskGetTickCount();
@@ -108,6 +113,6 @@ void app_main(void) {
         chronvs_Relogio_alert_poll();
         lv_timer_handler();
         chronvs_display_profile_poll(chronvs_system_ui_display_is_off());
-        vTaskDelay(pdMS_TO_TICKS(5));
+        vTaskDelay(ui_delay);
     }
 }

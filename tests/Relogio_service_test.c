@@ -43,6 +43,21 @@ static void clear_alarms(void) {
 }
 int main(void) {
     chronvs_Relogio_init();
+    assert(!chronvs_stopwatch_running() && chronvs_stopwatch_elapsed_ms()==0);
+    chronvs_stopwatch_start(); now_us+=5000000;
+    chronvs_stopwatch_start(); /* Idempotent start cannot reset elapsed time. */
+    now_us+=60000000;
+    assert(chronvs_stopwatch_elapsed_ms()==65000);
+    chronvs_stopwatch_pause(); now_us+=10000000; chronvs_stopwatch_pause();
+    assert(chronvs_stopwatch_elapsed_ms()==65000);
+    chronvs_stopwatch_start(); now_us+=2500000;
+    assert(chronvs_stopwatch_elapsed_ms()==67500);
+    chronvs_stopwatch_reset(); assert(chronvs_stopwatch_running());
+    now_us+=(int64_t)UINT32_MAX*1000+2000000;
+    assert(chronvs_stopwatch_elapsed_ms()==(uint64_t)UINT32_MAX+2000);
+    chronvs_stopwatch_pause(); chronvs_stopwatch_reset();
+    assert(!chronvs_stopwatch_running() && chronvs_stopwatch_elapsed_ms()==0);
+    now_us=0; chronvs_Relogio_init();
     assert(chronvs_Relogio_next_wake_ms(300000) == 300000);
     assert(!chronvs_alarm_create(24, 0, 1));
     assert(!chronvs_alarm_create(1, 60, 1));

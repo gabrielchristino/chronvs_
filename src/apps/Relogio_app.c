@@ -2,12 +2,14 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <inttypes.h>
 
 #include "core/app_manager.h"
 #include "lvgl.h"
 #include "ui/system_ui.h"
 #include "apps/Relogio_pages.h"
 #include "ui/Relogio_widgets.h"
+#include "services/Relogio_service.h"
 
 #define COLOR_PANEL       0x26302B
 #define COLOR_PANEL_EDGE  0x748173
@@ -25,9 +27,8 @@ static lv_obj_t *elapsed_label;
 static lv_obj_t *status_label;
 static lv_obj_t *start_label;
 static lv_timer_t *refresh_timer;
-static bool running;
-static uint32_t stored_elapsed_ms;
-static uint32_t started_at_tick;
+static uint64_t shown_deciseconds = UINT64_MAX;
+static int shown_stopwatch_state = -1;
 static int16_t gesture_start_x;
 static int16_t gesture_start_y;
 static bool returning_to_list;
@@ -103,24 +104,24 @@ static void create_Relogio_icon(lv_obj_t *parent) {
     lv_obj_invalidate(parent);
 }
 
-static uint32_t elapsed_ms(void) {
-    return running ? stored_elapsed_ms + lv_tick_elaps(started_at_tick)
-                   : stored_elapsed_ms;
-}
-
 static void update_display(void) {
     if (elapsed_label == NULL) return;
 
-    const uint32_t total_deciseconds = elapsed_ms() / 100;
-    const uint32_t minutes = total_deciseconds / 600;
-    const uint32_t seconds = (total_deciseconds / 10) % 60;
-    const uint32_t deciseconds = total_deciseconds % 10;
-    lv_label_set_text_fmt(elapsed_label, "%02lu:%02lu.%lu",
-                          (unsigned long)minutes, (unsigned long)seconds,
-                          (unsigned long)deciseconds);
-    lv_label_set_text(status_label, running ? "EM CURSO" :
-                      stored_elapsed_ms == 0 ? "PRONTO" : "PAUSADO");
-    lv_label_set_text(start_label, running ? "Pausar" : "Iniciar");
+    const uint64_t elapsed = chronvs_stopwatch_elapsed_ms();
+    const uint64_t deciseconds = elapsed / 100;
+    const int state = chronvs_stopwatch_running() ? 2 : elapsed ? 1 : 0;
+    if (deciseconds != shown_deciseconds) {
+        lv_label_set_text_fmt(elapsed_label, "%02" PRIu64 ":%02u.%u",
+                             deciseconds / 600, (unsigned)(deciseconds / 10 % 60),
+                             (unsigned)(deciseconds % 10));
+        shown_deciseconds = deciseconds;
+    }
+    if (state != shown_stopwatch_state) {
+        lv_label_set_text(status_label, state == 2 ? "EM CURSO" :
+                          state == 0 ? "PRONTO" : "PAUSADO");
+        lv_label_set_text(start_label, state == 2 ? "Pausar" : "Iniciar");
+        shown_stopwatch_state = state;
+    }
 }
 
 static void refresh_timer_cb(lv_timer_t *timer) {
@@ -143,22 +144,15 @@ static void select_page(unsigned page) {
 static void start_pause_event(lv_event_t *event) {
     if (lv_event_get_code(event) != LV_EVENT_CLICKED) return;
     chronvs_system_ui_notify_activity();
-    if (running) {
-        stored_elapsed_ms = elapsed_ms();
-        running = false;
-    }
-    else {
-        started_at_tick = lv_tick_get();
-        running = true;
-    }
+    if (chronvs_stopwatch_running()) chronvs_stopwatch_pause();
+    else chronvs_stopwatch_start();
     update_display();
 }
 
 static void reset_event(lv_event_t *event) {
     if (lv_event_get_code(event) != LV_EVENT_CLICKED) return;
     chronvs_system_ui_notify_activity();
-    stored_elapsed_ms = 0;
-    if (running) started_at_tick = lv_tick_get();
+    chronvs_stopwatch_reset();
     update_display();
 }
 
@@ -214,6 +208,8 @@ static void hide_Relogio(void) {
 }
 
 static lv_obj_t *create_Relogio(lv_obj_t *parent) {
+    shown_deciseconds = UINT64_MAX;
+    shown_stopwatch_state = -1;
     Relogio_root = lv_obj_create(parent);
     lv_obj_remove_style_all(Relogio_root);
     lv_obj_set_size(Relogio_root, SCREEN_SIZE, SCREEN_SIZE);

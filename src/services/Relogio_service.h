@@ -15,6 +15,12 @@ void chronvs_timer_start(uint32_t minutes);
 void chronvs_timer_cancel(void);
 uint32_t chronvs_timer_remaining(void);
 bool chronvs_timer_running(void);
+/* Stopwatch advances during light sleep and while its app is hidden. */
+void chronvs_stopwatch_start(void);
+void chronvs_stopwatch_pause(void);
+void chronvs_stopwatch_reset(void);
+bool chronvs_stopwatch_running(void);
+uint64_t chronvs_stopwatch_elapsed_ms(void);
 const chronvs_alarm_t *chronvs_alarm_get(unsigned index);
 bool chronvs_alarm_create(uint8_t hour, uint8_t minute, uint8_t days);
 bool chronvs_alarm_delete(unsigned index);

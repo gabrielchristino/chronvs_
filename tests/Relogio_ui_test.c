@@ -27,7 +27,9 @@ void chronvs_system_ui_notify_activity(void) { display_off = false; }
 void chronvs_sound_set_ringing(bool value) { ringing = value; }
 
 static unsigned char pixels[412 * 412 * 3];
+static unsigned flush_count;
 static void flush(lv_disp_drv_t *driver, const lv_area_t *area, lv_color_t *colors) {
+    ++flush_count;
     for (int y = area->y1; y <= area->y2; ++y) {
         for (int x = area->x1; x <= area->x2; ++x) {
             lv_color32_t c = {.full = lv_color_to32(*colors++)};
@@ -84,10 +86,32 @@ int main(void) {
     lv_indev_drv_init(&input); input.type=LV_INDEV_TYPE_POINTER; input.read_cb=read_touch;
     lv_indev_drv_register(&input);
     create_Relogio(lv_scr_act()); show_Relogio(); frame("01-stopwatch");
+    /* A ready/paused stopwatch must not redraw unchanged labels. */
+    for (unsigned i=0; i<10; ++i) { lv_tick_inc(20); lv_timer_handler(); }
+    flush_count=0;
+    for (unsigned i=0; i<50; ++i) { now_us+=20000; lv_tick_inc(20); lv_timer_handler(); }
+    assert(flush_count==0);
+    click("Iniciar");
+    now_us+=5000000; lv_tick_inc(5000); lv_timer_handler();
+    assert(!strcmp(lv_label_get_text(elapsed_label),"00:05.0"));
+    display_off=true;
+    flush_count=0;
+    now_us+=60000000; /* Board sleep advances monotonic time but stops LVGL tick. */
+    refresh_timer_cb(refresh_timer); assert(flush_count==0);
+    display_off=false;
+    lv_tick_inc(100); lv_timer_handler();
+    assert(!strcmp(lv_label_get_text(elapsed_label),"01:05.0"));
+    click("Pausar"); lv_refr_now(NULL); flush_count=0;
+    for (unsigned i=0; i<50; ++i) { now_us+=20000; lv_tick_inc(20); lv_timer_handler(); }
+    assert(flush_count==0);
+    click("Iniciar"); hide_Relogio(); now_us+=2000000; show_Relogio();
+    assert(!strcmp(lv_label_get_text(elapsed_label),"01:07.0"));
+    click("Pausar"); click("Zerar");
+    assert(!strcmp(lv_label_get_text(elapsed_label),"00:00.0"));
     /* Dragging a stopwatch button navigates without starting the stopwatch. */
     touch(141,291,LV_INDEV_STATE_PR); touch(141,190,LV_INDEV_STATE_PR);
     touch(141,190,LV_INDEV_STATE_REL);
-    assert(current_page==1 && !running);
+    assert(current_page==1 && !chronvs_stopwatch_running());
     touch(206,150,LV_INDEV_STATE_PR); touch(206,250,LV_INDEV_STATE_PR);
     touch(206,250,LV_INDEV_STATE_REL); assert(current_page==0);
     /* Up advances twice; down from the middle of the empty list returns. */

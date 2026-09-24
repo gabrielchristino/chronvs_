@@ -32,7 +32,10 @@ static void contact_event(lv_event_t *event) {
 }
 
 void chronvs_ui_app_input_bind(lv_obj_t *tree, chronvs_ui_app_input_t *state) {
-    lv_obj_add_event_cb(tree, contact_event, LV_EVENT_ALL, state);
+    /* Non-clickable labels cannot be the target of pointer contact events.
+     * Still descend: a decorative container may contain clickable controls. */
+    if (lv_obj_has_flag(tree, LV_OBJ_FLAG_CLICKABLE))
+        lv_obj_add_event_cb(tree, contact_event, LV_EVENT_ALL, state);
     for (unsigned i = 0; i < lv_obj_get_child_cnt(tree); ++i)
         chronvs_ui_app_input_bind(lv_obj_get_child(tree, i), state);
 }

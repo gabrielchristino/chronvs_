@@ -226,3 +226,27 @@ dispositivo. O relato é qualitativo, sem medições de FPS, consumo ou uma
 lista individual dos cenários executados; a pendência da suíte no host
 permanece separada dessa confirmação.
 Os demais candidatos desta análise continuam dependentes de medição.
+
+## Próxima revisão: memória de controles e eventos
+
+Após o commit validado `191db9b`, a investigação da suíte integrada encontrou
+duas reservas evitáveis: callbacks de contato em rótulos não clicáveis e
+cópias dos mesmos estilos em cada botão. O helper de input agora registra
+somente alvos clicáveis, ainda percorrendo todos os descendentes. Os estilos
+dos controles são compartilhados, mantendo estados, valores e overrides locais.
+
+Com apenas a redução de callbacks, o editor abriu, mas restaram 4.976 bytes
+livres e maior bloco de 3.472 bytes. Compartilhando estilos, restaram 31.072
+bytes livres, maior bloco de 29.560; com o aviso sobre o editor, 28.912 bytes
+livres em um único bloco. São medidas do teste Windows de 64 bits, sem
+equivalência direta com a economia no ESP32. O pool permanece em 128 KiB.
+
+Também foi corrigida uma suposição do teste: reabrir Calendario não move sua
+raiz para o final dos filhos; a verificação agora usa a raiz visível.
+`run_Relogio_ui.ps1 -System` passou integralmente, incluindo editor e aviso,
+gestos, digitação, contato prolongado, AUTO/ECO e primeiro toque ao acordar.
+O build padrão PlatformIO e a suíte específica de UI do Relogio passaram;
+nessa suíte, o heap ocupado caiu de 20.504 para 17.848 bytes. Após testar
+essa revisão no relógio, o usuário confirmou "tudo perfeito nos meus testes
+aqui". A redução de memória passa a integrar a base validada fisicamente;
+o relato não quantifica memória, FPS ou autonomia no dispositivo.

@@ -10,6 +10,8 @@ typedef struct {
 } chronvs_ui_app_input_t;
 
 /* Bind once to each newly created subtree, after its local event handlers.
+ * Set CLICKABLE flags before binding. Only clickable targets get callbacks;
+ * descendants are visited even when their parent is not clickable.
  * Reports real contact activity and consumes recognized swipes before release.
  * Both axes require >80 px and >20 px dominance over the other axis.
  * The state must live as long as the app; back may delete the current page. */

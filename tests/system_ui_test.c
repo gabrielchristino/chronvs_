@@ -134,6 +134,7 @@ static void capture(const char *name) {
     fwrite(h,1,54,f);fwrite(pixels,1,sizeof(pixels),f);fclose(f);
 }
 int main(void) {
+    setvbuf(stdout, NULL, _IONBF, 0);
     lv_init();
     assert(lvgl_pool_allocations==1);
     assert(chronvs_lvgl_pool_alloc(LV_MEM_SIZE)==chronvs_lvgl_pool_alloc(LV_MEM_SIZE));
@@ -380,7 +381,13 @@ int main(void) {
     assert(!strcmp(chronvs_app_active_id(),"apps"));
     puts("System UI passed: controls, Notas typing/hold, Calendario, AUTO/ECO inactivity and wake-only touch.");
     assert(chronvs_app_open("Calendario"));
-    lv_obj_t *Calendario=lv_obj_get_child(chronvs_app_content_layer(),-1);
+    /* Reopening an app does not reorder retained roots. */
+    lv_obj_t *Calendario=NULL;
+    for (unsigned i=0; i<lv_obj_get_child_cnt(chronvs_app_content_layer()); ++i) {
+        lv_obj_t *child=lv_obj_get_child(chronvs_app_content_layer(),i);
+        if (!lv_obj_has_flag(child,LV_OBJ_FLAG_HIDDEN)) { assert(!Calendario); Calendario=child; }
+    }
+    assert(Calendario);
     tap(290,197); tap(206,357); tap(206,341);
     assert(find_label_text(Calendario,"Título do lembrete"));
     capture("27-Calendario-editor-integrated");

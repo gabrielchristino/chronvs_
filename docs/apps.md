@@ -179,12 +179,23 @@ arcos do Relogio, devem estar documentadas em `docs/interface.md`.
 `chronvs_ui_app_input_bind(subtree, &state)`. Mantenha o estado durante toda a
 vida do app e vincule cada nova subárvore uma única vez, depois de criar seus
 controles e callbacks locais; diálogos criados depois precisam de vinculação
-própria. O helper observa cada alvo sem duplicar eventos propagados, registra
+própria. Defina `LV_OBJ_FLAG_CLICKABLE` antes de vincular. O helper só aloca
+callbacks nos objetos que podem receber toque, mas percorre todos os filhos,
+inclusive os de contêineres não clicáveis. Rótulos decorativos não precisam
+de registros próprios: o hit test do LVGL entrega o contato ao controle.
+O helper observa cada alvo sem duplicar eventos propagados, registra
 atividade no início, durante e ao liberar o contato e reconhece o retorno
 durante o arraste. O callback pode excluir a página atual. Notas é a referência
 de uso. Contatos prolongados também devem manter a tela ativa; timers de
 animação e salvamento não são atividade. A proteção global continua consumindo
 o primeiro toque com a tela apagada.
+
+Os estilos de controles em `ui/control_style.c` são compartilhados e
+inicializados uma única vez na tarefa da interface. Estados normal,
+pressionado, selecionado e desabilitado mantêm as mesmas propriedades;
+os apps podem sobrescrevê-las com setters locais. Não modifique os estilos
+compartilhados depois de inicializados. Isso evita copiar propriedades para
+cada tecla/botão e preserva espaço para editores e avisos simultâneos.
 
 Priorize gestos para navegar por páginas ou períodos nas novas implementações,
 com subir para avançar, descer para retornar e direita para voltar um nível.

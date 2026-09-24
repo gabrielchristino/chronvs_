@@ -142,3 +142,10 @@ alinhados à configuração local validada. Essa revisão é a nova base física
 sem mudança nos parâmetros críticos do display e sem medição quantitativa
 de desempenho. A análise, os testes automatizados e a pendência de memória
 no teste integrado do host estão em [`performance-audit.md`](performance-audit.md).
+
+Na revisão seguinte, estilos compartilhados e callbacks restritos a alvos
+clicáveis resolveram a falha de memória da suíte integrada, mantendo o pool
+de 128 KiB. Build e suítes de interface passaram. O usuário confirmou no
+relógio: "tudo perfeito nos meus testes aqui". Essa é a nova base validada;
+os números de memória do host estão na análise e não representam uma medição
+equivalente no ESP32.

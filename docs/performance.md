@@ -149,3 +149,9 @@ de 128 KiB. Build e suítes de interface passaram. O usuário confirmou no
 relógio: "tudo perfeito nos meus testes aqui". Essa é a nova base validada;
 os números de memória do host estão na análise e não representam uma medição
 equivalente no ESP32.
+
+Também foram validadas no relógio a espera do áudio por notificações, em
+vez de polling ocioso, e a consulta da agenda civil uma vez por segundo.
+Timer e soneca preservam seus prazos monotônicos em cada passagem do loop.
+Build e testes de serviço passaram; a redução de conversões da agenda foi
+medida no host, sem quantificar ganho de autonomia no dispositivo.

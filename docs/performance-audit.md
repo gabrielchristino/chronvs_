@@ -274,3 +274,34 @@ tudo certo. Essa etapa passa a integrar a base validada no relógio, sem
 medição quantitativa de consumo e sem detalhamento individual dos cenários.
 Os próximos candidatos continuam sendo agenda, NTP, RTC, mostrador e launcher;
 mudanças que alterem sua cadência exigem medição e um teste isolado.
+
+## Próxima revisão: consultas da agenda civil
+
+Após o áudio validado em `c418efb`, `Relogio_service` passou a consultar
+alarmes e lembretes uma vez por segundo civil, invalidando a consulta após
+alterações persistidas. Timer e soneca são verificados antes desse filtro;
+o cálculo de despertar e a lógica de recorrência permanecem iguais.
+
+O teste `agenda_poll_test.c` executa o serviço real e conta conversões de
+data: com 12 lembretes e 100 polls dentro de um segundo, foram 12 conversões
+em vez das 1.200 que o loop anterior exigia. O teste verifica alterações no
+mesmo segundo, correção do horário e timer/soneca vencendo no meio de um segundo.
+A suíte de serviço cobre também soneca, recorrência, viradas de calendário,
+persistência, falhas de gravação e lembretes vencidos após reinício.
+Essa redução não é uma medição de FPS ou autonomia.
+O build padrão PlatformIO e os testes de serviço passaram.
+
+Após testar esta etapa no relógio, o usuário confirmou: "tudo certo com os
+testes aqui". A otimização da agenda passa a integrar a base validada no
+dispositivo. O relato não detalha cada cenário nem quantifica desempenho
+ou autonomia. A comparação com a CrowPanel e a medição dos gestos ficam
+para depois, conforme combinado com o usuário.
+
+## Próximo passo após consolidar a agenda
+
+Revisar a tarefa NTP e sua reserva de pilha durante as 12 horas entre
+sincronizações. Primeiro levantar o ciclo de vida e os caminhos de falha;
+avaliar uma tarefa temporária sem perder o prazo, o resultado pendente para
+a UI ou a exclusão Wi-Fi compartilhada com Clima. Validar reconexão, falha
+de rede, suspensão e repetição de sessões antes de adotar a mudança.
+RTC e trabalho visual de mostrador/launcher permanecem na fila posterior.

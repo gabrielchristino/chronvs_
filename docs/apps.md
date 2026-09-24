@@ -289,6 +289,13 @@ Durante o diagnóstico, `ui/Relogio_alert.c` espera 2 s após criar o aviso ante
 de solicitar áudio. A espera usa ticks e não bloqueia LVGL; dispensar o aviso
 cancela o pedido. O teste no host cobre também esse cancelamento.
 
+A agenda civil de alarmes/lembretes é consultada uma vez por segundo em
+`Relogio_service`, ou na próxima passagem após criação, exclusão ou conclusão.
+Uma mudança de segundo por correção do relógio também provoca nova consulta.
+Timer e soneca usam prazos monotônicos e continuam verificados em cada poll,
+inclusive quando vencem entre duas consultas civis. O cálculo do próximo
+despertar permanece independente dessa redução de trabalho.
+
 `apps/Relogio_pages.c` implementa timer e criação/lista/detalhe dos alarmes como
 filhos do app. Um timer visual de 20 ms agrupa mudanças de página e texto do
 arco. O cronômetro consulta décimos a cada 100 ms e só altera textos quando

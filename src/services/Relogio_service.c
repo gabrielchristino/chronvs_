@@ -12,6 +12,8 @@ static int64_t snooze[CHRONVS_ALARM_LIMIT];
 static bool pending[CHRONVS_ALARM_LIMIT], timer_pending;
 static int64_t timer_deadline, anchor_us, anchor_seconds;
 static bool clock_valid;
+static bool civil_scan_valid;
+static int64_t civil_scan_seconds;
 static bool stopwatch_running;
 static int64_t stopwatch_elapsed_us, stopwatch_started_us;
 static nvs_handle_t storage;
@@ -51,6 +53,7 @@ void chronvs_Relogio_init(void) {
     memset(reminder_pending, 0, sizeof(reminder_pending));
     memset(reminders, 0, sizeof(reminders));
     clock_valid = timer_pending = false;
+    civil_scan_valid = false;
     timer_deadline = 0;
     stopwatch_running = false;
     stopwatch_elapsed_us = stopwatch_started_us = 0;
@@ -94,6 +97,11 @@ void chronvs_Relogio_poll(void) {
     }
     if (!clock_valid) return;
     int64_t seconds = clock_seconds();
+    /* Civil schedules have minute precision. Keep monotonic deadlines above
+     * this guard so a timer/snooze still expires within the current second. */
+    if (civil_scan_valid && seconds == civil_scan_seconds) return;
+    civil_scan_seconds = seconds;
+    civil_scan_valid = true;
     for (unsigned i = 0; i < CHRONVS_REMINDER_LIMIT; ++i)
         if (reminders[i].title[0] && !reminders[i].done && seconds >= reminder_seconds(&reminders[i]))
             reminder_pending[i] = true;
@@ -194,6 +202,7 @@ bool chronvs_alarm_create(uint8_t hour, uint8_t minute, uint8_t days) {
         /* A newly created alarm starts at the next occurrence. */
         last_day[i] = clock_valid && (clock_seconds() % 86400) / 60 == hour * 60 + minute
                           ? clock_seconds() / 86400 : -1;
+        civil_scan_valid = false;
         return true;
     }
     return false;
@@ -206,6 +215,7 @@ bool chronvs_alarm_delete(unsigned index) {
     pending[index] = false;
     snooze[index] = 0;
     last_day[index] = -1;
+    civil_scan_valid = false;
     return true;
 }
 int chronvs_Relogio_alert(void) {
@@ -254,6 +264,7 @@ static bool save_reminder(unsigned index, const chronvs_reminder_t *value) {
         return false;
     }
     reminder_pending[index] = false;
+    civil_scan_valid = false;
     ++reminder_revision;
     return true;
 }

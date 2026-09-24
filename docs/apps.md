@@ -112,6 +112,16 @@ da pilha de rede ocorre somente na primeira sessão. NTP e Clima adquirem a sess
 exclusiva em suas tarefas e desligam o rádio antes de liberar a próxima operação.
 Apps não chamam APIs globais de Wi-Fi. Não há nova consulta periódica de clima.
 
+NTP cria uma tarefa temporária de 6.144 bytes de pilha por sessão. Ao terminar,
+inclusive por falha de rede/NTP/RTC, libera a sessão Wi-Fi e exclui a tarefa;
+o FreeRTOS recupera sua memória na tarefa idle. O próximo prazo é monotônico,
+12 horas após o término da tentativa, e limita o light sleep junto da agenda.
+`chronvs_time_sync_poll()` roda na UI antes da decisão de suspensão e nunca
+executa rede ali. O indicador de atividade cobre criação, espera pela sessão
+exclusiva e limpeza. Falha ao criar a tarefa agenda nova tentativa em 60 s.
+Chamadas repetidas de `start` não duplicam tarefas. A caixa de resultado
+persiste fora da tarefa até a UI consumir a correção, mesmo com tela apagada.
+
 O painel rápido usa somente `chronvs_weather_init` e `chronvs_weather_get_snapshot`
 para exibir temperatura e condição salvas; não dispara consulta nem consome a
 caixa de resultados do app. Sem cache, omite a temperatura. `ui/weather_icon.c`

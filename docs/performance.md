@@ -155,3 +155,8 @@ vez de polling ocioso, e a consulta da agenda civil uma vez por segundo.
 Timer e soneca preservam seus prazos monotônicos em cada passagem do loop.
 Build e testes de serviço passaram; a redução de conversões da agenda foi
 medida no host, sem quantificar ganho de autonomia no dispositivo.
+
+O NTP passou a usar uma tarefa temporária por sessão, liberando a pilha
+entre sincronizações. Build e testes de NTP/Clima/Wi-Fi passaram, e o usuário
+confirmou "tudo certo nos testes" no relógio. O relato não discrimina cada
+cenário nem mede memória recuperada; os limites estão na análise de desempenho.

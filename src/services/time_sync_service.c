@@ -11,6 +11,7 @@
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_sntp.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -18,6 +19,7 @@
 
 #define NTP_SYNC_TIMEOUT_MS 15000
 #define SYNC_PERIOD_MS (12 * 60 * 60 * 1000)
+#define TASK_RETRY_MS 60000
 #define PCF85063_ADDRESS 0x51
 #define PCF85063_TIME_REGISTER 0x04
 
@@ -25,6 +27,8 @@ static const char *TAG = "time_sync";
 static portMUX_TYPE update_lock = portMUX_INITIALIZER_UNLOCKED;
 static chronvs_time_t synchronized_time;
 static bool update_pending;
+static bool scheduler_started, worker_active;
+static int64_t next_sync_us;
 
 bool chronvs_time_sync_take_update(chronvs_time_t *time) {
     portENTER_CRITICAL(&update_lock);
@@ -127,20 +131,58 @@ static bool synchronize_once(void) {
 
 static void time_sync_task(void *argument) {
     (void)argument;
-
-    while (true) {
-        synchronize_once();
-        vTaskDelay(pdMS_TO_TICKS(SYNC_PERIOD_MS));
-    }
+    synchronize_once();
+    portENTER_CRITICAL(&update_lock);
+    next_sync_us = esp_timer_get_time() + (int64_t)SYNC_PERIOD_MS * 1000;
+    worker_active = false;
+    portEXIT_CRITICAL(&update_lock);
+    /* Wi-Fi/SNTP are already stopped; idle task reclaims this task's stack. */
+    vTaskDelete(NULL);
 }
 
 void chronvs_time_sync_start(void) {
+    if (scheduler_started) return;
     if (!chronvs_wifi_session_configured()) {
         ESP_LOGI(TAG, "No Wi-Fi credentials; using PCF85063 only");
         return;
     }
+    scheduler_started = true;
+    chronvs_time_sync_poll();
+}
 
+void chronvs_time_sync_poll(void) {
+    if (!scheduler_started) return;
+    portENTER_CRITICAL(&update_lock);
+    bool due = !worker_active && esp_timer_get_time() >= next_sync_us;
+    if (due) worker_active = true;
+    portEXIT_CRITICAL(&update_lock);
+    if (!due) return;
     BaseType_t created = xTaskCreate(time_sync_task, "time_sync", 6144,
                                      NULL, 4, NULL);
-    if (created != pdPASS) ESP_LOGE(TAG, "Could not create time synchronization task");
+    if (created != pdPASS) {
+        portENTER_CRITICAL(&update_lock);
+        next_sync_us = esp_timer_get_time() + (int64_t)TASK_RETRY_MS * 1000;
+        worker_active = false;
+        portEXIT_CRITICAL(&update_lock);
+        ESP_LOGE(TAG, "Could not create time synchronization task");
+    }
+}
+
+bool chronvs_time_sync_active(void) {
+    portENTER_CRITICAL(&update_lock);
+    bool active = worker_active;
+    portEXIT_CRITICAL(&update_lock);
+    return active;
+}
+
+uint32_t chronvs_time_sync_next_wake_ms(uint32_t max_ms) {
+    if (!scheduler_started || !max_ms) return max_ms;
+    portENTER_CRITICAL(&update_lock);
+    bool active = worker_active;
+    int64_t remaining_us = next_sync_us - esp_timer_get_time();
+    portEXIT_CRITICAL(&update_lock);
+    if (active) return max_ms;
+    if (remaining_us <= 0) return 1;
+    int64_t remaining_ms = (remaining_us + 999) / 1000;
+    return remaining_ms < max_ms ? (uint32_t)remaining_ms : max_ms;
 }

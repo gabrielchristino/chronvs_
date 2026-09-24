@@ -52,6 +52,7 @@ void app_main(void) {
     const TickType_t ui_delay = pdMS_TO_TICKS(5) > 0 ? pdMS_TO_TICKS(5) : 1;
 
     while (true) {
+        chronvs_time_sync_poll();
         chronvs_time_t synchronized_time;
         if (chronvs_time_sync_take_update(&synchronized_time))
             chronvs_Relogio_observe_time(&synchronized_time);
@@ -63,9 +64,11 @@ void app_main(void) {
             display_was_off = true;
             /* AUTO/ECO stops capture; let the worker release I2S/model before sleep. */
             if (chronvs_voice_lab_active()) chronvs_voice_lab_stop();
-            if (!chronvs_wifi_session_active() && !chronvs_voice_lab_active()) {
+            if (!chronvs_wifi_session_active() && !chronvs_voice_lab_active() &&
+                !chronvs_time_sync_active()) {
                 chronvs_board_light_sleep(
-                    chronvs_Relogio_next_wake_ms(DISPLAY_OFF_MAX_SLEEP_MS));
+                    chronvs_time_sync_next_wake_ms(
+                        chronvs_Relogio_next_wake_ms(DISPLAY_OFF_MAX_SLEEP_MS)));
                 now = xTaskGetTickCount();
             }
         } else {

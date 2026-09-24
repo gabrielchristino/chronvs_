@@ -305,3 +305,33 @@ avaliar uma tarefa temporária sem perder o prazo, o resultado pendente para
 a UI ou a exclusão Wi-Fi compartilhada com Clima. Validar reconexão, falha
 de rede, suspensão e repetição de sessões antes de adotar a mudança.
 RTC e trabalho visual de mostrador/launcher permanecem na fila posterior.
+
+## Revisão NTP: tarefa temporária e prazo de suspensão
+
+A tarefa NTP foi convertida em uma sessão temporária: mantém os 6.144 bytes
+de pilha necessários durante rede e gravação do RTC, mas chama `vTaskDelete`
+após liberar o Wi-Fi. A tarefa idle do FreeRTOS recupera essa memória, em vez
+de mantê-la reservada durante as 12 horas entre tentativas. Não foi movida
+pilha para PSRAM nem criada uma tarefa adicional de agendamento.
+
+O loop principal consulta um prazo monotônico e cria no máximo uma sessão.
+Seu indicador de atividade impede light sleep desde a criação da tarefa,
+inclusive antes de adquirir o Wi-Fi compartilhado com Clima. O prazo de NTP
+também limita o tempo de suspensão. As 12 horas continuam contadas após o
+fim da tentativa, inclusive em falha de sincronização; falha de alocação da
+tarefa tem retry de 60 s, sem tentativas em cada passagem do loop. Sem
+credenciais não há tarefa nem despertar adicional. Resultados pendentes
+continuam disponíveis à UI após o fim da tarefa e falhas posteriores.
+
+`tests/run_ntp_tests.ps1` cobre o serviço real com periféricos simulados:
+inicialização idempotente, exclusão da tarefa, limite de despertar, tempo
+avançando durante suspensão, falhas Wi-Fi/NTP/RTC/criação de tarefa, nova
+tentativa, BCD escrito no RTC e resultado pendente. A exclusão Wi-Fi entre
+trabalhadores permanece coberta pelo teste de sessão compartilhada.
+Build padrão PlatformIO, testes NTP e testes de Clima/sessão Wi-Fi passaram.
+
+Após testar esta revisão no relógio, o usuário confirmou: "tudo certo nos
+testes". A etapa NTP passa a integrar a base validada pelo usuário. O relato
+não discrimina os cenários executados nem confirma individualmente a espera
+de 12 horas. A recuperação de memória é deduzida do ciclo de vida da tarefa;
+não houve medição fornecida de RAM interna, maior bloco DMA, consumo ou FPS.

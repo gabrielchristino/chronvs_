@@ -28,6 +28,8 @@ registram o diagnóstico das listras e distinguem o heap de objetos dos buffers 
 
 ## Estado validado
 
+- Fluidez do firmware padrão confirmada no relógio com LVGL em `-O2` e logs/consoles desativados. Histórico, limites e builds de diagnóstico em [`docs/performance.md`](docs/performance.md).
+
 - Compilação com PlatformIO `espressif32 @ 6.9.0` e ESP-IDF 5.3.1.
 - Configuração correta: ESP32-S3R8, 16 MB Flash e 8 MB OPI PSRAM.
 - I2C detectado: TCA9554 (`0x20`), PCF85063 RTC (`0x51`), touch SPD2010 (`0x53`) e QMI8658 (`0x6B`).
@@ -82,7 +84,9 @@ pio run -t upload
 
 `scripts/upload_waveshare.py` configura esse comando para gravar bootloader em `0x0`, tabela de partições em `0x10000` e firmware em `0x20000`. Assim, o esptool controla automaticamente o reset antes/depois do upload; não é necessário usar o botão `BOOT`, o botão `PWR` ou reconectar o USB em condições normais.
 
-Abra o monitor serial com:
+O firmware padrão não emite logs nem habilita consoles UART/USB. Para
+investigar um problema, grave `pio run -e display_profile_o2 -t upload` e
+abra o monitor serial com:
 
 ```powershell
 pio device monitor -p COM3 -b 115200
@@ -166,9 +170,11 @@ Não reintroduza o padrão colorido de `test_draw_bitmap()` sem garantir que tod
 
 ## Decisões técnicas e observações
 
+O procedimento de comparação de fluidez e os builds opcionais de diagnóstico
+estão em [`docs/performance.md`](docs/performance.md).
+
 - O driver Arduino-ESP32 distribuído com esta versão do PlatformIO não expõe o modo QSPI de quatro linhas necessário ao SPD2010. Por isso o projeto usa ESP-IDF e o driver oficial, que define `quad_mode = 1`.
-- `build_flags = -O0` é intencional: evita um erro interno do compilador observado com otimização ao compilar esta combinação de ESP-IDF/toolchain.
-- `build_type = debug` reforça o workaround do compilador durante a compilação dos componentes ESP-IDF.
+- O build padrão compila somente o LVGL com `-O2`, após validação de fluidez e funcionamento no relógio. Aplicação e drivers mantêm o modo debug, com `-Og` efetivo apesar do `-O0` declarado no INI. O histórico e os diagnósticos estão em [`docs/performance.md`](docs/performance.md).
 - `CONFIG_SPIRAM_USE_CAPS_ALLOC=y` permite que os buffers LVGL sejam alocados corretamente na PSRAM OPI.
 - A partição e o Flash são explicitamente configurados para 16 MB; a mensagem de “Expected 16MB, found 2MB” deixa de ocorrer com `sdkconfig.defaults` aplicado.
 - A fonte de referência da Waveshare está em `.vendor-reference/`, ignorada pelo Git. Não a remova enquanto quiser compilar localmente.

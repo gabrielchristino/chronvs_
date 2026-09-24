@@ -381,6 +381,19 @@ lista e arcos. A simulação LVGL no host não mede fluidez nem áudio físicos.
 
 ## Renderização e desempenho
 
+O build padrão não habilita logs de software nem consoles UART/USB. A saída
+serial do Vox e os diagnósticos de memória/tempo ficam nos builds opcionais
+descritos em [`performance.md`](performance.md); o conteúdo exibido na tela
+permanece igual. Mensagens iniciais da ROM são independentes dessa política.
+
+O firmware padrão compila o LVGL com `-O2`, sem logs de diagnóstico, após o
+usuário confirmar maior fluidez e funcionamento de Clima, timer com som,
+apagar/acordar e navegação no relógio. Os parâmetros do display e os gestos
+permanecem iguais. A comparação com o LVGL em debug e os limites dessa
+validação estão em [`performance.md`](performance.md).
+Após o upload do padrão com `-O2` e sem logs/consoles, o usuário confirmou
+o relógio extremamente fluido; essa é a base atual validada no dispositivo.
+
 O projeto usa **LVGL 8.3.11**, distribuído na referência oficial da Waveshare.
 Embora muitos guias recentes tratem de LVGL 9, os princípios de reduzir áreas
 invalidadas e evitar trabalho por quadro continuam válidos, mas os detalhes do

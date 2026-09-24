@@ -11,7 +11,8 @@ detecção, nenhuma linha `VOX:` é emitida.
 
 ## Coleta no relógio
 
-1. Grave o firmware e abra o monitor serial a 115200 baud.
+1. Grave `pio run -e display_profile_o2 -t upload` e abra o monitor serial
+   a 115200 baud. O firmware padrão mantém o texto no visor, mas não emite logs.
 2. Abra Vox, toque no microfone e diga **uma** palavra cadastrada por vez.
    A escuta continua até tocar no microfone novamente ou sair do app.
 3. Para cada palavra, faça pelo menos cinco tentativas com a mesma pronúncia,

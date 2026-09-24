@@ -2,6 +2,8 @@ Import("env")
 from os.path import join
 import os
 import subprocess
+import re
+from pathlib import Path
 
 # On this PC CC/CXX point to a desktop MinGW GCC. ESP-IDF must let PlatformIO
 # select its bundled Xtensa cross-compiler instead.
@@ -349,6 +351,19 @@ if panel_text != original_panel_text:
     with open(panel_source, "w", encoding="utf-8", newline="") as source_file:
         source_file.write(panel_text)
 
+# Keep direct vendor prints behind the same compile-time logging policy as
+# ESP_LOG. Patch only drivers actually compiled by Chronvs, persistently.
+for relative in ("EXIO/TCA9554PWR.c", "Touch_Driver/Touch_SPD2010.c",
+                 "LCD_Driver/Display_SPD2010.c"):
+    source_path = Path(driver_dir) / relative
+    original = source_path.read_text(encoding="utf-8")
+    patched = re.sub(r"\bprintf\s*\(", "CHRONVS_DRIVER_PRINTF(", original)
+    include = '#include "platform/driver_log.h"'
+    if include not in patched:
+        patched = include + "\n" + patched
+    if patched != original:
+        source_path.write_text(patched, encoding="utf-8")
+
 env.Append(CPPPATH=[
     join(driver_dir, "I2C_Driver"),
     join(driver_dir, "EXIO"),
@@ -379,7 +394,16 @@ env.BuildSources(
 # Use the exact LVGL 8.3.11 component distributed in the Waveshare ESP-IDF
 # example. It provides correct text rasterisation and the vendor's flush/touch
 # callbacks for this QSPI panel.
-env.BuildSources(
+lvgl_optimization = env.GetProjectOption("custom_lvgl_optimization", "-O0")
+if lvgl_optimization not in ("-O0", "-O2"):
+    raise RuntimeError("Unsupported Chronvs LVGL optimization")
+lvgl_label = "-O2" if lvgl_optimization == "-O2" else "baseline-debug"
+env.Append(CPPDEFINES=[("CHRONVS_LVGL_OPT_LABEL", '\\"' + lvgl_label + '\\"')])
+lvgl_env = env if lvgl_optimization == "-O0" else env.Clone()
+if lvgl_env is not env:
+    env["CHRONVS_LVGL_ENV"] = lvgl_env
+
+lvgl_env.BuildSources(
     join("$BUILD_DIR", "waveshare_lvgl"),
     lvgl_dir,
     src_filter="+<src/>",

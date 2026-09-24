@@ -92,6 +92,9 @@ quando o usuário inicia a escuta. O serviço entrega à UI o campo `string` do
 resultado, sem mapear o ID para uma palavra portuguesa, e registra a mesma
 saída na serial com prefixo `VOX:`. A escuta continua até o usuário interromper
 ou sair do app; `on_hide` solicita a parada e o timer visual é pausado.
+Essa saída serial, assim como os logs de apps e memória, só fica habilitada
+nos builds de diagnóstico. O firmware padrão mantém o texto do Vox na tela,
+com logs e consoles desativados; veja [`performance.md`](performance.md).
 
 `services/weather_service.c` mantém cache NVS e uma caixa de resultado sob mutex.
 `services/weather_data.c` valida JSON, horário civil e códigos WMO sem acessar

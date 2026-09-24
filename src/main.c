@@ -10,6 +10,7 @@
 #include "core/app_manager.h"
 #include "core/calendar.h"
 #include "platform/board.h"
+#include "platform/display_profile.h"
 #include "services/battery_service.h"
 #include "services/rtc_service.h"
 #include "services/time_sync_service.h"
@@ -32,6 +33,7 @@ static int64_t civil_seconds(const chronvs_time_t *time) {
 void app_main(void) {
     ESP_LOGI(TAG, "Chronvs application runtime starting");
     chronvs_board_init();
+    chronvs_display_profile_init();
     chronvs_battery_init();
 
     chronvs_app_manager_init(lv_scr_act());
@@ -105,6 +107,7 @@ void app_main(void) {
         chronvs_Relogio_poll();
         chronvs_Relogio_alert_poll();
         lv_timer_handler();
+        chronvs_display_profile_poll(chronvs_system_ui_display_is_off());
         vTaskDelay(pdMS_TO_TICKS(5));
     }
 }

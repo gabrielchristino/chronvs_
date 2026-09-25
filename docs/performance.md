@@ -74,6 +74,58 @@ builds simultâneos: o script de preparação compartilha a referência Waveshar
 
 ## Leitura dos logs
 
+### Captura e resumo por cenário
+
+Com o firmware `display_profile_o2` gravado, aguarde terminar o NTP e abra
+o monitor abaixo. O filtro instalado `log2file` salva a saída em
+`logs/device-monitor-<data-hora>.log` e imprime o caminho ao iniciar.
+Essa pasta é ignorada pelo Git. O padrão sem diagnóstico não produz essas métricas.
+
+```powershell
+pio device monitor -e display_profile_o2 -p COM3 -b 115200 -f log2file
+```
+
+Faça uma captura separada de cerca de 15 s para cada cenário: mostrador
+parado, abrir/fechar painel continuamente, rolar launcher continuamente.
+Encerre com Ctrl+C entre capturas e anote qual arquivo corresponde a cada
+cenário. Remova do arquivo de análise as linhas de transição entre cenários;
+um resumo representa a janela inteira anterior, de aproximadamente 2 s.
+Mantenha brilho, perfil de energia e ritmo dos gestos comparáveis. Feche o
+monitor antes de trocar firmware. A coleta requer interação física no relógio.
+
+Analise os arquivos (substituindo os nomes pelos caminhos salvos):
+
+```powershell
+python scripts/analyze_display_profile.py logs/mostrador.log logs/painel.log logs/launcher.log
+```
+
+Se Python não estiver no PATH, use
+`C:\Users\gabri\.platformio\penv\Scripts\python.exe` com `&` no PowerShell.
+O relatório JSON separa arquivos e a otimização informada no banner, quando
+presente; `unknown` significa que o banner não foi capturado. Não deduz o
+build a partir da velocidade observada. Use arquivos distintos também para
+builds ou sessões diferentes.
+
+- As médias de refresh, flush e pixels são ponderadas por quadros; o sufixo
+  `_approx` lembra que o firmware já arredondou cada média para baixo.
+- `refreshes_per_observed_second` considera apenas as janelas presentes no
+  arquivo. Não é FPS máximo nem média de toda a sessão: intervalos apagados,
+  sem redraw e logs ausentes não entram no denominador.
+- Tempos máximos preservam o maior valor; memória usa o menor valor amostrado.
+  Os mínimos não estabelecem um limite seguro de RAM/DMA.
+- `touch_windows` informa quantas janelas contêm as métricas novas de touch.
+  Logs antigos sem esses campos produzem `null`, não uma falsa medição zero.
+- Linhas incompletas/inconsistentes geram aviso e saída com código 1; as
+  janelas válidas ainda são resumidas. Um arquivo sem dados também falha.
+  Perdas de linhas inteiras ou truncamento que preserve números válidos não
+  são detectáveis sem numeração/checksum no protocolo.
+
+A ferramenta não conecta à serial nem altera firmware. Validação:
+`python tests/test_display_profile_analysis.py`, usando dados sintéticos para
+ponderação, extremos, arquivos UTF-8/UTF-16, logs antigos e entradas inválidas.
+
+### Campos emitidos pelo firmware
+
 O prefixo `display_perf` identifica resumos emitidos no máximo uma vez a cada
 2 segundos, sem logging por frame ou por bloco QSPI:
 

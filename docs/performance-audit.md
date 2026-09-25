@@ -433,3 +433,18 @@ o touch aqui". O funcionamento do toque está validado pelo relato no relógio;
 a cadência de 30 ms e o debounce permanecem iguais. Não há regressão de toque
 relatada que motive alterá-los. A captura de métricas permanece disponível
 para uma investigação futura; latência, FPS e autonomia não foram medidos.
+
+## Continuação: análise das medições de gestos
+
+Após `cbce002`, a preparação da etapa quantitativa ganhou
+`scripts/analyze_display_profile.py`. O utilitário resume arquivos de captura
+por cenário e otimização anunciada, com médias ponderadas pelo número de
+quadros, máximos de tempo e mínimos de memória amostrada. Recusa janelas
+incompletas e mantém explícita a ausência de métricas nos logs antigos.
+Os cinco testes automatizados passaram com dados sintéticos; não representam
+medições do relógio. O procedimento de captura está em `performance.md`.
+
+Esta etapa não altera o firmware. A próxima decisão de otimização depende
+dos logs de mostrador, painel e launcher no build de diagnóstico O2. Cadência
+do touch e espera adaptativa do loop são candidatos à avaliação, não mudanças
+já adotadas; FPS, latência física e autonomia continuam sem medição fornecida.

@@ -8,6 +8,7 @@
 
 #include "apps/watch_app.h"
 #include "apps/app_catalog.h"
+#include "platform/display_profile.h"
 #include "services/Relogio_service.h"
 #include "core/app_manager.h"
 #include "ui/system_ui.h"
@@ -401,16 +402,21 @@ static void draw_date_marker(lv_draw_ctx_t *ctx, float cx, float cy) {
 }
 
 static void clock_draw_event(lv_event_t *event) {
+    CHRONVS_WATCH_PROFILE_BEGIN();
     lv_draw_ctx_t *ctx = lv_event_get_draw_ctx(event);
     lv_obj_t *object = lv_event_get_target(event);
     const lv_area_t *original_clip = ctx->clip_area;
     lv_area_t visible_clip = *original_clip;
-    if (!visible_clock_clip(object, &visible_clip)) return;
+    if (!visible_clock_clip(object, &visible_clip)) {
+        CHRONVS_WATCH_PROFILE_MARK(SETUP);
+        return;
+    }
     ctx->clip_area = &visible_clip;
     const lv_area_t *coords = &object->coords;
     const float cx = (coords->x1 + coords->x2) * 0.5f;
     const float cy = (coords->y1 + coords->y2) * 0.5f;
     update_chapter_geometry(cx, cy, displayed_time.day);
+    CHRONVS_WATCH_PROFILE_MARK(SETUP);
 
     /*
      * The custom object has no normal LVGL background. Clear every pixel in
@@ -422,6 +428,7 @@ static void clock_draw_event(lv_event_t *event) {
     background_dsc.bg_opa = LV_OPA_COVER;
     background_dsc.border_opa = LV_OPA_TRANSP;
     lv_draw_rect(ctx, &background_dsc, coords);
+    CHRONVS_WATCH_PROFILE_MARK(BACKGROUND);
 
     const int64_t elapsed_us = esp_timer_get_time() - displayed_time_us;
     const float elapsed_seconds = (float)elapsed_us / 1000000.0f;
@@ -435,9 +442,13 @@ static void clock_draw_event(lv_event_t *event) {
     const float weekday_angle = displayed_time.weekday * (360.0f / 7.0f) +
                                 hours * (360.0f / (7.0f * 24.0f));
 
+    CHRONVS_WATCH_PROFILE_MARK(GEOMETRY);
     draw_fixed_case(ctx, cx, cy);
+    CHRONVS_WATCH_PROFILE_MARK(CASE);
     draw_mother_disk(ctx, cx, cy, minute_angle);
+    CHRONVS_WATCH_PROFILE_MARK(MOTHER);
     draw_minute_chapter(ctx);
+    CHRONVS_WATCH_PROFILE_MARK(MINUTES);
 
     /*
      * Local mother-disk coordinates are rotated for orbital translation.
@@ -458,14 +469,20 @@ static void clock_draw_event(lv_event_t *event) {
     const point_f_t weekday_orbit = rotate_offset(weekday_local, minute_angle);
     const point_f_t seconds_orbit = rotate_offset(seconds_local, minute_angle);
     const point_f_t temperature_orbit = rotate_offset(temperature_local, minute_angle);
+    CHRONVS_WATCH_PROFILE_MARK(GEOMETRY);
 
     draw_hour_dial(ctx, cx + hour_orbit.x, cy + hour_orbit.y, hour_angle);
+    CHRONVS_WATCH_PROFILE_MARK(HOURS);
     draw_weekday_dial(ctx, cx + weekday_orbit.x, cy + weekday_orbit.y,
                       weekday_angle, displayed_time.weekday, displayed_time.hour);
+    CHRONVS_WATCH_PROFILE_MARK(WEEKDAY);
     draw_temperature_dial(ctx, cx + temperature_orbit.x, cy + temperature_orbit.y,
                           ambient_temperature_c);
+    CHRONVS_WATCH_PROFILE_MARK(TEMPERATURE);
     draw_seconds_dial(ctx, cx + seconds_orbit.x, cy + seconds_orbit.y, second_angle);
+    CHRONVS_WATCH_PROFILE_MARK(SECONDS);
     draw_date_marker(ctx, cx, cy);
+    CHRONVS_WATCH_PROFILE_MARK(MARKER);
     ctx->clip_area = original_clip;
 }
 

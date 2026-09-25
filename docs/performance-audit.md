@@ -571,3 +571,27 @@ O leitor do touch levou no máximo 2.023 us em toda a captura. O principal
 custo continua fora do flush. Próximo passo: instrumentar separadamente os
 grupos de desenho vetorial antes de escolher outra otimização; não alterar
 touch, QSPI ou buffers a partir dessa diferença pequena.
+
+## Instrumentação por grupo do mostrador
+
+Após `65611d4`, os diagnósticos passam a acumular tempos de setup, fundo,
+geometria, aros/data, disco central, escala de minutos, quatro submostradores
+e marcador. Totais de todas as faixas ficam na mesma janela do refresh.
+`watch_frames` permite calcular médias sem diluí-las com quadros de outros
+apps; `watch_slices` identifica quantas vezes o callback foi executado.
+O analisador aceita tanto logs novos completos quanto antigos sem esses campos.
+
+A instrumentação não muda o desenho ou seus parâmetros. É removida por macros
+no padrão, cujo build preservou RAM estática de 54.900 bytes e flash de
+1.661.040 bytes. Nos diagnósticos, os tempos incluem preempções e custo dos
+marcadores; não devem ser tratados como uma medição sem interferência.
+Definições e procedimento da próxima captura estão em `performance.md`.
+
+Builds padrão e O2 passaram. Os seis testes do analisador cobrem médias
+ponderadas, campos ausentes/incompletos e janelas sem mostrador. A suíte
+integrada executou o mostrador com instrumentação, verificou acumulação de
+duas faixas em um refresh e descarte dos contadores com tela apagada, e passou.
+As 16 imagens permaneceram idênticas por SHA-256. O diagnóstico O2 usa
+58.160 bytes de RAM estática, 96 bytes a mais que antes. Falta a captura física
+com os novos campos para localizar o grupo dominante; não há ganho de
+renderização alegado nesta etapa de instrumentação.

@@ -15,6 +15,10 @@ TOUCH = (
     "touch_reads", "touch_read_max_us", "touch_gap_max_us",
     "interaction_frames", "frame_gap_max_us", "input_refresh_max_us",
 )
+WATCH_TIMES = tuple("watch_" + name + "_us" for name in (
+    "setup", "background", "geometry", "case", "mother", "minutes", "hours",
+    "weekday", "temperature", "seconds", "marker"))
+WATCH = ("watch_frames", "watch_slices") + WATCH_TIMES
 
 
 def parse(text):
@@ -42,12 +46,16 @@ def parse(text):
                 break
             fields[match[1]] = int(match[2])
         has_touch = any(key in fields for key in TOUCH)
+        has_watch = any(key in fields for key in WATCH)
         if (not valid or not all(key in fields for key in REQUIRED)
                 or not fields.get("window_ms") or not fields.get("frames")
                 or fields.get("over20", 0) > fields.get("frames", 0)
                 or fields.get("refresh_avg_ms", 0) > fields.get("refresh_max_ms", 0)
                 or (has_touch and not all(key in fields for key in TOUCH))
-                or fields.get("interaction_frames", 0) > fields.get("frames", 0)):
+                or fields.get("interaction_frames", 0) > fields.get("frames", 0)
+                or (has_watch and not all(key in fields for key in WATCH))
+                or fields.get("watch_frames", 0) > fields.get("frames", 0)
+                or fields.get("watch_frames", 0) > fields.get("watch_slices", 0)):
             rejected += 1
             continue
         groups.setdefault(optimization, []).append(fields)
@@ -75,6 +83,15 @@ def summarize(windows):
         values = [row[key] for row in touch]
         result[key] = (sum(values) if key in ("touch_reads", "interaction_frames")
                        else max(values)) if values else None
+    watch = [row for row in windows if "watch_frames" in row]
+    result["watch_windows"] = len(watch)
+    watch_frames = sum(row["watch_frames"] for row in watch)
+    result["watch_frames"] = watch_frames if watch else None
+    result["watch_slices"] = sum(row["watch_slices"] for row in watch) if watch else None
+    result["watch_section_avg_us"] = {
+        key: round(sum(row[key] for row in watch) / watch_frames, 3)
+        if watch_frames else None for key in WATCH_TIMES
+    }
     return result
 
 

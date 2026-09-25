@@ -126,6 +126,45 @@ ponderação, extremos, arquivos UTF-8/UTF-16, logs antigos e entradas inválida
 
 ### Campos emitidos pelo firmware
 
+Os diagnósticos também separam o desenho vetorial do mostrador. Estes campos
+ficam na mesma linha `display_perf` e são **totais em microssegundos por
+janela**, não médias por faixa:
+
+| Campo | Trecho medido |
+| --- | --- |
+| `watch_setup_us` | Contexto, recorte de superfícies opacas e atualização do cache |
+| `watch_background_us` | Limpeza opaca do fundo |
+| `watch_geometry_us` | Interpolação da hora, ângulos e posições orbitais |
+| `watch_case_us` | Aros externos e números da data |
+| `watch_mother_us` | Disco central, ponteiro de minutos e centro |
+| `watch_minutes_us` | Escala de minutos, números e traços |
+| `watch_hours_us` | Submostrador de horas |
+| `watch_weekday_us` | Submostrador de dia da semana |
+| `watch_temperature_us` | Submostrador de temperatura |
+| `watch_seconds_us` | Submostrador de segundos |
+| `watch_marker_us` | Marcador fixo da data |
+
+`watch_slices` conta entradas no callback customizado, inclusive as que saem
+por estarem cobertas. `watch_frames` conta atualizações concluídas em que ele
+foi chamado, no máximo uma vez por refresh, mesmo com várias faixas.
+Não é uma contagem de telas inteiras nem prova visibilidade no painel.
+O analisador soma cada grupo e divide por `watch_frames`, produzindo
+`watch_section_avg_us`. Janelas sem mostrador não diluem a média; logs antigos
+ou capturas sem quadros do mostrador retornam `null`. `watch_windows` informa
+a cobertura desses campos na captura.
+
+Os tempos incluem preempções e pequeno custo da instrumentação. Os grupos não
+se sobrepõem, mas sua soma não inclui todo o refresh LVGL nem o flush QSPI.
+Não some esses valores novamente ao tempo de refresh. Os marcadores não
+criam tarefa, alocação ou saída serial por faixa; o resumo continua a cada 2 s.
+No build padrão, macros eliminam os marcadores e seus acessos ao relógio.
+
+Para localizar o custo principal, repita o upload de `display_profile_o2` e
+capture primeiro pelo menos 15 s do mostrador parado, depois painel/launcher
+em arquivos separados. Envie também o resultado do upload, pois o parâmetro
+`-e` do monitor não comprova o firmware gravado. Não compare pequenos ganhos
+com uma captura sem essa instrumentação adicional como se o custo fosse igual.
+
 O prefixo `display_perf` identifica resumos emitidos no máximo uma vez a cada
 2 segundos, sem logging por frame ou por bloco QSPI:
 

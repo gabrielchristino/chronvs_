@@ -18,7 +18,9 @@
 #include <stdlib.h>
 
 /* Exercise diagnostic wrappers with the real LVGL input and display drivers. */
+#ifndef CHRONVS_DISPLAY_PROFILE
 #define CHRONVS_DISPLAY_PROFILE
+#endif
 #define CHRONVS_LVGL_OPT_LABEL "host"
 #define pixels profile_pixels
 #include "platform/display_profile.c"
@@ -438,7 +440,23 @@ int main(void) {
         (unsigned)memory.free_size,(unsigned)memory.free_biggest_size);
     tap(206,307); chronvs_Relogio_alert_poll(); assert(!reminder_ringing && chronvs_reminder_get(0)->done);
     assert(weather_rtc_reads==0); /* Apps use the shared clock, never I2C. */
+    assert(watch_frames > 0 && watch_slices > watch_frames);
     chronvs_display_profile_poll(true);
     assert(frames==0 && touch_reads==0 && pending_input_us==0);
+    assert(watch_frames==0 && watch_slices==0);
+    int64_t profile_test_start = chronvs_display_profile_watch_begin();
+    now_us += 100;
+    profile_test_start = chronvs_display_profile_watch_mark(CHRONVS_WATCH_SETUP, profile_test_start);
+    now_us += 200;
+    chronvs_display_profile_watch_mark(CHRONVS_WATCH_CASE, profile_test_start);
+    profile_test_start = chronvs_display_profile_watch_begin();
+    now_us += 50;
+    chronvs_display_profile_watch_mark(CHRONVS_WATCH_CASE, profile_test_start);
+    profile_monitor(NULL, 1, 1);
+    assert(watch_frames==1 && watch_slices==2);
+    assert(watch_us[CHRONVS_WATCH_SETUP]==100 && watch_us[CHRONVS_WATCH_CASE]==250);
+    chronvs_display_profile_poll(true);
+    assert(watch_frames==0 && watch_slices==0 && !watch_in_refresh);
+    for (unsigned i=0;i<CHRONVS_WATCH_SECTION_COUNT;++i) assert(watch_us[i]==0);
     return 0;
 }

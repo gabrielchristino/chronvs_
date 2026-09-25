@@ -10,6 +10,7 @@ try {
         'tests/Relogio_ui_test.c', 'src/services/Relogio_service.c', 'src/core/calendar.c', 'src/core/Notas_text.c', 'src/ui/Notas_font.c', 'src/ui/Relogio_widgets.c', 'src/ui/control_style.c') + $sources + @('-o', '.pio/host-tests/Relogio_ui_test.exe')
     $executable = '.pio/host-tests/Relogio_ui_test.exe'
     if ($System) {
+        $arguments += @('-DCHRONVS_DISPLAY_PROFILE')
         $executable = '.pio/host-tests/system_ui_test.exe'
         $arguments = $arguments | ForEach-Object {
             if ($_ -eq 'tests/Relogio_ui_test.c') { 'tests/system_ui_test.c' }

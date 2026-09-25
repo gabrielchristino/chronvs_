@@ -20,6 +20,22 @@ static uint32_t interaction_frames, frame_gap_max_us, input_refresh_max_us;
 static int64_t last_touch_us, last_frame_us, pending_input_us;
 static bool touching;
 static lv_point_t last_point;
+static uint64_t watch_us[CHRONVS_WATCH_SECTION_COUNT];
+static uint32_t watch_frames, watch_slices;
+static bool watch_in_refresh;
+
+int64_t chronvs_display_profile_watch_begin(void) {
+    ++watch_slices;
+    watch_in_refresh = true;
+    return esp_timer_get_time();
+}
+
+int64_t chronvs_display_profile_watch_mark(chronvs_watch_section_t section, int64_t start) {
+    const int64_t now = esp_timer_get_time();
+    if ((unsigned)section < CHRONVS_WATCH_SECTION_COUNT && now >= start)
+        watch_us[section] += (uint64_t)(now - start);
+    return now;
+}
 
 static void profile_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
     const int64_t start = esp_timer_get_time();
@@ -64,6 +80,8 @@ static void profile_monitor(lv_disp_drv_t *drv, uint32_t elapsed, uint32_t px) {
         pending_input_us = 0;
     }
     ++frames;
+    if (watch_in_refresh) ++watch_frames;
+    watch_in_refresh = false;
     refresh_ms += elapsed;
     pixels += px;
     if (elapsed > 20) ++slow_frames;
@@ -102,13 +120,26 @@ void chronvs_display_profile_poll(bool display_off) {
                  " px_avg=%" PRIu64 " internal_free=%u dma_largest=%u"
                  " touch_reads=%" PRIu32 " touch_read_max_us=%" PRIu32
                  " touch_gap_max_us=%" PRIu32 " interaction_frames=%" PRIu32
-                 " frame_gap_max_us=%" PRIu32 " input_refresh_max_us=%" PRIu32,
+                 " frame_gap_max_us=%" PRIu32 " input_refresh_max_us=%" PRIu32
+                 " watch_frames=%" PRIu32 " watch_slices=%" PRIu32
+                 " watch_setup_us=%" PRIu64 " watch_background_us=%" PRIu64
+                 " watch_geometry_us=%" PRIu64 " watch_case_us=%" PRIu64
+                 " watch_mother_us=%" PRIu64 " watch_minutes_us=%" PRIu64
+                 " watch_hours_us=%" PRIu64 " watch_weekday_us=%" PRIu64
+                 " watch_temperature_us=%" PRIu64 " watch_seconds_us=%" PRIu64
+                 " watch_marker_us=%" PRIu64,
                  (now - window_start) / 1000, frames, refresh_ms / frames,
                  max_ms, slow_frames, flush_us / frames, pixels / frames,
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
                  (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA),
                  touch_reads, touch_read_max_us, touch_gap_max_us, interaction_frames,
-                 frame_gap_max_us, input_refresh_max_us);
+                 frame_gap_max_us, input_refresh_max_us, watch_frames, watch_slices,
+                 watch_us[CHRONVS_WATCH_SETUP], watch_us[CHRONVS_WATCH_BACKGROUND],
+                 watch_us[CHRONVS_WATCH_GEOMETRY], watch_us[CHRONVS_WATCH_CASE],
+                 watch_us[CHRONVS_WATCH_MOTHER], watch_us[CHRONVS_WATCH_MINUTES],
+                 watch_us[CHRONVS_WATCH_HOURS], watch_us[CHRONVS_WATCH_WEEKDAY],
+                 watch_us[CHRONVS_WATCH_TEMPERATURE], watch_us[CHRONVS_WATCH_SECONDS],
+                 watch_us[CHRONVS_WATCH_MARKER]);
     }
     frames = slow_frames = max_ms = 0;
     flush_us = refresh_ms = pixels = 0;
@@ -116,6 +147,9 @@ void chronvs_display_profile_poll(bool display_off) {
     touch_reads = touch_read_max_us = touch_gap_max_us = 0;
     interaction_frames = frame_gap_max_us = input_refresh_max_us = 0;
     last_touch_us = last_frame_us = pending_input_us = 0;
+    for (unsigned i = 0; i < CHRONVS_WATCH_SECTION_COUNT; ++i) watch_us[i] = 0;
+    watch_frames = watch_slices = 0;
+    watch_in_refresh = false;
     if (discard) touching = false;
 }
 #endif

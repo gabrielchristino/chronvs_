@@ -19,6 +19,25 @@ def window(**changes):
 
 
 class ProfileAnalysisTest(unittest.TestCase):
+    def test_watch_totals_use_watch_frames_not_all_frames_or_slices(self):
+        counters = {key: 100 for key in MODULE["WATCH_TIMES"]}
+        first = window(frames=10, watch_frames=2, watch_slices=40, **counters)
+        second = window(frames=8, watch_frames=1, watch_slices=21,
+                        **{key: 500 for key in counters})
+        groups, bad = MODULE["parse"]("\n".join((first, window(), second)))
+        result = MODULE["summarize"](groups["unknown"])
+        self.assertEqual(bad, 0)
+        self.assertEqual(result["watch_windows"], 2)
+        self.assertEqual(result["watch_frames"], 3)
+        self.assertEqual(result["watch_slices"], 61)
+        self.assertEqual(result["watch_section_avg_us"]["watch_case_us"], 200)
+        groups, bad = MODULE["parse"](window(watch_frames=0, watch_slices=0,
+                                             **{key: 0 for key in counters}))
+        self.assertIsNone(MODULE["summarize"](groups["unknown"])["watch_section_avg_us"]["watch_case_us"])
+        for row in (window(watch_frames=1), window(watch_frames=3, watch_slices=50, **counters),
+                    window(watch_frames=2, watch_slices=1, **counters)):
+            self.assertEqual(MODULE["parse"](row), ({}, 1))
+
     def test_weighted_averages_duration_and_memory_minima(self):
         text = window() + "\n" + window(window_ms=3000, frames=8, refresh_avg_ms=30,
             refresh_max_ms=40, over20=5, flush_avg_us=10000, internal_free=30000,

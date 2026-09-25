@@ -124,6 +124,7 @@ void chronvs_display_profile_poll(bool display_off) {
                  " watch_frames=%" PRIu32 " watch_slices=%" PRIu32
                  " watch_setup_us=%" PRIu64 " watch_background_us=%" PRIu64
                  " watch_geometry_us=%" PRIu64 " watch_case_us=%" PRIu64
+                 " watch_rings_us=%" PRIu64 " watch_dates_us=%" PRIu64
                  " watch_mother_us=%" PRIu64 " watch_minutes_us=%" PRIu64
                  " watch_hours_us=%" PRIu64 " watch_weekday_us=%" PRIu64
                  " watch_temperature_us=%" PRIu64 " watch_seconds_us=%" PRIu64
@@ -135,7 +136,9 @@ void chronvs_display_profile_poll(bool display_off) {
                  touch_reads, touch_read_max_us, touch_gap_max_us, interaction_frames,
                  frame_gap_max_us, input_refresh_max_us, watch_frames, watch_slices,
                  watch_us[CHRONVS_WATCH_SETUP], watch_us[CHRONVS_WATCH_BACKGROUND],
-                 watch_us[CHRONVS_WATCH_GEOMETRY], watch_us[CHRONVS_WATCH_CASE],
+                 watch_us[CHRONVS_WATCH_GEOMETRY],
+                 watch_us[CHRONVS_WATCH_RINGS] + watch_us[CHRONVS_WATCH_DATES],
+                 watch_us[CHRONVS_WATCH_RINGS], watch_us[CHRONVS_WATCH_DATES],
                  watch_us[CHRONVS_WATCH_MOTHER], watch_us[CHRONVS_WATCH_MINUTES],
                  watch_us[CHRONVS_WATCH_HOURS], watch_us[CHRONVS_WATCH_WEEKDAY],
                  watch_us[CHRONVS_WATCH_TEMPERATURE], watch_us[CHRONVS_WATCH_SECONDS],

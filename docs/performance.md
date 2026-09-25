@@ -136,6 +136,8 @@ janela**, não médias por faixa:
 | `watch_background_us` | Limpeza opaca do fundo |
 | `watch_geometry_us` | Interpolação da hora, ângulos e posições orbitais |
 | `watch_case_us` | Aros externos e números da data |
+| `watch_rings_us` | Somente os dois círculos externos, com preenchimento e borda |
+| `watch_dates_us` | Somente os 31 números da data |
 | `watch_mother_us` | Disco central, ponteiro de minutos e centro |
 | `watch_minutes_us` | Escala de minutos, números e traços |
 | `watch_hours_us` | Submostrador de horas |
@@ -143,6 +145,15 @@ janela**, não médias por faixa:
 | `watch_temperature_us` | Submostrador de temperatura |
 | `watch_seconds_us` | Submostrador de segundos |
 | `watch_marker_us` | Marcador fixo da data |
+
+`watch_case_us` é a soma de `watch_rings_us` e `watch_dates_us`, preservada
+para comparação com logs anteriores. Esses dois detalhes **não devem ser
+somados novamente ao total**. O analisador os apresenta separadamente em
+`watch_case_detail_avg_us`, com cobertura em `watch_case_detail_windows` e
+`watch_case_detail_frames`. Só janelas com ambos os detalhes entram nessas
+médias; logs antigos retornam `null`. Detalhes incompletos ou cuja soma difere
+de `watch_case_us` tornam a linha inválida. O marcador triangular da data
+continua em `watch_marker_us`, fora dessa soma.
 
 `watch_slices` conta entradas no callback customizado, inclusive as que saem
 por estarem cobertas. `watch_frames` conta atualizações concluídas em que ele
@@ -153,8 +164,9 @@ O analisador soma cada grupo e divide por `watch_frames`, produzindo
 ou capturas sem quadros do mostrador retornam `null`. `watch_windows` informa
 a cobertura desses campos na captura.
 
-Os tempos incluem preempções e pequeno custo da instrumentação. Os grupos não
-se sobrepõem, mas sua soma não inclui todo o refresh LVGL nem o flush QSPI.
+Os tempos incluem preempções e pequeno custo da instrumentação. Os grupos
+principais não se sobrepõem (os detalhes de `case` já estão incluídos nele),
+mas sua soma não inclui todo o refresh LVGL nem o flush QSPI.
 Não some esses valores novamente ao tempo de refresh. Os marcadores não
 criam tarefa, alocação ou saída serial por faixa; o resumo continua a cada 2 s.
 No build padrão, macros eliminam os marcadores e seus acessos ao relógio.

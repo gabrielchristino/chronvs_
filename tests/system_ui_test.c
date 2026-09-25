@@ -448,13 +448,14 @@ int main(void) {
     now_us += 100;
     profile_test_start = chronvs_display_profile_watch_mark(CHRONVS_WATCH_SETUP, profile_test_start);
     now_us += 200;
-    chronvs_display_profile_watch_mark(CHRONVS_WATCH_CASE, profile_test_start);
+    chronvs_display_profile_watch_mark(CHRONVS_WATCH_RINGS, profile_test_start);
     profile_test_start = chronvs_display_profile_watch_begin();
     now_us += 50;
-    chronvs_display_profile_watch_mark(CHRONVS_WATCH_CASE, profile_test_start);
+    chronvs_display_profile_watch_mark(CHRONVS_WATCH_DATES, profile_test_start);
     profile_monitor(NULL, 1, 1);
     assert(watch_frames==1 && watch_slices==2);
-    assert(watch_us[CHRONVS_WATCH_SETUP]==100 && watch_us[CHRONVS_WATCH_CASE]==250);
+    assert(watch_us[CHRONVS_WATCH_SETUP]==100 && watch_us[CHRONVS_WATCH_RINGS]==200);
+    assert(watch_us[CHRONVS_WATCH_DATES]==50);
     chronvs_display_profile_poll(true);
     assert(watch_frames==0 && watch_slices==0 && !watch_in_refresh);
     for (unsigned i=0;i<CHRONVS_WATCH_SECTION_COUNT;++i) assert(watch_us[i]==0);

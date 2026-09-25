@@ -635,3 +635,26 @@ dados para alterar touch/QSPI nem priorizar mais caches de trigonometria.
 A cadência de repouso foi 1 Hz. Heap interno e maior bloco DMA amostrados
 ficaram em 142.919 e 31.744 bytes, respectivamente, sem inferir uma margem
 segura ou autonomia. Esta análise não introduz alteração no firmware.
+
+## Separação dos círculos e textos da data
+
+Após `6d0e16a`, o diagnóstico separa os dois círculos externos (`watch_rings_us`)
+dos 31 números (`watch_dates_us`). `watch_case_us` permanece como soma exata
+dos dois, evitando quebrar a série anterior. O marcador triangular continua
+no grupo próprio. As primitivas, seus parâmetros e sua ordem foram preservados;
+nenhum pixel é armazenado e não há mudança em touch, QSPI ou buffers.
+
+O analisador mantém as médias dos detalhes separadas do total e só usa como
+denominador os quadros das janelas com os campos novos. Rejeita detalhes
+incompletos ou soma inconsistente e continua aceitando logs antigos.
+O build padrão mantém 54.900 bytes de RAM; flash de 1.661.052 bytes, 12 bytes
+a mais após separar as funções de desenho. Marcadores continuam ausentes do
+padrão. Falta a captura de pelo menos 15 s de mostrador parado com diagnóstico
+O2 para decidir entre otimizar círculos ou texto; esta etapa não promete ganho.
+
+Validação: builds padrão e `display_profile_o2` concluídos, sete testes do
+analisador aprovados e teste integrado da interface aprovado, incluindo a
+separação dos contadores e sua limpeza com a tela apagada. As 16 capturas
+comparadas mantiveram SHA idêntico à referência. O diagnóstico O2 usa
+58.168 bytes de RAM (8 bytes adicionais) e 1.779.276 bytes de flash.
+Essas verificações não substituem a nova captura no dispositivo.

@@ -19,6 +19,24 @@ def window(**changes):
 
 
 class ProfileAnalysisTest(unittest.TestCase):
+    def test_case_breakdown_coverage_and_consistency(self):
+        counters = {key: 100 for key in MODULE["WATCH_TIMES"]}
+        old = window(watch_frames=2, watch_slices=42, **counters)
+        new = old + " watch_rings_us=80 watch_dates_us=20"
+        groups, bad = MODULE["parse"](old + "\n" + new)
+        result = MODULE["summarize"](groups["unknown"])
+        self.assertEqual(bad, 0)
+        self.assertEqual(result["watch_case_detail_windows"], 1)
+        self.assertEqual(result["watch_case_detail_frames"], 2)
+        self.assertEqual(result["watch_case_detail_avg_us"],
+                         {"watch_rings_us": 40, "watch_dates_us": 10})
+        self.assertEqual(result["watch_section_avg_us"]["watch_case_us"], 50)
+        for row in (old + " watch_rings_us=80", new.replace("watch_dates_us=20", "watch_dates_us=21"),
+                    window() + " watch_rings_us=80 watch_dates_us=20"):
+            self.assertEqual(MODULE["parse"](row), ({}, 1))
+        groups, _ = MODULE["parse"](old)
+        self.assertIsNone(MODULE["summarize"](groups["unknown"])["watch_case_detail_avg_us"]["watch_rings_us"])
+
     def test_watch_totals_use_watch_frames_not_all_frames_or_slices(self):
         counters = {key: 100 for key in MODULE["WATCH_TIMES"]}
         first = window(frames=10, watch_frames=2, watch_slices=40, **counters)

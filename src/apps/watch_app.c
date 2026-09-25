@@ -262,12 +262,14 @@ static void draw_hand(lv_draw_ctx_t *ctx, float cx, float cy, float tail,
               polar_point(cx, cy, length, angle), color, width, true);
 }
 
-static void draw_fixed_case(lv_draw_ctx_t *ctx, float cx, float cy) {
+static void draw_case_rings(lv_draw_ctx_t *ctx, float cx, float cy) {
 
     /* Overscan hides the antialiased edge beyond the round panel aperture. */
     draw_circle(ctx, cx, cy, 206, COLOR_DATE_RING, COLOR_TRACK, 1);
     draw_circle(ctx, cx, cy, 183, COLOR_FACE_DARK, COLOR_TRACK, 2);
+}
 
+static void draw_case_dates(lv_draw_ctx_t *ctx) {
     /* Independent date ring: today's number always meets the marker at 6. */
     for (int date = 1; date <= 31; ++date) {
         lv_point_t p = chapter.dates[date - 1];
@@ -443,8 +445,10 @@ static void clock_draw_event(lv_event_t *event) {
                                 hours * (360.0f / (7.0f * 24.0f));
 
     CHRONVS_WATCH_PROFILE_MARK(GEOMETRY);
-    draw_fixed_case(ctx, cx, cy);
-    CHRONVS_WATCH_PROFILE_MARK(CASE);
+    draw_case_rings(ctx, cx, cy);
+    CHRONVS_WATCH_PROFILE_MARK(RINGS);
+    draw_case_dates(ctx);
+    CHRONVS_WATCH_PROFILE_MARK(DATES);
     draw_mother_disk(ctx, cx, cy, minute_angle);
     CHRONVS_WATCH_PROFILE_MARK(MOTHER);
     draw_minute_chapter(ctx);

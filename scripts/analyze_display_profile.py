@@ -19,6 +19,7 @@ WATCH_TIMES = tuple("watch_" + name + "_us" for name in (
     "setup", "background", "geometry", "case", "mother", "minutes", "hours",
     "weekday", "temperature", "seconds", "marker"))
 WATCH = ("watch_frames", "watch_slices") + WATCH_TIMES
+CASE_DETAIL = ("watch_rings_us", "watch_dates_us")
 
 
 def parse(text):
@@ -47,6 +48,7 @@ def parse(text):
             fields[match[1]] = int(match[2])
         has_touch = any(key in fields for key in TOUCH)
         has_watch = any(key in fields for key in WATCH)
+        has_case_detail = any(key in fields for key in CASE_DETAIL)
         if (not valid or not all(key in fields for key in REQUIRED)
                 or not fields.get("window_ms") or not fields.get("frames")
                 or fields.get("over20", 0) > fields.get("frames", 0)
@@ -55,7 +57,10 @@ def parse(text):
                 or fields.get("interaction_frames", 0) > fields.get("frames", 0)
                 or (has_watch and not all(key in fields for key in WATCH))
                 or fields.get("watch_frames", 0) > fields.get("frames", 0)
-                or fields.get("watch_frames", 0) > fields.get("watch_slices", 0)):
+                or fields.get("watch_frames", 0) > fields.get("watch_slices", 0)
+                or (has_case_detail and (not has_watch
+                    or not all(key in fields for key in CASE_DETAIL)
+                    or sum(fields.get(key, 0) for key in CASE_DETAIL) != fields.get("watch_case_us")))):
             rejected += 1
             continue
         groups.setdefault(optimization, []).append(fields)
@@ -91,6 +96,14 @@ def summarize(windows):
     result["watch_section_avg_us"] = {
         key: round(sum(row[key] for row in watch) / watch_frames, 3)
         if watch_frames else None for key in WATCH_TIMES
+    }
+    detail = [row for row in watch if "watch_rings_us" in row]
+    detail_frames = sum(row["watch_frames"] for row in detail)
+    result["watch_case_detail_windows"] = len(detail)
+    result["watch_case_detail_frames"] = detail_frames if detail else None
+    result["watch_case_detail_avg_us"] = {
+        key: round(sum(row[key] for row in detail) / detail_frames, 3)
+        if detail_frames else None for key in CASE_DETAIL
     }
     return result
 

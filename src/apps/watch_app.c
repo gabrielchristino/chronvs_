@@ -44,6 +44,24 @@ static chronvs_time_t displayed_time = {
 static int64_t displayed_time_us;
 static float ambient_temperature_c = 24.0f;
 
+/* Geometry only, never pixels. Reused across partial-buffer draw calls. */
+static struct {
+    bool valid;
+    uint8_t day;
+    float cx, cy;
+    lv_point_t dates[31];
+    lv_point_t minutes[60][2];
+} chapter;
+
+static const char date_text[31][3] = {
+    "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11",
+    "12", "13", "14", "15", "16", "17", "18", "19", "20", "21",
+    "22", "23", "24", "25", "26", "27", "28", "29", "30", "31",
+};
+static const char minute_text[12][3] = {
+    "0", "5", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55",
+};
+
 /* Trim opaque, rectangular siblings entering from an edge. LVGL's normal
  * cover test only skips this custom drawing when a whole buffer is covered.
  * Walking up also finds the quick panel above the app content layer. */
@@ -103,6 +121,33 @@ static lv_point_t polar_point(float cx, float cy, float radius, float angle_deg)
         .y = (lv_coord_t)lroundf(cy - cosf(angle) * radius),
     };
     return p;
+}
+
+static void update_chapter_geometry(float cx, float cy, uint8_t day) {
+    const bool moved = !chapter.valid || chapter.cx != cx || chapter.cy != cy;
+    if (moved) {
+        for (int minute = 0; minute < 60; ++minute) {
+            const float angle = minute * 6.0f;
+            if (minute % 5 == 0) {
+                chapter.minutes[minute][0] = polar_point(cx, cy, 168, angle);
+            } else {
+                chapter.minutes[minute][0] = polar_point(cx, cy, 160, angle);
+                chapter.minutes[minute][1] = polar_point(cx, cy, 172, angle);
+            }
+        }
+    }
+    if (moved || chapter.day != day) {
+        const float date_step = 360.0f / 31.0f;
+        const float date_rotation = 180.0f - (day - 1) * date_step;
+        for (int date = 1; date <= 31; ++date) {
+            const float angle = (date - 1) * date_step + date_rotation;
+            chapter.dates[date - 1] = polar_point(cx, cy, 195, angle);
+        }
+    }
+    chapter.cx = cx;
+    chapter.cy = cy;
+    chapter.day = day;
+    chapter.valid = true;
 }
 
 static point_f_t rotate_offset(point_f_t p, float angle_deg) {
@@ -207,42 +252,34 @@ static void draw_hand(lv_draw_ctx_t *ctx, float cx, float cy, float tail,
               polar_point(cx, cy, length, angle), color, width, true);
 }
 
-static void draw_fixed_case(lv_draw_ctx_t *ctx, float cx, float cy, uint8_t day) {
-    char text[4];
+static void draw_fixed_case(lv_draw_ctx_t *ctx, float cx, float cy) {
 
     /* Overscan hides the antialiased edge beyond the round panel aperture. */
     draw_circle(ctx, cx, cy, 206, COLOR_DATE_RING, COLOR_TRACK, 1);
     draw_circle(ctx, cx, cy, 183, COLOR_FACE_DARK, COLOR_TRACK, 2);
 
     /* Independent date ring: today's number always meets the marker at 6. */
-    const float date_step = 360.0f / 31.0f;
-    const float date_rotation = 180.0f - (day - 1) * date_step;
     for (int date = 1; date <= 31; ++date) {
-        const float angle = (date - 1) * date_step + date_rotation;
-        snprintf(text, sizeof(text), "%d", date);
-        lv_point_t p = polar_point(cx, cy, 195, angle);
-        draw_text(ctx, p.x, p.y, text, &lv_font_montserrat_12, COLOR_INK_DIM, 24);
+        lv_point_t p = chapter.dates[date - 1];
+        draw_text(ctx, p.x, p.y, date_text[date - 1], &lv_font_montserrat_12, COLOR_INK_DIM, 24);
     }
 
 }
 
 /* Drawn after the mother disk so its type can never be erased by that disk. */
-static void draw_minute_chapter(lv_draw_ctx_t *ctx, float cx, float cy) {
-    char text[4];
+static void draw_minute_chapter(lv_draw_ctx_t *ctx) {
 
     for (int minute = 0; minute < 60; ++minute) {
         /* The 30-minute position is reserved for the fixed marker. */
         if (minute == 30) continue;
 
-        const float angle = minute * 6.0f;
         if (minute % 5 == 0) {
-            snprintf(text, sizeof(text), "%d", minute);
-            lv_point_t p = polar_point(cx, cy, 168, angle);
-            draw_text(ctx, p.x, p.y, text, &lv_font_montserrat_18,
+            lv_point_t p = chapter.minutes[minute][0];
+            draw_text(ctx, p.x, p.y, minute_text[minute / 5], &lv_font_montserrat_18,
                       COLOR_INK, 34);
         } else {
-            draw_radial_line(ctx, cx, cy, 160, 172, angle,
-                             COLOR_INK, 2);
+            draw_line(ctx, chapter.minutes[minute][0], chapter.minutes[minute][1],
+                      COLOR_INK, 2, true);
         }
     }
 }
@@ -364,6 +401,7 @@ static void clock_draw_event(lv_event_t *event) {
     const lv_area_t *coords = &object->coords;
     const float cx = (coords->x1 + coords->x2) * 0.5f;
     const float cy = (coords->y1 + coords->y2) * 0.5f;
+    update_chapter_geometry(cx, cy, displayed_time.day);
 
     /*
      * The custom object has no normal LVGL background. Clear every pixel in
@@ -388,9 +426,9 @@ static void clock_draw_event(lv_event_t *event) {
     const float weekday_angle = displayed_time.weekday * (360.0f / 7.0f) +
                                 hours * (360.0f / (7.0f * 24.0f));
 
-    draw_fixed_case(ctx, cx, cy, displayed_time.day);
+    draw_fixed_case(ctx, cx, cy);
     draw_mother_disk(ctx, cx, cy, minute_angle);
-    draw_minute_chapter(ctx, cx, cy);
+    draw_minute_chapter(ctx);
 
     /*
      * Local mother-disk coordinates are rotated for orbital translation.

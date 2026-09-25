@@ -420,6 +420,12 @@ driver não podem ser copiados diretamente.
   a hora avança pelo contador monotônico. Tela apagada continua sem ler RTC.
 - A curva do launcher só reaplica deslocamento e opacidade quando seus
   valores mudam. Geometria e coalescência de 20 ms permanecem iguais.
+- O mostrador guarda as coordenadas das escalas fixas de minutos e datas
+  em um cache de 616 bytes. Recalcula ao mudar de posição ou de dia; os
+  números ficam em texto constante. Isso evita trigonometria e formatação
+  repetidas em cada faixa, sem armazenar pixels nem mudar buffers ou visual.
+  Na captura seguinte de diagnóstico O2, o trecho inicial de tela inteira
+  caiu de cerca de 274 para 237 ms por atualização; gestos não foram controlados.
 - Há dois buffers LVGL em PSRAM. O driver SPD2010 deve permanecer no tamanho
   original de `1/20` da tela e em transferências QSPI de 2 KiB.
 - O script `scripts/add_waveshare_drivers.py` reaplica essas escolhas ao

@@ -448,3 +448,73 @@ Esta etapa não altera o firmware. A próxima decisão de otimização depende
 dos logs de mostrador, painel e launcher no build de diagnóstico O2. Cadência
 do touch e espera adaptativa do loop são candidatos à avaliação, não mudanças
 já adotadas; FPS, latência física e autonomia continuam sem medição fornecida.
+
+## Primeira captura física de desempenho
+
+Arquivo local `logs/device-monitor-260925-110205.log`, analisado com o
+utilitário acima: 24 janelas completas, totalizando 48.528 ms observados e
+278 atualizações. O banner de otimização não está na captura; o ambiente
+gravado foi confirmado pelo anexo do usuário: upload de `display_profile_o2`
+concluído com sucesso, hashes verificados e monitor salvando esse mesmo arquivo.
+O texto "Building in debug mode" não contradiz o O2 seletivo aplicado ao LVGL.
+O arquivo contém vários cenários,
+portanto a média global não caracteriza a fluidez de um gesto específico.
+
+| Trecho (timestamp do log) | Janelas / quadros | Refresh médio aproximado | Flush médio aproximado | Refresh máximo |
+| --- | --- | --- | --- | --- |
+| Inicial, 35.959–45.969 ms | 6 / 13 | 273,77 ms | 17,08 ms | 274 ms |
+| Launcher, 52.089–58.119 ms | 4 / 69 | 54,65 ms | 14,29 ms | 74 ms |
+
+O primeiro trecho é compatível com mostrador em repouso: cerca de uma
+atualização por segundo, tela inteira de 169.744 pixels por quadro e só
+um quadro durante contato. Não há marcador explícito do cenário. O segundo
+fica entre os eventos de abertura de `apps` em 49.959 ms e de `watch` em
+59.279 ms; isso confirma o app ativo, mas não a continuidade dos arrastes.
+
+Em toda a captura, a leitura do touch levou no máximo 2.009 us. O maior
+intervalo entre amostras pressionadas chegou a 280.334 us. Isso distingue
+custo do leitor de atraso para voltar a executá-lo na tarefa da interface.
+O menor heap interno amostrado foi 143.639 bytes e o menor maior bloco DMA,
+40.960 bytes; são amostras, não limites seguros nem ausência comprovada de
+picos de alocação entre elas.
+
+Os dados apontam para trabalho de renderização fora do flush como principal
+custo do trecho inicial (diferença aproximada de 257 ms). Isso inclui desenho,
+layout e preempções, não apenas o callback do mostrador. A hipótese prioritária
+é investigar o desenho vetorial e o trabalho repetido por faixa, antes de
+alterar polling do touch ou QSPI. `input_refresh_max_us` atingiu 931.003 us,
+mas não mede latência física nem garante relação causal com o próximo refresh.
+Nenhum parâmetro do firmware foi alterado a partir desta captura.
+
+## Experimento seguinte: geometria fixa do mostrador
+
+Confirmado o diagnóstico O2 pelo upload anexado, a primeira alteração isolada
+guarda as coordenadas de minutos/datas, antes calculadas para cada faixa
+parcial. O cache estático ocupa 616 bytes e é refeito quando o centro muda;
+trocar o dia recalcula somente o anel de datas. Os números são constantes,
+eliminando também 42 chamadas de `snprintf` por passagem por essas escalas.
+Nenhum pixel é armazenado. Hora interpolada, ordem de desenho, clipping,
+touch, QSPI, cadência e tamanhos dos buffers permanecem iguais.
+
+A suíte integrada passou e as 16 capturas nomeadas por ela ficaram idênticas
+em comparação SHA-256 com a base sem cache. Isso verifica os cenários do host,
+não o comportamento físico. A RAM estática reportada no build padrão passou
+de 54.284 para 54.900 bytes, correspondendo aos 616 bytes do cache.
+O usuário repetiu o upload `display_profile_o2` e enviou a captura
+`logs/device-monitor-260925-111638.log`, com sucesso confirmado no anexo.
+Nas duas primeiras janelas (25.960 e 27.960 ms), os quatro quadros de tela
+inteira tiveram média de 237 ms, máximo de 238 ms e flush médio de 16,99 ms.
+São cerca de 37 ms ou 13,5% menos que os 274 ms do trecho inicial anterior.
+Não houve contato nessas duas janelas; o trecho final sem contato ficou em
+236 ms. O horário/desenho e os gestos não foram rigidamente controlados:
+isso é evidência de redução observada, não benchmark isolado ou ganho de FPS
+do launcher. O transporte permaneceu perto de 17 ms.
+
+Build padrão e `display_profile_o2` passaram. O teste
+`tests/run_watch_geometry_tests.ps1` cobre reutilização sem novas chamadas
+trigonométricas, alinhamento da data atual nos 31 dias, deslocamentos horizontal
+e vertical e reconstrução somente do anel de datas ao trocar o dia. Coordenadas
+em meio pixel são verificadas com tolerância de arredondamento de 0,5 px.
+O cache foi confirmado em 616 bytes também no teste do host. A execução física
+e a comparação quantitativa foram realizadas; o envio de logs não constitui
+uma confirmação explícita da ausência de todos os possíveis artefatos visuais.

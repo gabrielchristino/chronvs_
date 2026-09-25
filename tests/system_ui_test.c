@@ -431,6 +431,7 @@ int main(void) {
     chronvs_Relogio_init(); set_time(26,9,10,12,0,0);
     chronvs_reminder_t reminder={.year=26,.month=9,.day=10,.hour=12,.minute=1,.title="Aviso durante a edição"};
     assert(chronvs_reminder_create(&reminder)); advance(60); chronvs_Relogio_alert_poll();
+    assert(reminder_ringing);
     assert(find_label_text(lv_layer_top(),"Concluir")); capture("28-Calendario-alert-integrated");
     lv_mem_monitor(&memory); assert(memory.free_biggest_size>4096);
     printf("Editor plus alert: %u bytes free, largest block %u.\n",

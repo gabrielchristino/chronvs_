@@ -406,3 +406,24 @@ usuário. O relato não discrimina cada cenário nem quantifica FPS, latência
 ou consumo. O próximo passo é capturar os cenários instrumentados de
 `performance.md` para avaliar gargalos antes de mudar parâmetros do touch.
 Comparação com CrowPanel e medição de autonomia permanecem para outra etapa.
+
+## Retirada do atraso de áudio
+
+A base validada de mostrador/launcher/RTC foi publicada em `1fdd93b`.
+Resta da análise original o atraso artificial de 2 s antes de solicitar som,
+usado no isolamento das listras. A revisão seguinte remove somente essa espera
+e seu estado pendente: o aviso solicita áudio ao terminar de criar seus objetos.
+I2S continua sob demanda; não há promessa de latência física zero ou ganho de FPS.
+Parar/adicionar tempo/concluir interrompe o som; falha ao salvar a conclusão
+de um lembrete mantém o aviso e a reprodução. O driver QSPI não muda.
+
+Após testar a retirada no relógio, o usuário confirmou: "deu tudo certo aqui".
+A alteração passa a integrar a base validada pelo usuário. O relato não
+discrimina cada cenário nem mede latência física do áudio. A base `1fdd93b`
+preserva a versão com atraso. Medição de touch, latência e autonomia continua
+pendente de dados físicos; a comparação com CrowPanel permanece adiada.
+
+Build padrão e testes de UI do Relogio e da interface integrada passaram.
+Os testes verificam o pedido de som no primeiro poll do aviso, interrupção
+ao dispensar/adicionar tempo, ausência de reinício tardio e continuidade
+quando a gravação da conclusão falha. Esses mocks não validam o painel/I2S.

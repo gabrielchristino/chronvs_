@@ -334,10 +334,10 @@ no primeiro aviso sonoro. No teste seguinte, o usuário confirmou despertar,
 bip audível e botão `Parar` funcional, mas as listras voltaram no aviso.
 As listras continuaram na navegação após parar o som. Uma leitura de 8 s da
 COM3, sem solicitar reset, não recebeu mensagens de diagnóstico.
-Para separar o desenho da ativação do I2S, o aviso agora aparece imediatamente
-e o som começa **dois segundos depois**. Parar ou adicionar tempo nesse
-intervalo cancela o som pendente. Essa espera é uma medida de diagnóstico;
-observar se a imagem fica listrada antes ou somente após o início do áudio.
+Para separar o desenho da ativação do I2S, naquela revisão o aviso aparecia
+imediatamente e o som começava **dois segundos depois**. Parar ou adicionar
+tempo nesse intervalo cancelava o som pendente. Essa espera era uma medida
+de diagnóstico para observar a imagem antes e após o início do áudio.
 Naquela etapa, a causa ainda não estava confirmada; build e simulação LVGL
 não reproduziam o problema físico.
 
@@ -367,6 +367,15 @@ timer corretas, primeiro aviso sem artefatos, extensão `+1` e segundo aviso
 também sem artefatos. A espera síncrona QSPI passa a integrar a configuração
 validada e deve ser preservada. A confirmação abrange esse fluxo; não é uma
 medição de desempenho nem um teste exaustivo de todas as telas.
+
+Na revisão atual, o pedido de som ocorre assim que o aviso é criado, sem
+os 2 s artificiais de diagnóstico. A inicialização do I2S continua sob demanda,
+portanto isso não garante início físico instantâneo. Parar, adicionar tempo ou
+concluir interrompe o pedido; uma falha ao salvar o lembrete mantém o alerta.
+Após testar esta retirada no relógio, o usuário confirmou: "deu tudo certo
+aqui". O roteiro proposto incluía primeiro timer após boot com tela apagada,
+`+1`, segundo aviso e `Parar`, observando listras; o relato não discrimina
+cada cenário. O QSPI permanece com a espera síncrona validada.
 
 Alarmes salvos sobrevivem ao reinício; timer, adiamentos e avisos pendentes
 são voláteis. O relógio precisa estar ligado: não há despertar de deep sleep

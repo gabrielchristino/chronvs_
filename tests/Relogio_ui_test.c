@@ -126,9 +126,8 @@ int main(void) {
     click("Cancelar");
     click("5"); assert(chronvs_timer_remaining()==300); frame("03-timer-running");
     display_off=true; advance(300); chronvs_Relogio_alert_poll();
-    assert(!display_off && !ringing); frame("04-timer-alert");
-    lv_tick_inc(1000); chronvs_Relogio_alert_poll(); assert(!ringing);
-    lv_tick_inc(1000); chronvs_Relogio_alert_poll(); assert(ringing);
+    assert(!display_off && ringing); frame("04-timer-alert");
+    chronvs_Relogio_alert_poll(); assert(ringing);
     lv_obj_t *extra=button_with_text(overlay,"+120"); assert(extra);
     lv_event_send(extra,LV_EVENT_CLICKED,NULL); chronvs_Relogio_alert_poll();
     assert(!ringing && chronvs_timer_remaining()==7200);
@@ -172,8 +171,8 @@ int main(void) {
     clear_alarms();
     chronvs_timer_cancel(); set_time(26,9,7,7,29,59);
     assert(chronvs_alarm_create(7,30,127)); advance(1);
-    chronvs_Relogio_alert_poll(); assert(!ringing); frame("11-alarm-alert");
-    /* Dismissing during the silent interval must cancel the delayed sound. */
+    chronvs_Relogio_alert_poll(); assert(ringing); frame("11-alarm-alert");
+    /* Dismissing immediately stops sound and must not restart it later. */
     lv_obj_t *stop=button_with_text(overlay,"Parar"); assert(stop);
     lv_event_send(stop,LV_EVENT_CLICKED,NULL); chronvs_Relogio_alert_poll();
     lv_tick_inc(2500); chronvs_Relogio_alert_poll(); assert(!ringing && !overlay);
@@ -182,8 +181,7 @@ int main(void) {
         .title="Reunião de planejamento com a equipe"};
     assert(chronvs_reminder_create(&reminder));
     display_off=true; advance(1); chronvs_Relogio_alert_poll();
-    assert(!display_off && overlay && !ringing); frame("26-Calendario-alert");
-    lv_tick_inc(2000); chronvs_Relogio_alert_poll(); assert(ringing);
+    assert(!display_off && overlay && ringing); frame("26-Calendario-alert");
     stop=button_with_text(overlay,"Concluir"); assert(stop);
     fail_save=true; lv_event_send(stop,LV_EVENT_CLICKED,NULL); chronvs_Relogio_alert_poll();
     assert(overlay && ringing && !chronvs_reminder_get(0)->done);

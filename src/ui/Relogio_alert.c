@@ -7,10 +7,6 @@
 
 static lv_obj_t *overlay;
 static int shown = -2;
-/* Hardware isolation: let the alert render before I2S is initialized/enabled. */
-#define ALERT_SOUND_DELAY_MS 2000
-static bool sound_pending;
-static uint32_t alert_shown_tick;
 static lv_obj_t *error_text;
 
 static void dismiss(lv_event_t *event) {
@@ -21,7 +17,6 @@ static void dismiss(lv_event_t *event) {
     }
     if (shown < CHRONVS_ALARM_LIMIT)
         chronvs_Relogio_dismiss((uintptr_t)lv_event_get_user_data(event));
-    sound_pending = false;
     chronvs_sound_set_ringing(false);
     /* Defer tree changes until after input dispatch. */
     shown = -3;
@@ -29,16 +24,9 @@ static void dismiss(lv_event_t *event) {
 void chronvs_Relogio_alert_poll(void) {
     int alert = chronvs_Relogio_alert();
     if (alert != -2) chronvs_system_ui_notify_activity();
-    if (shown == alert) {
-        if (sound_pending && lv_tick_elaps(alert_shown_tick) >= ALERT_SOUND_DELAY_MS) {
-            sound_pending = false;
-            chronvs_sound_set_ringing(true);
-        }
-        return;
-    }
+    if (shown == alert) return;
     if (overlay) { lv_obj_del(overlay); overlay = NULL; }
     shown = alert;
-    sound_pending = false;
     chronvs_sound_set_ringing(false);
     if (alert == -2) return;
     lv_indev_t *input = lv_indev_get_next(NULL);
@@ -72,6 +60,5 @@ void chronvs_Relogio_alert_poll(void) {
         chronvs_Relogio_action(overlay, "+5 min", -66, 264, CHRONVS_UI_PAIR_WIDTH, true, dismiss, 5);
         chronvs_Relogio_action(overlay, "Parar", 66, 264, CHRONVS_UI_PAIR_WIDTH, false, dismiss, 0);
     }
-    alert_shown_tick = lv_tick_get();
-    sound_pending = true;
+    chronvs_sound_set_ringing(true);
 }

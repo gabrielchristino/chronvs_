@@ -310,9 +310,11 @@ notificação FreeRTOS, sem polling periódico. Mudanças de volume/alerta e
 pedidos de prévia a acordam; um comando anterior à espera fica pendente,
 evitando perder a retomada. As flags atômicas continuam sendo a fonte do
 estado atual. Canal e pilha permanecem reservados após a primeira utilização.
-Durante o diagnóstico, `ui/Relogio_alert.c` espera 2 s após criar o aviso antes
-de solicitar áudio. A espera usa ticks e não bloqueia LVGL; dispensar o aviso
-cancela o pedido. O teste no host cobre também esse cancelamento.
+`ui/Relogio_alert.c` solicita áudio ao terminar de criar o aviso, sem a espera
+artificial de 2 s usada no diagnóstico anterior. Dispensar ou adicionar tempo
+interrompe o pedido; falha ao salvar a conclusão de um lembrete mantém o som
+e o aviso. Os testes no host cobrem esses caminhos. Após testar a retirada
+da espera no relógio, o usuário confirmou: "deu tudo certo aqui".
 
 A agenda civil de alarmes/lembretes é consultada uma vez por segundo em
 `Relogio_service`, ou na próxima passagem após criação, exclusão ou conclusão.

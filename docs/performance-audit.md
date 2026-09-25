@@ -518,3 +518,56 @@ em meio pixel são verificadas com tolerância de arredondamento de 0,5 px.
 O cache foi confirmado em 616 bytes também no teste do host. A execução física
 e a comparação quantitativa foram realizadas; o envio de logs não constitui
 uma confirmação explícita da ausência de todos os possíveis artefatos visuais.
+
+## Descarte de primitivas fora da faixa
+
+O cache e as duas capturas físicas foram consolidados em `b9d6f61`.
+A próxima mudança antecipa o descarte de textos e linhas fora do clip atual,
+evitando preparar descritores e chamar o desenho LVGL nesses casos. O texto
+usa o mesmo retângulo que a biblioteca já testa. Linhas usam margem conservadora
+de largura + 2 px, preservando pontas arredondadas, antialiasing e segmentos
+que cruzam a faixa mesmo com ambas as extremidades fora dela.
+
+Não há nova reserva estática nem alteração de geometria, cadência, touch,
+QSPI ou buffers. A suíte integrada passou, mantendo idênticas por SHA-256 as
+16 imagens produzidas por ela em relação à versão com cache. A captura física
+seguinte está analisada abaixo; os logs não substituem avaliação visual de
+números e linhas durante abertura/fechamento de painel e launcher.
+
+O primeiro build encontrou metadados CMake sem o alvo `__idf_src`. A cópia
+local do cache foi preservada em `.pio/audit` e regenerada, sem limpar `.pio`
+nem mudar configuração versionada. O build padrão então passou.
+O diagnóstico `display_profile_o2` também passou, assim como o teste de
+geometria ampliado para descarte fora da faixa e preservação de bordas e
+segmentos que a atravessam. RAM estática permaneceu em 54.900 bytes no padrão.
+
+O anexo seguinte contém 39 janelas completas, 78.332 ms observados e 212
+atualizações, correspondentes ao monitor `device-monitor-260925-182240.log`.
+A análise usou o texto anexado, evitando depender do arquivo local que pode
+continuar sendo escrito. O comando do monitor seleciona `display_profile_o2`,
+mas este anexo não contém upload nem banner de compilação; só selecionar o
+ambiente do monitor não comprova qual firmware está gravado.
+
+Para comparar repouso, foram selecionadas janelas com dois quadros de tela
+inteira (169.744 pixels médios), sem quadros durante contato e sem espera de
+input pendente registrada. Esse filtro não identifica todos os possíveis
+estados da UI, mas evita misturar os arrastes conhecidos:
+
+| Captura | Janelas / quadros filtrados | Refresh médio aproximado | Flush médio aproximado |
+| --- | --- | --- | --- |
+| Anterior, 11:16:38 | 3 / 6 | 236,67 ms | 17,00 ms |
+| Nova, 18:22:40 | 26 / 52 | 234,12 ms | 17,13 ms |
+
+A diferença observada é 2,55 ms (1,1%). Na nova captura, as médias de repouso
+variam de 230 a 236 ms; o horário e a geometria do mostrador também mudaram.
+Não há evidência suficiente para atribuir um ganho causal a este descarte.
+A cadência de repouso segue próxima de 1 Hz; 234 ms é duração de renderização,
+não o intervalo pretendido entre atualizações nem FPS máximo do painel.
+
+O maior bloco DMA amostrado foi 31.744 bytes, ante 40.960 na captura anterior;
+o heap interno mínimo ficou em 143.015 bytes. Não se deduz vazamento dessa
+diferença entre sessões, nem se trata esses números como margem segura.
+O leitor do touch levou no máximo 2.023 us em toda a captura. O principal
+custo continua fora do flush. Próximo passo: instrumentar separadamente os
+grupos de desenho vetorial antes de escolher outra otimização; não alterar
+touch, QSPI ou buffers a partir dessa diferença pequena.

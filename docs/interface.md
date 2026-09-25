@@ -426,6 +426,11 @@ driver não podem ser copiados diretamente.
   repetidas em cada faixa, sem armazenar pixels nem mudar buffers ou visual.
   Na captura seguinte de diagnóstico O2, o trecho inicial de tela inteira
   caiu de cerca de 274 para 237 ms por atualização; gestos não foram controlados.
+- O mostrador descarta textos e linhas inteiramente fora da faixa de
+  desenho antes de preparar os descritores LVGL. Linhas mantêm margem para
+  espessura, pontas arredondadas e antialiasing. A comparação de 16 capturas
+  do host preservou os pixels. A captura seguinte ficou em 234,1 ms médios
+  sem interação, contra 236,7 ms antes; a diferença pequena não isola um ganho.
 - Há dois buffers LVGL em PSRAM. O driver SPD2010 deve permanecer no tamanho
   original de `1/20` da tela e em transferências QSPI de 2 KiB.
 - O script `scripts/add_waveshare_drivers.py` reaplica essas escolhas ao

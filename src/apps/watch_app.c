@@ -192,6 +192,13 @@ static void draw_circle(lv_draw_ctx_t *ctx, float cx, float cy, float radius,
 
 static void draw_line(lv_draw_ctx_t *ctx, lv_point_t start, lv_point_t end,
                       uint32_t color, int width, bool rounded) {
+    /* Conservative bounds include stroke width, round caps and antialiasing. */
+    const int margin = width + 2;
+    const lv_area_t *clip = ctx->clip_area;
+    if ((start.x < clip->x1 - margin && end.x < clip->x1 - margin) ||
+        (start.x > clip->x2 + margin && end.x > clip->x2 + margin) ||
+        (start.y < clip->y1 - margin && end.y < clip->y1 - margin) ||
+        (start.y > clip->y2 + margin && end.y > clip->y2 + margin)) return;
     lv_draw_line_dsc_t dsc;
     lv_draw_line_dsc_init(&dsc);
     dsc.color = lv_color_hex(color);
@@ -211,12 +218,6 @@ static void draw_radial_line(lv_draw_ctx_t *ctx, float cx, float cy,
 
 static void draw_text(lv_draw_ctx_t *ctx, float cx, float cy, const char *text,
                       const lv_font_t *font, uint32_t color, int width) {
-    lv_draw_label_dsc_t dsc;
-    lv_draw_label_dsc_init(&dsc);
-    dsc.font = font;
-    dsc.color = lv_color_hex(color);
-    dsc.align = LV_TEXT_ALIGN_CENTER;
-
     const lv_coord_t height = lv_font_get_line_height(font);
     lv_area_t area = {
         .x1 = (lv_coord_t)lroundf(cx - width / 2.0f),
@@ -224,6 +225,14 @@ static void draw_text(lv_draw_ctx_t *ctx, float cx, float cy, const char *text,
         .x2 = (lv_coord_t)lroundf(cx + width / 2.0f),
         .y2 = (lv_coord_t)lroundf(cy + height / 2.0f),
     };
+    /* Same label bounds checked by LVGL, before descriptor initialization. */
+    lv_area_t intersection;
+    if (!_lv_area_intersect(&intersection, &area, ctx->clip_area)) return;
+    lv_draw_label_dsc_t dsc;
+    lv_draw_label_dsc_init(&dsc);
+    dsc.font = font;
+    dsc.color = lv_color_hex(color);
+    dsc.align = LV_TEXT_ALIGN_CENTER;
     lv_draw_label(ctx, &dsc, &area, text, NULL);
 }
 

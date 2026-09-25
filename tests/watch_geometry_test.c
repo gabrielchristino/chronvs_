@@ -2,14 +2,26 @@
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
+#include "lvgl.h"
 static unsigned trig_calls;
+static unsigned label_descriptors, line_calls;
+static void counted_label_init(lv_draw_label_dsc_t *dsc) {
+    ++label_descriptors;
+    lv_draw_label_dsc_init(dsc);
+}
+static void count_line(lv_draw_ctx_t *ctx, const lv_draw_line_dsc_t *dsc,
+                       const lv_point_t *start, const lv_point_t *end) {
+    (void)ctx; (void)dsc; (void)start; (void)end; ++line_calls;
+}
 static float counted_sinf(float angle) { ++trig_calls; return sinf(angle); }
 static float counted_cosf(float angle) { ++trig_calls; return cosf(angle); }
 #define sinf counted_sinf
 #define cosf counted_cosf
+#define lv_draw_label_dsc_init counted_label_init
 #include "../src/apps/watch_app.c"
 #undef sinf
 #undef cosf
+#undef lv_draw_label_dsc_init
 
 int64_t esp_timer_get_time(void) { return 0; }
 bool chronvs_system_ui_display_is_off(void) { return false; }
@@ -48,5 +60,20 @@ int main(void) {
     assert(trig_calls == 0);
     printf("Watch geometry: reuse, all dates and movement passed; cache=%u bytes.\n",
            (unsigned)sizeof(chapter));
+    lv_area_t clip = {.x1=0, .y1=20, .x2=411, .y2=39};
+    lv_draw_ctx_t ctx = {.clip_area=&clip, .draw_line=count_line};
+    draw_line(&ctx, (lv_point_t){10,100}, (lv_point_t){30,100}, COLOR_INK, 2, true);
+    draw_line(&ctx, (lv_point_t){-30,25}, (lv_point_t){-20,35}, COLOR_INK, 2, true);
+    assert(line_calls == 0);
+    /* Keep caps near the edge and lines crossing the strip with both ends outside. */
+    draw_line(&ctx, (lv_point_t){10,19}, (lv_point_t){30,19}, COLOR_INK, 2, true);
+    draw_line(&ctx, (lv_point_t){10,-10}, (lv_point_t){30,80}, COLOR_INK, 2, true);
+    assert(line_calls == 2);
+    draw_text(&ctx, 100, 150, "31", &lv_font_montserrat_12, COLOR_INK, 24);
+    assert(label_descriptors == 0);
+    /* No draw_letter backend is needed to verify the visible descriptor path. */
+    draw_text(&ctx, 100, 25, "31", &lv_font_montserrat_12, COLOR_INK, 24);
+    assert(label_descriptors == 1);
+    puts("Watch clipping: off-strip work skipped, edge and crossing lines retained.");
     return 0;
 }

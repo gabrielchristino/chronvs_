@@ -28,6 +28,9 @@
 
 typedef struct {
     const char *id;
+    int translate_x;
+    lv_opa_t opacity;
+    bool curve_set;
 } app_row_context_t;
 
 static app_row_context_t row_contexts[8];
@@ -51,9 +54,16 @@ static void update_curve(lv_timer_t *timer) {
         if (dy < 0) dy = -dy;
         const int clamped = dy > ARC_RADIUS ? ARC_RADIUS : dy;
         const int x = SCREEN_CENTER - 32 - (int)sqrtf(ARC_RADIUS * ARC_RADIUS - clamped * clamped);
-        lv_obj_set_style_translate_x(rows[i], x, 0);
-        lv_obj_set_style_opa(rows[i], dy >= 178 ? LV_OPA_TRANSP :
-            dy <= 130 ? LV_OPA_COVER : (178 - dy) * LV_OPA_COVER / 48, 0);
+        const lv_opa_t opacity = dy >= 178 ? LV_OPA_TRANSP :
+            dy <= 130 ? LV_OPA_COVER : (178 - dy) * LV_OPA_COVER / 48;
+        app_row_context_t *context = &row_contexts[i];
+        if (!context->curve_set || context->translate_x != x)
+            lv_obj_set_style_translate_x(rows[i], x, 0);
+        if (!context->curve_set || context->opacity != opacity)
+            lv_obj_set_style_opa(rows[i], opacity, 0);
+        context->translate_x = x;
+        context->opacity = opacity;
+        context->curve_set = true;
     }
 }
 
@@ -166,6 +176,7 @@ static lv_obj_t *create_app_list(lv_obj_t *parent) {
         lv_obj_set_pos(row, 0, y);
         rows[visible_index] = row;
         row_contexts[visible_index].id = app->id;
+        row_contexts[visible_index].curve_set = false;
         lv_obj_add_flag(row, LV_OBJ_FLAG_EVENT_BUBBLE);
         lv_obj_add_event_cb(row, open_app_event, LV_EVENT_CLICKED,
                             &row_contexts[visible_index]);

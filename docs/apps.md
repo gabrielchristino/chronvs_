@@ -136,6 +136,15 @@ pela caixa de resultado. Os apps não leem I2C nem reancoram a hora. A abertura,
 Hoje e a atualização após despertar reutilizam a contagem monotônica,
 preservando a referência válida quando uma leitura posterior de RTC falha.
 
+`chronvs_rtc_refresh()` concentra essa política na tarefa da UI: consulta no
+boot, ao acordar e a cada 60 s com referência válida. Sem referência, tenta
+novamente após 1 s; com tela apagada não acessa I2C. A contagem compartilhada
+continua avançando por tempo monotônico entre consultas. A leitura ainda é
+síncrona, com timeout de 100 ms. O timer do mostrador consome essa contagem e
+invalida uma vez por segundo apenas quando visível, incluindo prévias de
+navegação; `on_show` atualiza imediatamente. Atualizar a hora armazenada não
+gera uma segunda invalidação periódica.
+
 O diagnóstico de listras usou uma espera de 2 s antes da sessão Wi-Fi.
 Após corrigir a pressão de memória e confirmar a tela no relógio, o atraso
 foi retirado; os logs de memória nas etapas de rede/TLS foram mantidos.
@@ -245,7 +254,7 @@ No mês, o callback `vertical` avança ao subir e retorna ao descer, uma vez por
 contato, inclusive sobre a grade e Hoje; no detalhe, não troca o mês. Não há
 setas. O retorno para a direita permanece hierárquico.
 
-`on_show` abre o mês atual. O timer de 250 ms consulta o serviço RTC na
+`on_show` abre o mês atual. O timer de 250 ms consulta a hora compartilhada na
 abertura, em Hoje, ao despertar e a cada minuto com tela ativa; só redesenha
 quando os dados mudam. `on_hide` pausa o timer e a tela apagada impede leituras
 e alterações visuais. A troca de data atualiza destaque e distância sem mudar
@@ -253,9 +262,8 @@ o mês que o usuário está consultando. Datas impossíveis, inclusive 31/02,
 são rejeitadas mesmo que o serviço RTC marque a leitura como válida.
 
 Sem data válida na primeira abertura, mostra `Sem data` e aguarda recuperação.
-Depois de uma leitura válida, uma falha mantém o mês navegável, remove o
-destaque de hoje e desabilita Hoje; o detalhe informa que a data atual está
-indisponível. Não usa horário de demonstração para cálculos.
+Depois de obter uma referência válida, falhas do RTC preservam a contagem
+compartilhada, o destaque e Hoje. Não usa horário de demonstração para cálculos.
 
 `tests/run_Calendario_tests.ps1` testa todos os 36.525 dias do intervalo contra o
 calendário da biblioteca C do host, navegação nos limites, bissextos, seis

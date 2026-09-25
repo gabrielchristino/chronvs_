@@ -14,6 +14,33 @@ static uint64_t flush_us, refresh_ms, pixels;
 static uint32_t frames, slow_frames, max_ms;
 static int64_t window_start;
 static bool was_off;
+static void (*original_read)(lv_indev_drv_t *, lv_indev_data_t *);
+static uint32_t touch_reads, touch_read_max_us, touch_gap_max_us;
+static uint32_t interaction_frames, frame_gap_max_us, input_refresh_max_us;
+static int64_t last_touch_us, last_frame_us, pending_input_us;
+static bool touching;
+static lv_point_t last_point;
+
+static void profile_read(lv_indev_drv_t *drv, lv_indev_data_t *data) {
+    const int64_t start = esp_timer_get_time();
+    original_read(drv, data);
+    const int64_t now = esp_timer_get_time();
+    const uint32_t elapsed = (uint32_t)(now - start);
+    if (elapsed > touch_read_max_us) touch_read_max_us = elapsed;
+    ++touch_reads;
+    const bool pressed = data->state == LV_INDEV_STATE_PRESSED;
+    if (pressed && touching && last_touch_us) {
+        const uint32_t gap = (uint32_t)(now - last_touch_us);
+        if (gap > touch_gap_max_us) touch_gap_max_us = gap;
+    }
+    if ((pressed != touching || (pressed &&
+        (data->point.x != last_point.x || data->point.y != last_point.y))) && !pending_input_us)
+        pending_input_us = now;
+    if (!pressed || !touching) last_frame_us = 0;
+    touching = pressed;
+    last_touch_us = now;
+    last_point = data->point;
+}
 
 static void profile_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t *colors) {
     const int64_t start = esp_timer_get_time();
@@ -22,6 +49,20 @@ static void profile_flush(lv_disp_drv_t *drv, const lv_area_t *area, lv_color_t 
 }
 
 static void profile_monitor(lv_disp_drv_t *drv, uint32_t elapsed, uint32_t px) {
+    const int64_t now = esp_timer_get_time();
+    if (touching) {
+        ++interaction_frames;
+        if (last_frame_us) {
+            const uint32_t gap = (uint32_t)(now - last_frame_us);
+            if (gap > frame_gap_max_us) frame_gap_max_us = gap;
+        }
+        last_frame_us = now;
+    }
+    if (pending_input_us) {
+        const uint32_t age = (uint32_t)(now - pending_input_us);
+        if (age > input_refresh_max_us) input_refresh_max_us = age;
+        pending_input_us = 0;
+    }
     ++frames;
     refresh_ms += elapsed;
     pixels += px;
@@ -37,6 +78,12 @@ void chronvs_display_profile_init(void) {
     original_monitor = display->driver->monitor_cb;
     display->driver->flush_cb = profile_flush;
     display->driver->monitor_cb = profile_monitor;
+    for (lv_indev_t *input = lv_indev_get_next(NULL); input; input = lv_indev_get_next(input)) {
+        if (input->driver->type != LV_INDEV_TYPE_POINTER || !input->driver->read_cb) continue;
+        original_read = input->driver->read_cb;
+        input->driver->read_cb = profile_read;
+        break;
+    }
     window_start = esp_timer_get_time();
     ESP_LOGI("display_perf", "enabled; refresh includes synchronous flush; LVGL optimization=%s",
              CHRONVS_LVGL_OPT_LABEL);
@@ -52,14 +99,23 @@ void chronvs_display_profile_poll(bool display_off) {
                  "window_ms=%" PRIi64 " frames=%" PRIu32
                  " refresh_avg_ms=%" PRIu64 " refresh_max_ms=%" PRIu32
                  " over20=%" PRIu32 " flush_avg_us=%" PRIu64
-                 " px_avg=%" PRIu64 " internal_free=%u dma_largest=%u",
+                 " px_avg=%" PRIu64 " internal_free=%u dma_largest=%u"
+                 " touch_reads=%" PRIu32 " touch_read_max_us=%" PRIu32
+                 " touch_gap_max_us=%" PRIu32 " interaction_frames=%" PRIu32
+                 " frame_gap_max_us=%" PRIu32 " input_refresh_max_us=%" PRIu32,
                  (now - window_start) / 1000, frames, refresh_ms / frames,
                  max_ms, slow_frames, flush_us / frames, pixels / frames,
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
-                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA));
+                 (unsigned)heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_DMA),
+                 touch_reads, touch_read_max_us, touch_gap_max_us, interaction_frames,
+                 frame_gap_max_us, input_refresh_max_us);
     }
     frames = slow_frames = max_ms = 0;
     flush_us = refresh_ms = pixels = 0;
     window_start = now;
+    touch_reads = touch_read_max_us = touch_gap_max_us = 0;
+    interaction_frames = frame_gap_max_us = input_refresh_max_us = 0;
+    last_touch_us = last_frame_us = pending_input_us = 0;
+    if (discard) touching = false;
 }
 #endif

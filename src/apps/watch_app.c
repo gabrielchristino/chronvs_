@@ -8,6 +8,7 @@
 
 #include "apps/watch_app.h"
 #include "apps/app_catalog.h"
+#include "services/Relogio_service.h"
 #include "core/app_manager.h"
 #include "ui/system_ui.h"
 
@@ -422,6 +423,9 @@ static void clock_draw_event(lv_event_t *event) {
 }
 
 static void animation_timer_cb(lv_timer_t *timer) {
+    if (chronvs_system_ui_display_is_off() || !lv_obj_is_visible(clock_face)) return;
+    chronvs_time_t time;
+    if (chronvs_Relogio_time(&time)) chronvs_watch_app_set_time(&time);
     lv_obj_invalidate((lv_obj_t *)timer->user_data);
 }
 
@@ -464,10 +468,12 @@ void chronvs_watch_app_set_time(const chronvs_time_t *time) {
 
     displayed_time = *time;
     displayed_time_us = esp_timer_get_time();
-    lv_obj_invalidate(clock_face);
+    /* The one-second visual timer owns periodic invalidation. */
 }
 
 static void show_watch_app(void) {
+    chronvs_time_t time;
+    if (chronvs_Relogio_time(&time)) chronvs_watch_app_set_time(&time);
     if (clock_face != NULL) lv_obj_invalidate(clock_face);
 }
 

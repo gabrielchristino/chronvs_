@@ -1,4 +1,7 @@
 #include "services/rtc_service.h"
+#include "services/Relogio_service.h"
+#include "core/calendar.h"
+#include "esp_timer.h"
 
 #include "driver/i2c.h"
 #include "freertos/FreeRTOS.h"
@@ -7,6 +10,9 @@
 
 #define PCF85063_ADDRESS 0x51
 #define PCF85063_TIME_REGISTER 0x04
+
+static int64_t next_read_us;
+static bool was_off;
 
 static uint8_t bcd_to_decimal(uint8_t value) {
     return ((value >> 4) * 10) + (value & 0x0F);
@@ -34,4 +40,24 @@ chronvs_time_t chronvs_rtc_read(void) {
                  time.day >= 1 && time.day <= 31 && time.weekday < 7 &&
                  time.month >= 1 && time.month <= 12;
     return time;
+}
+
+void chronvs_rtc_refresh(bool display_off) {
+    if (display_off) { was_off = true; return; }
+    const int64_t now = esp_timer_get_time();
+    if (!was_off && now < next_read_us) return;
+    was_off = false;
+    chronvs_time_t sample = chronvs_rtc_read(), estimated;
+    const bool have_estimate = chronvs_Relogio_time(&estimated);
+    bool usable = sample.valid && chronvs_calendar_valid(2000 + sample.year, sample.month, sample.day);
+    if (usable && have_estimate) {
+        const int64_t sample_seconds = (int64_t)chronvs_calendar_ordinal(2000 + sample.year,
+            sample.month, sample.day) * 86400 + sample.hour * 3600 + sample.minute * 60 + sample.second;
+        const int64_t estimated_seconds = (int64_t)chronvs_calendar_ordinal(2000 + estimated.year,
+            estimated.month, estimated.day) * 86400 + estimated.hour * 3600 + estimated.minute * 60 + estimated.second;
+        const int64_t difference = sample_seconds - estimated_seconds;
+        usable = difference >= 0 && difference <= 2;
+    }
+    if (usable) chronvs_Relogio_observe_time(&sample);
+    next_read_us = esp_timer_get_time() + (usable || have_estimate ? 60000000LL : 1000000LL);
 }

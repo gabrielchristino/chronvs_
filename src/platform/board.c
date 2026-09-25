@@ -24,6 +24,7 @@ static const char *TAG = "board";
 #define PWR_Control_PIN     GPIO_NUM_7
 #define TOUCH_INT_PIN       GPIO_NUM_4
 
+#ifdef CHRONVS_DISPLAY_PROFILE
 static void scan_onboard_i2c(void) {
     static const uint8_t addresses[] = {0x20, 0x51, 0x53, 0x6A, 0x6B};
     static const char *names[] = {
@@ -39,6 +40,7 @@ static void scan_onboard_i2c(void) {
                  result == ESP_OK ? "OK" : "no response");
     }
 }
+#endif
 
 static void power_button_task(void *arg) {
     int press_counter = 0;
@@ -101,7 +103,9 @@ void chronvs_board_init(void) {
     gpio_config(&btn_conf);
 
     // 3. Inicializações normais da placa
+#ifdef CHRONVS_DISPLAY_PROFILE
     scan_onboard_i2c();
+#endif
     LCD_Init();
     LVGL_Init();
 

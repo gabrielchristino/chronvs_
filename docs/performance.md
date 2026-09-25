@@ -31,6 +31,8 @@ diagnósticos são substituídas na próxima compilação.
 Ambos preservam atualização de 20 ms, buffers duplos de 1/20 em PSRAM,
 pool TLSF de 128 KiB em PSRAM, transferências de 2 KiB, espera síncrona QSPI
 e debounce do touch. Não há alteração visual ou de gesto.
+O scanner de endereços I2C do boot é executado somente nos diagnósticos;
+o padrão inicializa normalmente os dispositivos, sem sondagens extras.
 
 ## Comparação no dispositivo
 
@@ -85,6 +87,16 @@ O prefixo `display_perf` identifica resumos emitidos no máximo uma vez a cada
 - `px_avg`: pixels processados por atualização, útil para comparar a carga.
 - `internal_free`, `dma_largest`: RAM interna livre de 8 bits e maior bloco
   interno apto a DMA, em bytes, amostrados ao emitir o resumo.
+- `touch_reads`, `touch_read_max_us`: chamadas ao leitor do touch e maior
+  duração de uma chamada, incluindo o backend I2C quando ele é executado.
+- `touch_gap_max_us`: maior intervalo entre leituras consecutivas enquanto
+  o contato permanece pressionado.
+- `interaction_frames`, `frame_gap_max_us`: atualizações concluídas durante
+  contato e maior intervalo entre elas no mesmo contato. Um dedo parado
+  pode não exigir novos quadros; intervalos longos não provam travamento.
+- `input_refresh_max_us`: maior espera da primeira mudança de posição/estado
+  ainda pendente até a próxima atualização concluída. Essa atualização pode
+  ter outra causa; não mede latência física nem prova resposta ao gesto.
 
 A diferença entre refresh e flush é apenas uma estimativa do trabalho fora
 do driver; os relógios têm resoluções diferentes e incluem preempções.
@@ -93,6 +105,10 @@ do app fora do refresh. O logging também tem custo: compare ambos os builds
 instrumentados e confirme o resultado final sem instrumentação.
 Com tela apagada, as amostras são descartadas e não há resumo nem consulta
 de heap. Nenhum timer ou tarefa extra é criado.
+As métricas de touch usam o callback original, sem alterar sua cadência de
+30 ms nem o debounce. Contadores e intervalos são reiniciados por janela;
+janelas sem atualizações não emitem resumo. Compare os intervalos durante
+arrastes contínuos equivalentes, separando repouso, painel e launcher.
 
 Compilação bem-sucedida, isoladamente, não confirma ganho de fluidez ou
 estabilidade física. Novas alterações continuam exigindo comparação no painel.
@@ -160,3 +176,10 @@ O NTP passou a usar uma tarefa temporária por sessão, liberando a pilha
 entre sincronizações. Build e testes de NTP/Clima/Wi-Fi passaram, e o usuário
 confirmou "tudo certo nos testes" no relógio. O relato não discrimina cada
 cenário nem mede memória recuperada; os limites estão na análise de desempenho.
+
+A consolidação das atualizações do mostrador, o cache de estilos do launcher,
+a consulta RTC por minuto e a retirada do scanner I2C do padrão também foram
+testados no relógio pelo usuário: "tudo funcionando perfeito". Os três builds
+e os testes de RTC/interface passaram. A próxima etapa é a captura das métricas
+de touch e renderização descritas acima; ainda não há medidas físicas para
+justificar alterações na cadência do touch ou quantificar o ganho desta revisão.

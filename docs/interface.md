@@ -404,6 +404,13 @@ driver não podem ser copiados diretamente.
 
 - `LV_DISP_DEF_REFR_PERIOD` é 20 ms, com alvo de até 50 FPS durante um gesto.
   O mostrador normal continua atualizado uma vez por segundo.
+  Um único timer controla sua invalidação periódica; quando oculto, não
+  invalida. Ao abrir e durante as prévias dos gestos, volta a mostrar a hora.
+  A referência RTC é consultada no boot, ao acordar e a cada minuto com tela
+  acesa; sem referência válida, há nova tentativa após 1 s. Entre leituras,
+  a hora avança pelo contador monotônico. Tela apagada continua sem ler RTC.
+- A curva do launcher só reaplica deslocamento e opacidade quando seus
+  valores mudam. Geometria e coalescência de 20 ms permanecem iguais.
 - Há dois buffers LVGL em PSRAM. O driver SPD2010 deve permanecer no tamanho
   original de `1/20` da tela e em transferências QSPI de 2 KiB.
 - O script `scripts/add_waveshare_drivers.py` reaplica essas escolhas ao

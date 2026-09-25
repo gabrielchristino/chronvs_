@@ -6,9 +6,7 @@
 #include "lvgl.h"
 
 #include "apps/app_catalog.h"
-#include "apps/watch_app.h"
 #include "core/app_manager.h"
-#include "core/calendar.h"
 #include "platform/board.h"
 #include "platform/display_profile.h"
 #include "services/battery_service.h"
@@ -25,12 +23,6 @@
 
 static const char *TAG = "chronvs";
 
-static int64_t civil_seconds(const chronvs_time_t *time) {
-    return (int64_t)chronvs_calendar_ordinal(2000 + time->year,
-        time->month, time->day) * 86400 + time->hour * 3600 +
-        time->minute * 60 + time->second;
-}
-
 void app_main(void) {
     ESP_LOGI(TAG, "Chronvs application runtime starting");
     chronvs_board_init();
@@ -45,7 +37,6 @@ void app_main(void) {
     chronvs_wifi_session_init();
     chronvs_time_sync_start();
 
-    TickType_t next_rtc_update = 0;
     TickType_t next_battery_update = 0;
     bool display_was_off = false;
     /* At 100 Hz, pdMS_TO_TICKS(5) is zero: always block for at least one tick. */
@@ -58,6 +49,7 @@ void app_main(void) {
             chronvs_Relogio_observe_time(&synchronized_time);
         TickType_t now = xTaskGetTickCount();
         const bool display_is_off = chronvs_system_ui_display_is_off();
+        chronvs_rtc_refresh(display_is_off);
         if (display_is_off) {
             if (!display_was_off)
                 ESP_LOGI(TAG, "Display off: light sleep enabled");
@@ -73,33 +65,6 @@ void app_main(void) {
             }
         } else {
             const bool refresh_after_wake = display_was_off;
-            if (refresh_after_wake || now >= next_rtc_update) {
-                chronvs_time_t time = chronvs_rtc_read();
-                chronvs_time_t estimated;
-                const bool have_estimate = chronvs_Relogio_time(&estimated);
-                bool rtc_usable = time.valid &&
-                    chronvs_calendar_valid(2000 + time.year, time.month, time.day);
-                if (rtc_usable && have_estimate) {
-                    const int64_t difference = civil_seconds(&time) - civil_seconds(&estimated);
-                    if (difference < 0 || difference > 2) {
-                        if (refresh_after_wake)
-                            ESP_LOGW(TAG, "RTC differs from running clock by %lld s",
-                                     (long long)difference);
-                        rtc_usable = false;
-                    }
-                }
-                if (rtc_usable) {
-                    chronvs_Relogio_observe_time(&time);
-                } else if (have_estimate) {
-                    if (refresh_after_wake && !time.valid)
-                        ESP_LOGW(TAG, "RTC read failed after display wake; using running clock");
-                    time = estimated;
-                } else {
-                    time.valid = false;
-                }
-                chronvs_watch_app_set_time(&time);
-                next_rtc_update = now + pdMS_TO_TICKS(1000);
-            }
             if (refresh_after_wake || now >= next_battery_update) {
                 const chronvs_battery_status_t battery = chronvs_battery_read();
                 if (battery.valid) {

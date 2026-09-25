@@ -6,6 +6,7 @@
 #undef nvs_set_blob
 #include "lvgl.h"
 #include "apps/app_catalog.h"
+#include "apps/watch_app.h"
 #include "ui/system_ui.h"
 #include "ui/control_style.h"
 #include "esp_heap_caps.h"
@@ -15,6 +16,13 @@
 #include "platform/lvgl_memory.h"
 #include "ui/Relogio_alert.h"
 #include <stdlib.h>
+
+/* Exercise diagnostic wrappers with the real LVGL input and display drivers. */
+#define CHRONVS_DISPLAY_PROFILE
+#define CHRONVS_LVGL_OPT_LABEL "host"
+#define pixels profile_pixels
+#include "platform/display_profile.c"
+#undef pixels
 
 int nvs_set_blob(nvs_handle_t h, const char *k, const void *in, size_t size) {
     if (!strncmp(k,"note",4)) {
@@ -133,6 +141,10 @@ static void capture(const char *name) {
     memcpy(h+18,&dim,4);memcpy(h+22,&dim,4);memcpy(h+26,&planes,2);memcpy(h+28,&bits,2);
     fwrite(h,1,54,f);fwrite(pixels,1,sizeof(pixels),f);fclose(f);
 }
+static unsigned refresh_count;
+static void count_refresh(lv_disp_drv_t *drv,uint32_t ms,uint32_t px) {
+    (void)drv; (void)ms; (void)px; ++refresh_count;
+}
 int main(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
     lv_init();
@@ -144,11 +156,27 @@ int main(void) {
     static lv_color_t buffer[412*412/20];static lv_disp_draw_buf_t draw;static lv_disp_drv_t driver;
     lv_disp_draw_buf_init(&draw,buffer,NULL,412*412/20);lv_disp_drv_init(&driver);
     driver.hor_res=driver.ver_res=412;driver.draw_buf=&draw;driver.flush_cb=flush;
+    driver.monitor_cb=count_refresh;
     lv_disp_drv_register(&driver);
     static lv_indev_drv_t input; lv_indev_drv_init(&input);
     input.type=LV_INDEV_TYPE_POINTER;input.read_cb=read_touch;lv_indev_drv_register(&input);
+    chronvs_display_profile_init(); chronvs_display_profile_init();
     chronvs_app_manager_init(lv_scr_act());assert(chronvs_apps_register_all());
     assert(chronvs_app_open("watch"));capture("12-watch");
+    refresh_count=0;
+    for (unsigned i=0; i<1000; ++i) {
+        now_us+=10000;
+        if (i%100==50) {
+            chronvs_time_t shared;
+            assert(chronvs_Relogio_time(&shared));
+            chronvs_watch_app_set_time(&shared);
+        }
+        lv_tick_inc(10); lv_timer_handler();
+    }
+    printf("Watch: %u refreshes over 10 seconds with offset time updates.\n",refresh_count);
+    assert(refresh_count>=9 && refresh_count<=11);
+    assert(frames>=refresh_count && touch_reads>0);
+    chronvs_system_ui_notify_activity();
     lv_obj_t *panel=lv_obj_get_child(lv_scr_act(),1);assert(panel);
     lv_obj_clear_flag(panel,LV_OBJ_FLAG_HIDDEN);lv_obj_set_y(panel,0);
     chronvs_system_ui_set_battery(72,3.9f);capture("13-quick-settings");
@@ -235,6 +263,9 @@ int main(void) {
     int centered_x = lv_obj_get_style_translate_x(first_row, 0);
     lv_obj_scroll_to_y(app_list, 82, LV_ANIM_OFF); elapse(70);
     assert(lv_obj_get_style_translate_x(first_row, 0) > centered_x);
+    elapse(100); refresh_count=0;
+    for (unsigned i=0;i<10;++i) { lv_event_send(app_list,LV_EVENT_SCROLL,NULL); elapse(35); }
+    assert(refresh_count==0); /* Unchanged curve must not invalidate row styles. */
     capture("19-launcher-arc");
     /* A vertical drag on an app scrolls the arc without launching on release. */
     touch(150,206,LV_INDEV_STATE_PR);
@@ -406,5 +437,7 @@ int main(void) {
         (unsigned)memory.free_size,(unsigned)memory.free_biggest_size);
     tap(206,307); chronvs_Relogio_alert_poll(); assert(!reminder_ringing && chronvs_reminder_get(0)->done);
     assert(weather_rtc_reads==0); /* Apps use the shared clock, never I2C. */
+    chronvs_display_profile_poll(true);
+    assert(frames==0 && touch_reads==0 && pending_input_us==0);
     return 0;
 }

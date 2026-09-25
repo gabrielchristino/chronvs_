@@ -365,3 +365,44 @@ validada pelo usuário, sem detalhamento individual dos cenários ou medição
 de latência e consumo. Próximo candidato: medir e consolidar as invalidações
 do mostrador em repouso, preservando a prévia dos gestos. Comparação com
 CrowPanel e mudanças na cadência do touch continuam adiadas.
+
+## Revisão de 25/09/2026: mostrador, launcher, RTC e diagnóstico
+
+Após a base validada `fd1650b`, o mostrador passou a ter uma única fonte de
+invalidação periódica. Seu timer lê a hora compartilhada e redesenha a cada
+segundo quando visível; atualizar a referência não invalida novamente.
+`on_show` atualiza imediatamente e as prévias de navegação continuam atendidas.
+O launcher guarda deslocamento e opacidade de cada linha, reaplicando estilos
+somente quando esses valores mudam, sem mudar sua curva ou gestos.
+
+O serviço RTC concentra a política antes mantida no main: consulta no boot,
+ao acordar e a cada 60 s após obter referência válida. Sem referência, tenta
+novamente após 1 s. Com tela apagada não lê I2C. A validação e o fallback
+monotônico permanecem; correções NTP continuam entregues ao serviço comum.
+Não foi criada tarefa. A consulta ainda pode bloquear até seu timeout de
+100 ms; a redução de frequência não elimina esse risco em uma leitura.
+
+O padrão também deixou de executar a sondagem I2C do boot. Os diagnósticos
+preservam o scanner e acrescentam duração das leituras de touch, intervalos
+entre amostras e quadros durante contato e espera até o próximo refresh.
+As definições e limitações estão em `performance.md`: esses dados não medem
+latência física e ainda precisam ser capturados no relógio. Não foram alterados
+cadência/debounce do touch, buffers, heap LVGL, QSPI ou período de refresh.
+
+`tests/run_rtc_tests.ps1` passou cobrindo retry inicial, cadência de 60 s,
+sono simulado de 24 horas, despertar, fallback e correção NTP.
+`tests/run_Relogio_ui.ps1 -System` passou incluindo os wrappers de diagnóstico,
+gestos, controles, editor, aviso, AUTO/ECO e primeiro toque ao acordar.
+O mostrador produziu 10 refreshes em 10 s apesar de atualizações de hora
+deslocadas do timer; eventos repetidos de scroll sem movimento não produziram
+refresh no launcher. Esses números são do host, não do painel físico.
+Os três builds PlatformIO passaram: padrão, `display_profile_o2` e
+`display_profile`. O padrão ocupa 1.660.656 bytes de flash; esse tamanho
+não representa uma medição de fluidez ou de RAM interna disponível.
+
+Após testar esta revisão no relógio, o usuário confirmou: "tudo funcionando
+perfeito, podemos seguir". A etapa passa a integrar a base validada pelo
+usuário. O relato não discrimina cada cenário nem quantifica FPS, latência
+ou consumo. O próximo passo é capturar os cenários instrumentados de
+`performance.md` para avaliar gargalos antes de mudar parâmetros do touch.
+Comparação com CrowPanel e medição de autonomia permanecem para outra etapa.

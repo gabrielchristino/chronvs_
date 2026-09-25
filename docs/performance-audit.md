@@ -595,3 +595,43 @@ As 16 imagens permaneceram idênticas por SHA-256. O diagnóstico O2 usa
 58.160 bytes de RAM estática, 96 bytes a mais que antes. Falta a captura física
 com os novos campos para localizar o grupo dominante; não há ganho de
 renderização alegado nesta etapa de instrumentação.
+
+## Resultado físico da instrumentação do mostrador
+
+O anexo seguinte registra `device-monitor-260925-183242.log`, com os novos
+campos. A análise selecionou o trecho de 34.260 a 76.270 ms: 22 janelas,
+44 quadros de tela inteira, nenhuma interação registrada e 924 entradas no
+callback (21 faixas por quadro). O início foi excluído por conter atividade
+Wi-Fi e transições; a primeira janela chegou a 218 ms de flush médio e não
+representa o repouso estável. O anexo não traz confirmação de upload/banner.
+
+| Grupo | Tempo médio por atualização |
+| --- | ---: |
+| Aros e números da data | 79,82 ms |
+| Disco central e ponteiro de minutos | 33,21 ms |
+| Submostrador de horas | 23,25 ms |
+| Escala de minutos | 20,07 ms |
+| Dia da semana | 15,02 ms |
+| Temperatura | 14,10 ms |
+| Segundos | 4,32 ms |
+| Geometria (ângulos e posições) | 2,82 ms |
+| Marcador da data | 2,70 ms |
+| Fundo | 1,20 ms |
+| Setup, recorte e cache | 0,91 ms |
+
+O refresh médio foi 238,09 ms; flush, 17,21 ms. Os grupos somam 197,42 ms.
+A diferença restante, aproximadamente 23,46 ms, não está atribuída: inclui
+trabalho LVGL fora dos trechos, diferenças de resolução e instrumentação.
+Esses tempos incluem preempções; não são contadores exclusivos de CPU.
+
+O maior custo identificado é `draw_fixed_case`: cerca de 33,5% do refresh
+ou 40,4% dos grupos medidos. Esse grupo ainda reúne dois círculos e os 31
+números da data; não é possível atribuir seus 80 ms somente a preenchimento,
+borda, fonte ou antialiasing. A próxima investigação deve separar círculos
+e textos dentro desse grupo e avaliar desenho redundante coberto pelas
+camadas seguintes, preservando pixels e buffers. Não há justificativa nestes
+dados para alterar touch/QSPI nem priorizar mais caches de trigonometria.
+
+A cadência de repouso foi 1 Hz. Heap interno e maior bloco DMA amostrados
+ficaram em 142.919 e 31.744 bytes, respectivamente, sem inferir uma margem
+segura ou autonomia. Esta análise não introduz alteração no firmware.

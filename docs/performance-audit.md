@@ -427,3 +427,9 @@ Build padrão e testes de UI do Relogio e da interface integrada passaram.
 Os testes verificam o pedido de som no primeiro poll do aviso, interrupção
 ao dispensar/adicionar tempo, ausência de reinício tardio e continuidade
 quando a gravação da conclusão falha. Esses mocks não validam o painel/I2S.
+
+Após a publicação de `5f3feed`, o usuário confirmou também: "tudo certo com
+o touch aqui". O funcionamento do toque está validado pelo relato no relógio;
+a cadência de 30 ms e o debounce permanecem iguais. Não há regressão de toque
+relatada que motive alterá-los. A captura de métricas permanece disponível
+para uma investigação futura; latência, FPS e autonomia não foram medidos.

@@ -736,3 +736,79 @@ launcher. Comparar `watch_rings_us`, refresh, memória interna e maior bloco
 DMA; conferir também bordas, Clima e avisos no painel físico. O firmware
 anterior foi preservado localmente em `.pio/diagnostics/pre-circle-cache-6843b04/`.
 Para reverter a variável em teste, restaurar quatro entradas e recompilar.
+
+## Captura após ampliar o cache de círculos (26/09)
+
+Análise dos arquivos locais `device-monitor-260926-160746.log` e
+`device-monitor-260926-160921.log`, correspondentes ao anexo recebido.
+O primeiro contém 20 janelas válidas; o segundo, 12. Não houve rejeição
+numérica nos originais. A colagem perdeu um separador em uma linha e cortou
+o último número, por isso os cálculos usam os arquivos locais. O segundo
+arquivo começa com um fragmento de boot unido à primeira linha de métricas;
+essa janela inicial não entra nas comparações abaixo.
+
+### Mostrador parado
+
+No primeiro arquivo, o Wi-Fi termina em 9.690 ms. Foram selecionadas as
+18 janelas entre 11.930 e 45.940 ms: 36 quadros completos, 756 faixas,
+36,009 s observados e nenhuma interação. Excluídas as janelas anteriores,
+que incluem atividade do rádio. O brilho reduz em 17.230 ms e a tela apaga
+em 47.230 ms. A cadência de repouso permanece em 1 Hz.
+
+| Medição por atualização | Captura anterior | Nova captura | Diferença observada |
+| --- | ---: | ---: | ---: |
+| Círculos externos | 69,04 ms | 57,35 ms | −16,9% |
+| Números da data | 11,24 ms | 10,87 ms | −3,3% |
+| Grupo completo da data | 80,29 ms | 68,23 ms | −15,0% |
+| Refresh completo | 245,26 ms | 228,06 ms | −7,0% |
+| Flush QSPI | 17,16 ms | 17,11 ms | aproximadamente estável |
+
+A redução dos círculos é coerente com o menor número de recálculos no host.
+Não é um A/B controlado: data, ângulos e condições mudaram entre capturas;
+portanto não se atribuem os 17,21 ms de redução total exclusivamente ao cache.
+O tempo dos círculos caiu 11,69 ms. As duas capturas não trazem confirmação
+de upload nem banner de otimização; o ambiente do monitor não identifica
+sozinho a configuração do binário gravado.
+
+Heap interno mínimo: 142.887 bytes, 112 bytes abaixo do repouso anterior,
+coerente com os descritores extras. Maior bloco DMA: 38.912 bytes, igual ao
+anterior. Esses valores são amostras após refresh; não medem o pico do pool
+LVGL em PSRAM nem estabelecem margem segura de memória.
+
+### Navegação na segunda sessão
+
+Entre 13.964 e 18.004 ms, três janelas misturam navegação e desenho do
+mostrador: 33 quadros, 24 durante contato, refresh médio ponderado de
+99,52 ms e máximo de 228 ms. O intervalo máximo entre quadros durante
+contato foi 214,09 ms; entre leituras de touch, 250,34 ms. A leitura do
+touch em si levou no máximo 1,92 ms nessas janelas. Isso aponta para trabalho
+entre leituras, incluindo renderização, como alvo de investigação; não
+isola todo o atraso nem justifica alterar parâmetros do driver.
+
+Depois de `Opened app: apps`, as janelas de 20.034 e 22.044 ms não desenham
+o mostrador: 40 quadros, 21 durante contato, refresh médio de 54,95 ms,
+máximo de 70 ms e intervalo máximo entre quadros de 83,48 ms. Não se deve
+comparar diretamente esse custo com o refresh de tela inteira do mostrador,
+pois a composição e a quantidade de pixels diferem. Também não há uma
+captura anterior dos mesmos gestos para quantificar sua melhoria.
+
+`input_refresh_max_us` chegou a 933.679 us em 11.954 ms, numa janela sem
+quadros registrados durante contato. O contador guarda a primeira mudança
+de toque até o próximo refresh, inclusive soltar/toques que não provocam
+redesenho imediato; esse valor não prova latência visual de 934 ms de um
+gesto. Nas três janelas de navegação acima, o máximo foi 405,65 ms, sujeito
+à mesma limitação. Heap interno mínimo durante navegação: 142.787 bytes;
+DMA permaneceu em 38.912 bytes.
+
+### Limites e próximo passo
+
+O anexo registra perda da COM3 após apagar e depois um novo trecho de boot.
+Não há motivo de reset, panic ou watchdog capturado. Foi solicitada a
+confirmação de reinicialização/reconexão manual; até a resposta, não é
+possível classificar esse evento como regressão ou funcionamento normal.
+Clima, avisos e ausência de artefatos ainda dependem de confirmação visual.
+
+O próximo alvo é reduzir desenho redundante dos círculos onde camadas
+opacas posteriores os cobrem, com comparação de pixels antes de novo teste
+físico. O cache fica em oito entradas; não há evidência para ampliá-lo de
+novo indiscriminadamente. Esta etapa registra a medição e não muda firmware.

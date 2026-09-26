@@ -802,10 +802,17 @@ DMA permaneceu em 38.912 bytes.
 
 ### Limites e próximo passo
 
-O anexo registra perda da COM3 após apagar e depois um novo trecho de boot.
-Não há motivo de reset, panic ou watchdog capturado. Foi solicitada a
-confirmação de reinicialização/reconexão manual; até a resposta, não é
-possível classificar esse evento como regressão ou funcionamento normal.
+O usuário confirmou que a COM3 desconectou ao apagar a tela; depois ele
+desconectou o USB, desligou e ligou o relógio. O novo boot corresponde a essa
+intervenção manual, não a um reinício espontâneo comprovado. Não há motivo
+de reset, panic ou watchdog capturado. A perda da conexão é compatível com
+o light sleep explícito em `platform/board.c`: o diagnóstico habilita o
+console secundário USB Serial/JTAG e o Kconfig do ESP-IDF 5.3.1 instalado
+documenta a indisponibilidade desse periférico durante/depois do light sleep.
+A opção de impedir sono automático com USB conectado não impede a chamada
+explícita a `esp_light_sleep_start()`. Para coletar desempenho sem interromper
+a USB, usar temporariamente o perfil ON com ECO desligado; restaurar o perfil
+depois. Esse procedimento não testa suspensão nem autonomia.
 Clima, avisos e ausência de artefatos ainda dependem de confirmação visual.
 
 O próximo alvo é reduzir desenho redundante dos círculos onde camadas

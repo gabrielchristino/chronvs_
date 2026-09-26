@@ -102,6 +102,16 @@ um resumo representa a janela inteira anterior, de aproximadamente 2 s.
 Mantenha brilho, perfil de energia e ritmo dos gestos comparáveis. Feche o
 monitor antes de trocar firmware. A coleta requer interação física no relógio.
 
+Para manter a captura USB contínua, selecione temporariamente o perfil `ON`
+nos acessos rápidos e desligue `ECO` (ele prevalece sobre ON). Restaure o
+perfil anterior ao terminar e use a mesma configuração nas comparações.
+Ao apagar a tela, o firmware entra em light sleep explícito; o USB Serial/JTAG
+usado pelo diagnóstico pode perder a conexão e não retornar ao despertar,
+limitação descrita no Kconfig do ESP-IDF instalado. A opção de bloquear
+light sleep automático via USB não bloqueia essa chamada explícita.
+A queda da COM3 sozinha não comprova travamento ou reset. Testes de suspensão
+devem ser separados dessa coleta de desempenho com tela ligada.
+
 Analise os arquivos (substituindo os nomes pelos caminhos salvos):
 
 ```powershell

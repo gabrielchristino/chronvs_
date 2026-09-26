@@ -922,3 +922,45 @@ diagnóstico O2 aprovado (RAM 58.280 B, flash 1.779.280 B). A suíte integrada
 passou, incluindo navegação, memória, energia e despertar; as 16 capturas
 diretas mantiveram SHA idêntico à referência. Não há ganho físico alegado
 para a retirada antes do novo upload e da captura de confirmação.
+
+## Recuperação confirmada após retirar o recorte
+
+Após testar a versão restaurada, o usuário confirmou: "está fluido".
+Os arquivos locais `device-monitor-260926-163501.log` e
+`device-monitor-260926-163547.log` têm, respectivamente, 13 e 30 janelas
+válidas, sem rejeições. Foram usados os originais, pois a colagem perdeu
+separadores. A primeira sessão inclui o banner `LVGL optimization=-O2`;
+a segunda não traz esse banner e é mantida separada na análise.
+
+| Trecho de repouso após Wi-Fi | Janelas / quadros | Círculos | Refresh | Flush |
+| --- | ---: | ---: | ---: | ---: |
+| Primeira sessão, 11.969–23.999 ms | 7 / 14 | 57,14 ms | 229,71 ms | 17,14 ms |
+| Segunda sessão, 21.969–35.969 ms | 8 / 16 | 57,07 ms | 227,38 ms | 17,12 ms |
+
+Os trechos têm 14,040 e 16,009 s observados, nenhuma interação e 21 faixas
+por quadro de tela inteira. A cadência permanece próxima de 1 Hz. Os
+valores voltaram à faixa anterior ao experimento (57,35 ms de círculos e
+228,06 ms de refresh), frente aos aproximadamente 70 e 244 ms com recorte.
+Junto ao relato do usuário, isso confirma a recuperação observada no
+dispositivo. A comparação não fixa data/ângulos nem quantifica autonomia.
+
+Heap interno mínimo nesses trechos: 142.887 e 142.883 bytes; maior bloco
+DMA: 38.912 bytes em ambos. No launcher, as janelas de 54.339 e 56.349 ms
+da segunda sessão somam 40 quadros, 20 durante contato, com refresh médio
+ponderado de 53,80 ms e máximo de 70 ms, sem desenho do mostrador.
+
+A janela de navegação em 44.299 ms registra intervalo entre quadros de
+846,94 ms e idade da primeira mudança de toque até refresh de 842,18 ms.
+Esses máximos não foram descartados: o contador inclui períodos sem novo
+redesenho, inclusive contato parado, e o agregado não permite distinguir
+espera por invalidação de bloqueio. Não equivalem ao tempo de renderização
+de um quadro nem comprovam travamento. Uma investigação futura de gestos
+precisa correlacionar movimento, invalidação e conclusão de refresh.
+
+O monitor desconectou entre as sessões e o segundo arquivo contém um
+fragmento de boot. A captura não registra a causa desse evento; não se
+atribui automaticamente à suspensão ou a reset espontâneo. O perfil
+registrado continua AUTO 15s/45s, com redução de brilho durante repouso.
+A confirmação de fluidez não substitui ensaios específicos de Clima,
+avisos, suspensão ou duração de bateria. Esta etapa somente documenta
+o resultado; mantém cache de oito entradas e desenho sem recorte interno.

@@ -48,6 +48,9 @@ a captura física mostrar aumento de custo. Permanecem as duas primitivas
 originais com o cache de oito raios. A comparação de pixels continua nos
 testes; o [histórico do experimento](performance-audit.md#recorte-do-interior-coberto-dos-círculos)
 registra por que reduzir preenchimento não garantiu menor tempo de desenho.
+Após a retirada, o usuário confirmou a fluidez e os logs mostraram retorno
+dos círculos a cerca de 57 ms e refresh de 227–230 ms em repouso. Veja a
+[confirmação física](performance-audit.md#recuperação-confirmada-após-retirar-o-recorte).
 
 ## Comparação no dispositivo
 

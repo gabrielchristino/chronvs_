@@ -262,11 +262,47 @@ static void draw_hand(lv_draw_ctx_t *ctx, float cx, float cy, float tail,
               polar_point(cx, cy, length, angle), color, width, true);
 }
 
+/* Skip only pixels well inside the opaque circle drawn afterwards. The
+ * exclusion spans this whole partial strip, so at most two clips are needed.
+ * Keep four pixels of margin for coordinate rounding, border and AA. */
+static void draw_covered_circle(lv_draw_ctx_t *ctx, float cx, float cy,
+                                float radius, uint32_t fill, int border_width,
+                                float cover_radius) {
+    const lv_area_t *original_clip = ctx->clip_area;
+    const float safe_radius = cover_radius - 4.0f;
+    const float dy = fmaxf(fabsf(original_clip->y1 - cy),
+                          fabsf(original_clip->y2 - cy));
+    if (dy >= safe_radius || lv_draw_mask_is_any(original_clip)) {
+        draw_circle(ctx, cx, cy, radius, fill, COLOR_TRACK, border_width);
+        return;
+    }
+    const float half_width = sqrtf(safe_radius * safe_radius - dy * dy);
+    const lv_coord_t hole_left = (lv_coord_t)ceilf(cx - half_width);
+    const lv_coord_t hole_right = (lv_coord_t)floorf(cx + half_width);
+    if (hole_left > hole_right) {
+        draw_circle(ctx, cx, cy, radius, fill, COLOR_TRACK, border_width);
+        return;
+    }
+    lv_area_t clip = *original_clip;
+    clip.x2 = LV_MIN(clip.x2, hole_left - 1);
+    if (clip.x1 <= clip.x2) {
+        ctx->clip_area = &clip;
+        draw_circle(ctx, cx, cy, radius, fill, COLOR_TRACK, border_width);
+    }
+    clip = *original_clip;
+    clip.x1 = LV_MAX(clip.x1, hole_right + 1);
+    if (clip.x1 <= clip.x2) {
+        ctx->clip_area = &clip;
+        draw_circle(ctx, cx, cy, radius, fill, COLOR_TRACK, border_width);
+    }
+    ctx->clip_area = original_clip;
+}
+
 static void draw_case_rings(lv_draw_ctx_t *ctx, float cx, float cy) {
 
     /* Overscan hides the antialiased edge beyond the round panel aperture. */
-    draw_circle(ctx, cx, cy, 206, COLOR_DATE_RING, COLOR_TRACK, 1);
-    draw_circle(ctx, cx, cy, 183, COLOR_FACE_DARK, COLOR_TRACK, 2);
+    draw_covered_circle(ctx, cx, cy, 206, COLOR_DATE_RING, 1, 183);
+    draw_covered_circle(ctx, cx, cy, 183, COLOR_FACE_DARK, 2, 154);
 }
 
 static void draw_case_dates(lv_draw_ctx_t *ctx) {

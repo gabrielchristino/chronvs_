@@ -26,6 +26,9 @@ try {
     $beforeHash = (Get-FileHash '.pio/host-tests/watch-render-4.rgb565').Hash
     $afterHash = (Get-FileHash '.pio/host-tests/watch-render-8.rgb565').Hash
     if ($beforeHash -ne $afterHash) { throw 'Pixel stream SHA256 differs between cache sizes' }
+    # Captured before covered-circle clipping, with the same 60 watch scenarios.
+    $referenceHash = 'CDBAEE2A64F4C5F8E6314E59F8C74ADDC036A2E3497B1C5A9718D307A38A8E4D'
+    if ($afterHash -ne $referenceHash) { throw 'Watch pixels differ from the reference drawing' }
     Write-Output "Pixel streams SHA256: $afterHash"
     $beforeMisses = [int][regex]::Match($results[0], 'large_misses=(\d+)').Groups[1].Value
     $afterMisses = [int][regex]::Match($results[1], 'large_misses=(\d+)').Groups[1].Value

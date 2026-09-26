@@ -43,6 +43,12 @@ dos pixels, recálculos de máscaras e memória amostrada durante o desenho.
 O ganho de tempo no dispositivo ainda aguarda medição; veja a
 [análise do cache](performance-audit.md#cache-de-máscaras-circulares).
 
+Os círculos externos também recortam seu interior quando outra camada
+circular opaca o cobrirá. O recorte é calculado por faixa com margem para
+bordas e antialiasing; máscaras externas mantêm o desenho completo. A
+igualdade dos pixels foi verificada no host; o ganho de tempo dessa etapa
+ainda depende da [medição física](performance-audit.md#recorte-do-interior-coberto-dos-círculos).
+
 ## Comparação no dispositivo
 
 Use o PlatformIO instalado em `C:\Users\gabri\.platformio\penv\Scripts\platformio.exe`

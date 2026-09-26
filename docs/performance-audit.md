@@ -819,3 +819,45 @@ O próximo alvo é reduzir desenho redundante dos círculos onde camadas
 opacas posteriores os cobrem, com comparação de pixels antes de novo teste
 físico. O cache fica em oito entradas; não há evidência para ampliá-lo de
 novo indiscriminadamente. Esta etapa registra a medição e não muda firmware.
+
+## Recorte do interior coberto dos círculos
+
+Após `3e906f1`, `draw_covered_circle` reduz o desenho dos dois círculos
+externos por faixa. O círculo de raio 206 omite apenas uma região interior
+que será coberta pelo círculo de raio 183; este omite a região coberta pelo
+disco central de raio 154. A margem de quatro pixels mantém o recorte longe
+das bordas, do arredondamento de coordenadas e do antialiasing.
+
+Para cada faixa, a distância vertical mais afastada do centro determina um
+retângulo inteiramente dentro do círculo de cobertura. Desenha-se somente
+à esquerda e à direita dele, no máximo duas chamadas, preservando os limites
+originais da primitiva. Faixas fora desse interior ou sob máscaras LVGL
+externas usam o desenho anterior. O clip original é restaurado antes das
+próximas camadas. Cores, fontes, ordem de composição, cache de oito raios,
+buffers, pool, cadência e transferência QSPI permanecem iguais.
+
+O teste dos 60 cenários com LVGL real manteve exatamente o SHA-256 do fluxo
+RGB565 anterior; o runner agora verifica também essa referência fixa, além
+de comparar quatro e oito entradas de cache. As 16 capturas diretas da suíte
+integrada também mantiveram SHA idêntico. A suíte passou nos testes de
+navegação, memória compartilhada, inatividade e primeiro toque de despertar.
+
+Com oito entradas, o teste do mostrador registrou 13.273 recálculos totais e
+300 de raios grandes, frente a 13.200 e 357 anteriores. As chamadas extras
+e as larguras diferentes dos recortes têm custo: o maior uso amostrado do
+heap no host passou de 19.248 para 20.296 bytes; ao terminar, continuou em
+8.952 bytes. Não há novo armazenamento persistente nem cache de imagem.
+O objetivo é reduzir pixels processados, não necessariamente cada contador
+de chamadas. Somente a nova captura física pode confirmar ganho de tempo.
+
+O build padrão passou com 55.012 bytes de RAM (igual ao anterior) e
+1.661.732 bytes de flash (+672 bytes). O firmware de diagnóstico anterior
+foi preservado em `.pio/diagnostics/pre-covered-circles-3e906f1/`.
+O build O2 também passou: 58.280 bytes de RAM e 1.779.872 bytes de flash.
+
+Validação física pendente: repetir repouso e gestos em capturas separadas,
+com ON, ECO desligado e brilho equivalente. Comparar círculos, refresh e
+intervalos durante contato com a captura de 26/09, conferir bordas e
+transições e testar Clima/avisos/despertar. Se o custo das chamadas extras
+superar o trabalho poupado, restaurar as duas chamadas diretas a
+`draw_circle` em `draw_case_rings`, mantendo o cache de oito entradas.

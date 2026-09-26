@@ -658,3 +658,81 @@ separação dos contadores e sua limpeza com a tela apagada. As 16 capturas
 comparadas mantiveram SHA idêntico à referência. O diagnóstico O2 usa
 58.168 bytes de RAM (8 bytes adicionais) e 1.779.276 bytes de flash.
 Essas verificações não substituem a nova captura no dispositivo.
+
+## Resultado físico: círculos externos versus números da data
+
+A captura `device-monitor-260925-184251.log` contém 22 janelas válidas, sem
+linhas rejeitadas. Para o repouso após NTP e desligamento do Wi-Fi, foram
+selecionadas as 19 janelas de 9.950 a 45.960 ms: 38 quadros completos,
+798 faixas e nenhuma interação registrada. A janela de 7.940 ms ainda mistura
+a atividade anterior ao desligamento do rádio e foi excluída junto ao boot.
+O brilho reduziu em 17.250 ms; a cadência permaneceu em 1 Hz até apagar.
+
+| Medição | Média por atualização |
+| --- | ---: |
+| Círculos externos | 69,04 ms |
+| 31 números da data | 11,24 ms |
+| Soma dos dois (`watch_case_us`) | 80,29 ms |
+| Refresh completo | 245,26 ms |
+| Flush QSPI | 17,16 ms |
+
+Os círculos representam 86,0% desse grupo e 28,2% do refresh. O custo do
+grupo ficou próximo dos 79,82 ms anteriores; a variação do refresh total
+não demonstra regressão ou ganho, pois os ângulos e as condições não foram
+controlados entre as capturas. Não há amostra de interação para avaliar
+latência de gestos. Os tempos incluem preempções e instrumentação.
+
+Heap interno mínimo de 142.999 bytes e maior bloco DMA de 38.912 bytes
+foram amostrados, sem inferir margem segura. O anexo começa no monitor e
+não inclui upload nem banner de otimização; os novos campos confirmam a
+instrumentação subdividida, mas `-e display_profile_o2` no monitor sozinho
+não comprova as opções do firmware gravado.
+
+## Cache de máscaras circulares
+
+O LVGL local usa quatro entradas por padrão para guardar os dados de
+antialiasing de raios. `lv_draw_mask_radius_init` recalcula a máscara quando
+o raio não está no cache. Os preenchimentos e bordas dos círculos externos
+usam mais raios do que essas quatro entradas comportam, concorrendo ainda
+com os demais desenhos. Isso motivou um teste isolado de quatro versus oito
+entradas, sem mudar as primitivas do mostrador.
+
+`tests/run_watch_render_tests.ps1` compila as duas configurações com o LVGL
+real e buffers de 1/20. Após aquecimento, desenha 60 cenários cobrindo todos
+os minutos, dias e dias da semana, além de deslocamento e recorte parcial.
+Um wrapper de teste conta chamadas que não encontram o raio no cache.
+
+| Medição no host | 4 entradas | 8 entradas |
+| --- | ---: | ---: |
+| Recálculos totais | 17.454 | 13.200 |
+| Recálculos de raios ≥ 180 px | 3.542 | 357 |
+| Maior uso de heap amostrado durante inicialização de máscaras | 15.832 B | 19.248 B |
+| Menor bloco livre amostrado nesse ponto | 114.176 B | 110.944 B |
+| Heap usado depois do refresh | 8.952 B | 8.952 B |
+
+Os fluxos RGB565 completos tiveram SHA-256 idêntico:
+`CDBAEE2A64F4C5F8E6314E59F8C74ADDC036A2E3497B1C5A9718D307A38A8E4D`.
+A redução de 89,9% dos recálculos grandes não representa o mesmo percentual
+de redução no tempo de desenho: máscaras, mistura de pixels e demais
+primitivas continuam necessárias. Não foi usado tempo do host para estimar
+velocidade no ESP32. A amostragem de memória não cobre cada alocação interna
+e os tamanhos do host não representam RAM interna/DMA do dispositivo.
+
+A única alteração de produção é `LV_CIRCLE_CACHE_SIZE = 8` em `src/lv_conf.h`.
+Os quatro descritores extras acrescentam 112 bytes estáticos no ESP32;
+os dados variáveis vêm do pool TLSF de 128 KiB em PSRAM. `_lv_draw_mask_cleanup`
+libera esses dados ao terminar cada refresh. O tamanho do pool e dos buffers,
+o QSPI, a cadência, o desenho e os gestos permanecem iguais.
+
+O build padrão passou com 55.012 bytes de RAM e 1.661.060 bytes de flash.
+O diagnóstico O2 também passou, com 58.280 bytes de RAM e 1.779.280 bytes de flash.
+O teste integrado da interface passou, incluindo todos os apps retidos,
+editor com aviso, inatividade e primeiro toque de despertar. As 16 capturas
+diretas da suíte mantiveram SHA idêntico à referência.
+
+Pendente: upload de `display_profile_o2` e nova captura após NTP, com pelo
+menos 15 s sem interação e depois gestos de abertura/fechamento do painel e
+launcher. Comparar `watch_rings_us`, refresh, memória interna e maior bloco
+DMA; conferir também bordas, Clima e avisos no painel físico. O firmware
+anterior foi preservado localmente em `.pio/diagnostics/pre-circle-cache-6843b04/`.
+Para reverter a variável em teste, restaurar quatro entradas e recompilar.

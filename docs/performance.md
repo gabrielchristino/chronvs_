@@ -34,6 +34,15 @@ e debounce do touch. Não há alteração visual ou de gesto.
 O scanner de endereços I2C do boot é executado somente nos diagnósticos;
 o padrão inicializa normalmente os dispositivos, sem sondagens extras.
 
+O cache de máscaras circulares do LVGL usa oito entradas (`LV_CIRCLE_CACHE_SIZE`),
+para reutilizar raios entre as faixas de um mesmo refresh. Os dados de
+antialiasing são alocados no pool TLSF existente em PSRAM e liberados pelo
+LVGL ao terminar o refresh. Não há cache de framebuffer. A comparação com
+quatro entradas está em `tests/run_watch_render_tests.ps1`: verifica SHA-256
+dos pixels, recálculos de máscaras e memória amostrada durante o desenho.
+O ganho de tempo no dispositivo ainda aguarda medição; veja a
+[análise do cache](performance-audit.md#cache-de-máscaras-circulares).
+
 ## Comparação no dispositivo
 
 Use o PlatformIO instalado em `C:\Users\gabri\.platformio\penv\Scripts\platformio.exe`

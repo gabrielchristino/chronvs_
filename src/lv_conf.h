@@ -19,6 +19,12 @@
 // 50 FPS is the smooth, sustainable target for this QSPI display.  It gives
 // gesture updates enough time to finish without continuously queuing frames.
 #define LV_DISP_DEF_REFR_PERIOD 20
+// Reuse large-circle AA masks across partial strips. Their data uses the
+// existing PSRAM TLSF pool and LVGL releases it at the end of each refresh.
+// Allow the host comparison to compile the previous four-entry baseline.
+#ifndef LV_CIRCLE_CACHE_SIZE
+#define LV_CIRCLE_CACHE_SIZE 8
+#endif
 #define LV_FONT_MONTSERRAT_12 1
 #define LV_FONT_MONTSERRAT_14 1
 #define LV_FONT_MONTSERRAT_18 1

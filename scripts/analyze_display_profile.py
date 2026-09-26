@@ -20,6 +20,7 @@ WATCH_TIMES = tuple("watch_" + name + "_us" for name in (
     "weekday", "temperature", "seconds", "marker"))
 WATCH = ("watch_frames", "watch_slices") + WATCH_TIMES
 CASE_DETAIL = ("watch_rings_us", "watch_dates_us")
+RENDER = ("render_max_us", "render_idle_max_us", "motion_reads", "motion_frames", "motion_age_max_us")
 
 
 def parse(text):
@@ -49,12 +50,16 @@ def parse(text):
         has_touch = any(key in fields for key in TOUCH)
         has_watch = any(key in fields for key in WATCH)
         has_case_detail = any(key in fields for key in CASE_DETAIL)
+        has_render = any(key in fields for key in RENDER)
         if (not valid or not all(key in fields for key in REQUIRED)
                 or not fields.get("window_ms") or not fields.get("frames")
                 or fields.get("over20", 0) > fields.get("frames", 0)
                 or fields.get("refresh_avg_ms", 0) > fields.get("refresh_max_ms", 0)
                 or (has_touch and not all(key in fields for key in TOUCH))
                 or fields.get("interaction_frames", 0) > fields.get("frames", 0)
+                or (has_render and not all(key in fields for key in RENDER))
+                or fields.get("motion_frames", 0) > fields.get("frames", 0)
+                or fields.get("motion_frames", 0) > fields.get("motion_reads", 0)
                 or (has_watch and not all(key in fields for key in WATCH))
                 or fields.get("watch_frames", 0) > fields.get("frames", 0)
                 or fields.get("watch_frames", 0) > fields.get("watch_slices", 0)
@@ -83,6 +88,12 @@ def summarize(windows):
         result[key + "_approx"] = round(
             sum(row[key] * row["frames"] for row in windows) / frames, 3)
     touch = [row for row in windows if "touch_reads" in row]
+    render = [row for row in windows if "render_max_us" in row]
+    result["render_windows"] = len(render)
+    for key in RENDER:
+        values = [row[key] for row in render]
+        result[key] = (sum(values) if key in ("motion_reads", "motion_frames")
+                       else max(values)) if values else None
     result["touch_windows"] = len(touch)
     for key in TOUCH:
         values = [row[key] for row in touch]

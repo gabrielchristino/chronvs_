@@ -964,3 +964,36 @@ registrado continua AUTO 15s/45s, com redução de brilho durante repouso.
 A confirmação de fluidez não substitui ensaios específicos de Clima,
 avisos, suspensão ou duração de bateria. Esta etapa somente documenta
 o resultado; mantém cache de oito entradas e desenho sem recorte interno.
+
+## Separação de desenho, intervalo e movimento no diagnóstico
+
+Os picos anteriores de intervalo entre quadros não isolam renderização de
+contato parado. O diagnóstico passa a encadear `render_start_cb`, que o LVGL
+local chama somente quando há áreas inválidas, e conserva `monitor_cb`.
+Mede duração de desenho/flush e intervalo entre conclusão e próximo início.
+Também conta mudanças de coordenadas durante contato e a idade da última
+mudança quando o desenho começa. As definições e limitações estão em
+`docs/performance.md`; não há atribuição causal a invalidações individuais.
+
+Os campos antigos permanecem e o analisador aceita capturas antigas. Os
+novos contadores são zerados por janela e ao apagar, não atravessando sono.
+Não há log por quadro, nova tarefa ou alocação. A implementação é compilada
+somente com `CHRONVS_DISPLAY_PROFILE`; o firmware padrão e as primitivas
+de desenho não mudam. Esta etapa não alega ganho de desempenho.
+
+O teste sintético verifica contato parado com 800 ms sem desenho, render
+de 4–6 ms, múltiplos movimentos agrupados, movimento seguido de soltura,
+encadeamento do callback anterior e limpeza dos contadores. O analisador
+testa cobertura parcial entre versões de log, máximos, somas e rejeição
+de linhas incompletas/inconsistentes.
+
+Próxima coleta: com ON e ECO desligado, três cenários separados: mostrador
+parado por 15 s; abrir/fechar painel continuamente por 15 s; rolar launcher
+por 15 s. Uma amostra adicional segurando o dedo parado por 2 s no meio de
+um arraste ajuda a comparar espera sem movimento com desenho contínuo.
+Identificar cada cenário e enviar o resultado do upload junto dos logs.
+
+Validação: oito testes Python e suíte integrada aprovados; 16 capturas
+diretas com SHA idêntico à referência. Builds padrão e O2 aprovados.
+O padrão permanece em 55.012 B de RAM e 1.661.060 B de flash; diagnóstico
+O2 em 58.336 B de RAM (+56 B) e 1.779.724 B de flash (+444 B).

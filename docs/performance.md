@@ -228,6 +228,28 @@ O prefixo `display_perf` identifica resumos emitidos no máximo uma vez a cada
 - `input_refresh_max_us`: maior espera da primeira mudança de posição/estado
   ainda pendente até a próxima atualização concluída. Essa atualização pode
   ter outra causa; não mede latência física nem prova resposta ao gesto.
+- `render_max_us`: maior duração entre `render_start_cb` e `monitor_cb`,
+  incluindo desenho e flush síncrono; exclui layout anterior ao início do
+  desenho. O callback anterior do driver é preservado.
+- `render_idle_max_us`: maior intervalo entre a conclusão de um desenho e
+  o início do seguinte na janela. Inclui tempo sem invalidações, limpeza,
+  outros timers, tarefas e espera; não significa sozinho bloqueio da UI.
+- `motion_reads`: leituras com coordenadas diferentes da leitura anterior
+  durante o mesmo contato pressionado. Pressionar/soltar e contato parado
+  não incrementam esse contador; ruído de coordenadas também pode contar.
+- `motion_frames`: quadros concluídos cujo início encontrou movimento lido
+  desde o desenho anterior. Várias leituras são agrupadas num quadro; pode
+  contar um quadro após soltar e não prova que o movimento o causou.
+- `motion_age_max_us`: maior idade da **última** mudança de coordenadas ao
+  começar o desenho, entre os quadros acima. Não mede desde o primeiro
+  movimento nem desde a invalidação e pode incluir espera sem novo desenho.
+
+Esses cinco campos aparecem juntos nos novos logs. O analisador retorna
+`render_windows` como cobertura, soma as contagens e preserva os máximos;
+capturas antigas retornam `null`. Campos incompletos ou contagens de quadros
+de movimento superiores a quadros totais/leituras de movimento são rejeitados.
+Os máximos podem vir de quadros diferentes: não some `render_idle_max_us`,
+`motion_age_max_us` e `render_max_us` para deduzir uma latência individual.
 
 A diferença entre refresh e flush é apenas uma estimativa do trabalho fora
 do driver; os relógios têm resoluções diferentes e incluem preempções.

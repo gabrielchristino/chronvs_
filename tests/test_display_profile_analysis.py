@@ -19,6 +19,23 @@ def window(**changes):
 
 
 class ProfileAnalysisTest(unittest.TestCase):
+    def test_render_coverage_and_maxima(self):
+        fields = dict(render_max_us=100, render_idle_max_us=900,
+                      motion_reads=3, motion_frames=1, motion_age_max_us=40)
+        groups, bad = MODULE["parse"]('\n'.join((window(), window(**fields), window(**fields))))
+        result = MODULE["summarize"](groups['unknown'])
+        self.assertEqual(bad, 0)
+        self.assertEqual(result['render_windows'], 2)
+        self.assertEqual(result['motion_reads'], 6)
+        self.assertEqual(result['motion_frames'], 2)
+        self.assertEqual(result['render_idle_max_us'], 900)
+        self.assertEqual(result['motion_age_max_us'], 40)
+        for row in (window(render_max_us=1), window(**dict(fields, motion_frames=3)),
+                    window(**dict(fields, motion_reads=0))):
+            self.assertEqual(MODULE['parse'](row), ({}, 1))
+        groups, _ = MODULE['parse'](window())
+        self.assertIsNone(MODULE['summarize'](groups['unknown'])['render_max_us'])
+
     def test_case_breakdown_coverage_and_consistency(self):
         counters = {key: 100 for key in MODULE["WATCH_TIMES"]}
         old = window(watch_frames=2, watch_slices=42, **counters)

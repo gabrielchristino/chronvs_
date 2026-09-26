@@ -144,6 +144,8 @@ static void capture(const char *name) {
     fwrite(h,1,54,f);fwrite(pixels,1,sizeof(pixels),f);fclose(f);
 }
 static unsigned refresh_count;
+static unsigned render_start_count;
+static void count_render_start(lv_disp_drv_t *drv) { (void)drv; ++render_start_count; }
 static void count_refresh(lv_disp_drv_t *drv,uint32_t ms,uint32_t px) {
     (void)drv; (void)ms; (void)px; ++refresh_count;
 }
@@ -159,6 +161,7 @@ int main(void) {
     lv_disp_draw_buf_init(&draw,buffer,NULL,412*412/20);lv_disp_drv_init(&driver);
     driver.hor_res=driver.ver_res=412;driver.draw_buf=&draw;driver.flush_cb=flush;
     driver.monitor_cb=count_refresh;
+    driver.render_start_cb=count_render_start;
     lv_disp_drv_register(&driver);
     static lv_indev_drv_t input; lv_indev_drv_init(&input);
     input.type=LV_INDEV_TYPE_POINTER;input.read_cb=read_touch;lv_indev_drv_register(&input);
@@ -459,5 +462,28 @@ int main(void) {
     chronvs_display_profile_poll(true);
     assert(watch_frames==0 && watch_slices==0 && !watch_in_refresh);
     for (unsigned i=0;i<CHRONVS_WATCH_SECTION_COUNT;++i) assert(watch_us[i]==0);
+    /* A held, stationary finger can leave a long interval without rendering.
+     * Only coordinate changes during contact count as motion. */
+    lv_indev_data_t sample = {0};
+    contact = LV_INDEV_STATE_PR; point = (lv_point_t){100,100};
+    profile_read(NULL, &sample);
+    assert(motion_reads == 0);
+    unsigned starts_before = render_start_count;
+    profile_render_start(NULL); now_us += 5000; profile_monitor(NULL, 5, 1);
+    now_us += 800000;
+    profile_read(NULL, &sample);
+    assert(motion_reads == 0 && latest_motion_us == 0);
+    profile_render_start(NULL); now_us += 4000; profile_monitor(NULL, 4, 1);
+    assert(render_idle_max_us == 800000 && render_max_us == 5000 && motion_frames == 0);
+    now_us += 100; point.x += 10; profile_read(NULL, &sample);
+    now_us += 200; point.x += 10; profile_read(NULL, &sample);
+    now_us += 300; contact = LV_INDEV_STATE_REL; profile_read(NULL, &sample);
+    profile_render_start(NULL); now_us += 6000; profile_monitor(NULL, 6, 1);
+    assert(motion_reads == 2 && motion_frames == 1 && motion_age_max_us == 300);
+    assert(render_max_us == 6000 && render_start_count == starts_before + 3);
+    chronvs_display_profile_poll(true);
+    assert(render_started_us == 0 && render_finished_us == 0 && latest_motion_us == 0);
+    assert(render_max_us == 0 && render_idle_max_us == 0 && motion_frames == 0 && motion_reads == 0);
+    assert(motion_age_max_us == 0 && !render_had_motion);
     return 0;
 }

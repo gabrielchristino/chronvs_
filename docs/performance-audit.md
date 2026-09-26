@@ -997,3 +997,63 @@ Validação: oito testes Python e suíte integrada aprovados; 16 capturas
 diretas com SHA idêntico à referência. Builds padrão e O2 aprovados.
 O padrão permanece em 55.012 B de RAM e 1.661.060 B de flash; diagnóstico
 O2 em 58.336 B de RAM (+56 B) e 1.779.724 B de flash (+444 B).
+
+## Resultado das métricas de desenho e movimento
+
+O arquivo local `device-monitor-260926-164818.log` tem 30 janelas válidas,
+sem rejeições. Os cálculos usam o original, pois a colagem perdeu espaços.
+O anexo não contém upload nem banner de otimização; os novos campos
+confirmam a instrumentação, mas não identificam sozinhos todas as opções
+do binário. O rádio termina em 8.730 ms. Houve redução e reativação de brilho;
+não se trata de uma coleta inteira em ON com cenários marcados.
+
+No repouso de 25.960–43.960 ms, dez janelas somam 20 quadros completos em
+20 s, sem movimentos lidos. Refresh médio: 234,00 ms; círculos: 57,42 ms;
+flush: 17,03 ms. O máximo de desenho foi 234,24 ms e o intervalo sem desenho
+chegou a 765,96 ms. Isso é coerente com a cadência de 1 Hz; o intervalo não
+é um quadro levando 766 ms. Os máximos são independentes e não devem ser
+somados para reconstruir um quadro específico. Os círculos continuam na
+faixa recuperada após retirar o recorte; ângulos e instrumentação impedem
+atribuir a pequena variação do refresh total a uma regressão.
+
+| Trecho | Quadros | Refresh médio | Desenho máximo | Idade máxima do último movimento ao iniciar desenho |
+| --- | ---: | ---: | ---: | ---: |
+| Transições, 48.000–52.050 ms | 70 | 58,83 ms | 232,78 ms | 2,56 ms |
+| Launcher sem mostrador, 54.060–56.100 ms | 49 | 62,57 ms | 69,59 ms | 2,27 ms |
+| Launcher sem mostrador, 60.150–62.170 ms | 52 | 58,88 ms | 68,63 ms | 2,22 ms |
+| Retorno/transições, 64.210–68.240 ms | 43 | 89,86 ms | 234,66 ms | 29,82 ms |
+
+Nas transições iniciais houve 75 leituras com movimento e 67 quadros que
+consumiram movimento pendente. O máximo entre leituras durante contato
+foi 230,37 ms, embora uma leitura tenha levado no máximo 1,88 ms. O início
+do desenho costuma seguir rapidamente a última amostra, mas isso **não**
+mede latência física: a UI síncrona pode passar tempo desenhando antes de
+conseguir ler a próxima posição. Portanto não se conclui que o touch tenha
+latência total de 2 ms nem que todos os intervalos longos sejam contato parado.
+
+Na janela de 54.060 ms, sem mostrador, o desenho máximo foi 65,90 ms,
+intervalo sem desenho máximo de 4,97 ms e intervalo entre quadros durante
+contato de 70,57 ms. É um exemplo de sequência dominada pelo desenho.
+Em 56.100 ms, o intervalo entre quadros chegou a 183,87 ms, enquanto o
+desenho máximo foi 69,59 ms e o intervalo sem desenho, 128,93 ms. Esse pico
+inclui tempo fora do desenho; não prova um quadro de 184 ms. Os agregados
+não permitem dizer se foi dedo parado, ausência de invalidação ou outro
+trabalho. O momento exato da pausa de dois segundos não está identificado.
+
+Em 45.970 ms houve 15 leituras de movimento e nenhum quadro associado a
+elas. Isso é permitido: movimento pode não provocar invalidação, ocorrer
+depois do último desenho da janela ou ser consumido pelo despertar. O
+contador é reiniciado por janela, então também não mede perdas de amostras.
+
+Heap interno mínimo no trecho inicial: 142.835 B; no retorno: 142.747 B.
+Maior bloco DMA: 38.912 B em todos esses trechos. Não há evidência nesta
+captura para alterar QSPI, buffers, intervalo do touch ou reintroduzir o
+recorte descartado. Também não se deve concluir aumento de capacidade de
+quadros a partir das janelas com diferentes quantidades de pixels.
+
+Próximo foco: custo de renderização do launcher, que persiste mesmo sem
+desenhar o mostrador. O código já evita reaplicar posição/opacidade iguais;
+investigar composição das linhas com opacidade parcial e seus ícones,
+comparando pixels e memória antes de qualquer mudança. Essa é uma hipótese
+de investigação, não uma causa isolada pelos logs. A instrumentação atual
+foi validada nesta captura; esta etapa apenas documenta o resultado.

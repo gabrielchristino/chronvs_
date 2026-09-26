@@ -822,6 +822,9 @@ novo indiscriminadamente. Esta etapa registra a medição e não muda firmware.
 
 ## Recorte do interior coberto dos círculos
 
+Experimento retirado após a captura física abaixo mostrar piora. Os dados
+desta seção descrevem a implementação e sua validação anterior à retirada.
+
 Após `3e906f1`, `draw_covered_circle` reduz o desenho dos dois círculos
 externos por faixa. O círculo de raio 206 omite apenas uma região interior
 que será coberta pelo círculo de raio 183; este omite a região coberta pelo
@@ -861,3 +864,61 @@ intervalos durante contato com a captura de 26/09, conferir bordas e
 transições e testar Clima/avisos/despertar. Se o custo das chamadas extras
 superar o trabalho poupado, restaurar as duas chamadas diretas a
 `draw_circle` em `draw_case_rings`, mantendo o cache de oito entradas.
+
+## Resultado físico do recorte e retirada
+
+O arquivo local `device-monitor-260926-162723.log` contém 46 janelas válidas,
+sem rejeições. A colagem do terminal perdeu vários separadores; a análise
+usa o arquivo original. O anexo começa com uma tentativa de abrir COM3
+inexistente, seguida de conexão bem-sucedida; não inclui upload nem banner
+que identifique o binário. O Wi-Fi termina em 9.224 ms.
+
+Foram separados dois trechos de repouso sem interação: 11.954–17.954 ms
+(quatro janelas, oito quadros, 8,009 s) e 76.764–88.774 ms (sete janelas,
+14 quadros, 14,009 s). Ambos desenham a tela inteira em 21 faixas por quadro,
+com cadência próxima de 1 Hz. As transições, o boot e as mudanças de energia
+ficaram fora dessas médias.
+
+| Média por atualização | Antes do recorte | Repouso inicial | Repouso final |
+| --- | ---: | ---: | ---: |
+| Círculos externos | 57,35 ms | 70,18 ms | 69,80 ms |
+| Números da data | 10,87 ms | 11,61 ms | 11,53 ms |
+| Refresh completo | 228,06 ms | 244,00 ms | 243,71 ms |
+| Flush QSPI | 17,11 ms | 17,10 ms | 17,01 ms |
+
+Os círculos ficaram aproximadamente 22% mais caros e o refresh, 7% mais
+lento. Datas/ângulos não foram fixados entre firmwares, portanto não é um
+A/B causal rigoroso; ainda assim a piora consistente no grupo alterado,
+com flush praticamente estável, não sustenta manter a experiência. A
+interpretação é que preparação/máscaras/chamadas extras custam mais do que
+o preenchimento poupado. O teste de pixels no host comprovou equivalência
+visual, não velocidade; o resultado no dispositivo prevalece.
+
+Na navegação de 24.074–26.084 ms, o intervalo máximo entre quadros durante
+contato chegou a 298,86 ms (antes, 214,09 ms em outro conjunto de gestos).
+Ritmo, quantidade de quadros e pixels variaram, então esses máximos não
+quantificam isoladamente uma regressão dos gestos. As janelas puras do
+launcher em 30.134 e 56.544 ms tiveram refresh médio de 56 e 57 ms, sem
+desenho do mostrador, próximo dos 54,95 ms anteriores.
+
+O perfil ainda reduziu brilho em 17.284 ms; ECO foi ligado em 44.844 ms e
+desligado em 71.074 ms. Não tratar a captura inteira como cenário uniforme.
+No repouso final, heap interno mínimo foi 142.823 bytes e maior bloco DMA,
+38.912 bytes. Não houve alteração no bloco DMA observado; esses números
+não medem pico de heap nem estabelecem margem segura.
+
+Foi retirado somente `draw_covered_circle` e restauradas as duas chamadas
+originais de `draw_circle`. O cache de oito raios e as demais melhorias
+permanecem; o teste mantém a referência SHA-256 de pixels. O firmware do
+experimento foi preservado em `.pio/diagnostics/covered-circles-1c62e3b/`.
+A confirmação no relógio após a retirada ainda é necessária, antes de
+atribuir recuperação de tempo à versão restaurada. A próxima investigação
+deve medir custo de preparação/máscaras versus mistura de pixels, sem
+reintroduzir divisão de chamadas apenas por reduzir área preenchida.
+
+Validação da retirada: `watch_app.c` e `lv_conf.h` ficaram idênticos aos de
+`3e906f1`; build padrão aprovado (RAM 55.012 B, flash 1.661.060 B) e
+diagnóstico O2 aprovado (RAM 58.280 B, flash 1.779.280 B). A suíte integrada
+passou, incluindo navegação, memória, energia e despertar; as 16 capturas
+diretas mantiveram SHA idêntico à referência. Não há ganho físico alegado
+para a retirada antes do novo upload e da captura de confirmação.

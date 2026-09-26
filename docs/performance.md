@@ -43,11 +43,11 @@ dos pixels, recálculos de máscaras e memória amostrada durante o desenho.
 O ganho de tempo no dispositivo ainda aguarda medição; veja a
 [análise do cache](performance-audit.md#cache-de-máscaras-circulares).
 
-Os círculos externos também recortam seu interior quando outra camada
-circular opaca o cobrirá. O recorte é calculado por faixa com margem para
-bordas e antialiasing; máscaras externas mantêm o desenho completo. A
-igualdade dos pixels foi verificada no host; o ganho de tempo dessa etapa
-ainda depende da [medição física](performance-audit.md#recorte-do-interior-coberto-dos-círculos).
+O recorte experimental do interior coberto dos círculos foi retirado após
+a captura física mostrar aumento de custo. Permanecem as duas primitivas
+originais com o cache de oito raios. A comparação de pixels continua nos
+testes; o [histórico do experimento](performance-audit.md#recorte-do-interior-coberto-dos-círculos)
+registra por que reduzir preenchimento não garantiu menor tempo de desenho.
 
 ## Comparação no dispositivo
 

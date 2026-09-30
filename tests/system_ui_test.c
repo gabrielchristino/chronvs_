@@ -124,6 +124,12 @@ int nvs_set_u8(nvs_handle_t h, const char *k, uint8_t v) {
 }
 
 static unsigned char pixels[412*412*3];
+static unsigned rect_draws;
+void __real_lv_draw_rect(lv_draw_ctx_t *, const lv_draw_rect_dsc_t *, const lv_area_t *);
+void __wrap_lv_draw_rect(lv_draw_ctx_t *ctx, const lv_draw_rect_dsc_t *dsc, const lv_area_t *area) {
+    ++rect_draws;
+    __real_lv_draw_rect(ctx,dsc,area);
+}
 static void flush(lv_disp_drv_t *driver, const lv_area_t *area, lv_color_t *colors) {
     for(int y=area->y1;y<=area->y2;++y) for(int x=area->x1;x<=area->x2;++x) {
         lv_color32_t c={.full=lv_color_to32(*colors++)};
@@ -211,6 +217,12 @@ int main(void) {
     assert(lv_obj_get_style_radius(panel,0)==LV_RADIUS_CIRCLE);
     assert(lv_obj_get_style_clip_corner(panel,0));
     lv_obj_set_y(panel,-160); capture("quick-settings-circle-transition");
+    rect_draws=0;
+    for (int y=-400;y<=0;y+=40) {
+        char name[64]; snprintf(name,sizeof(name),"circle-panel-%d",-y);
+        lv_obj_set_y(panel,y); lv_obj_invalidate(lv_scr_act()); capture(name);
+    }
+    printf("Circular panel rectangle draws: %u\n",rect_draws);
     lv_obj_set_y(panel,0);
     unsigned circles=0;
     for(unsigned i=0;i<lv_obj_get_child_cnt(panel);++i) {
@@ -290,6 +302,12 @@ int main(void) {
     assert(chronvs_app_open("watch"));
     assert(chronvs_app_preview_y("apps",160));
     capture("launcher-circle-transition");
+    rect_draws=0;
+    for (int y=400;y>=0;y-=40) {
+        char name[64]; snprintf(name,sizeof(name),"circle-launcher-%d",y);
+        chronvs_app_preview_y("apps",y); lv_obj_invalidate(lv_scr_act()); capture(name);
+    }
+    printf("Circular launcher rectangle draws: %u\n",rect_draws);
     chronvs_app_cancel_preview();
     assert(chronvs_app_open("apps"));
     lv_obj_t *app_list = lv_obj_get_child(launcher, 0);

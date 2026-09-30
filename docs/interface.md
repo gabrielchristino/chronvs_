@@ -453,8 +453,10 @@ driver não podem ser copiados diretamente.
   isso para seu timer de interface.
 - O desenho vetorial do mostrador recorta as regiões cobertas por superfícies
   retangulares opacas acima dele. Painel rápido e lista de apps agora são
-  circulares e ficam fora dessa otimização, preservando o mostrador visível
-  nos cantos expostos durante o movimento. Para superfícies retangulares, o recorte
+  circulares e usam descarte conservador de primitivas: só deixa de desenhar
+  uma primitiva quando toda sua região na faixa atual fica no interior opaco
+  do círculo, com margem de 2 px na borda. Os cantos expostos continuam visíveis.
+  Para superfícies retangulares, o recorte
   acompanha as coordenadas atuais dessas superfícies durante o arraste e a
   animação; ao recuarem, a região exposta volta a ser desenhada normalmente.
 - Submostradores inteiramente fora da faixa de desenho são descartados antes

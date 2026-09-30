@@ -1160,3 +1160,28 @@ No host, há 71.472 bytes livres com apps retidos e 28.784 com editor e alerta;
 o build usa 55.020 bytes de RAM estática e 1.661.496 de flash. Falta validar
 no relógio abertura/fechamento lento e rápido, cancelamento do gesto,
 arraste pelo arco de brilho e rolagem nos extremos, observando fluidez e rastros.
+
+## Redução do desenho sob os painéis circulares
+
+Após o usuário observar maior carga e montagem visível em partes, o mostrador
+passa a identificar até dois círculos opacos acima dele. Por faixa de desenho,
+descarta círculos, textos, linhas e arcos apenas quando a interseção de seus
+limites com a faixa está inteiramente coberta. A verificação usa coordenadas
+inteiras, considera o recorte do pai e preserva 2 px de margem na borda.
+Superfícies transparentes, transformadas ou com pai arredondado não são usadas.
+O fundo continua sendo limpo e não há cache de pixels nem aumento de buffers.
+
+O teste integrado percorre 11 posições de cada painel, de 400 px de deslocamento
+até totalmente aberto. Os 22 BMPs têm SHA-256 idêntico à referência anterior.
+As chamadas a `lv_draw_rect` caíram de 7.295 para 5.772 nos atalhos (20,9%)
+e de 7.529 para 5.978 no launcher (20,6%). Essa contagem inclui outras partes
+da interface e não equivale a uma medição de tempo ou FPS. A referência local
+está em `.pio/host-tests/circle-before.json`; o wrapper existe somente no teste.
+
+A memória livre do pool no host permaneceu em 71.472 bytes com os apps retidos
+e 28.784 com editor e alerta. O build padrão passou com 55.052 bytes de RAM
+estática e 1.662.360 de flash. O ganho físico e a redução do efeito de faixas
+não foram medidos. O diagnóstico O2 também compilou com sucesso. Ambos
+ainda dependem do teste de abertura, fechamento e cancelamento no relógio.
+As transferências continuam parciais e síncronas; esta mudança não promete
+atualização atômica de toda a tela.

@@ -62,10 +62,39 @@ static const char minute_text[12][3] = {
     "0", "5", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55",
 };
 
+typedef struct {
+    lv_area_t bounds;
+    lv_area_t parent_bounds;
+} circle_cover_t;
+static circle_cover_t circle_covers[2];
+static unsigned circle_cover_count;
+
+/* Only omit pixels strictly inside an opaque circle. Keep two pixels of
+ * safety for integer rounding and antialiasing along the panel edge. */
+static bool covered_by_circle(const lv_area_t *area, const lv_area_t *clip) {
+    if (!circle_cover_count) return false;
+    lv_area_t part;
+    if (!_lv_area_intersect(&part, area, clip)) return false;
+    for (unsigned i = 0; i < circle_cover_count; ++i) {
+        const circle_cover_t *cover = &circle_covers[i];
+        if (part.x1 < cover->parent_bounds.x1 || part.x2 > cover->parent_bounds.x2 ||
+            part.y1 < cover->parent_bounds.y1 || part.y2 > cover->parent_bounds.y2) continue;
+        /* Doubled coordinates avoid floating point and half-pixel centers. */
+        const int cx = cover->bounds.x1 + cover->bounds.x2;
+        const int cy = cover->bounds.y1 + cover->bounds.y2;
+        const int radius = cover->bounds.x2 - cover->bounds.x1 - 4;
+        const int dx = LV_MAX(LV_ABS(2 * part.x1 - cx), LV_ABS(2 * part.x2 - cx));
+        const int dy = LV_MAX(LV_ABS(2 * part.y1 - cy), LV_ABS(2 * part.y2 - cy));
+        if (radius > 0 && dx * dx + dy * dy < radius * radius) return true;
+    }
+    return false;
+}
+
 /* Trim opaque, rectangular siblings entering from an edge. LVGL's normal
  * cover test only skips this custom drawing when a whole buffer is covered.
  * Walking up also finds the quick panel above the app content layer. */
 static bool visible_clock_clip(lv_obj_t *object, lv_area_t *clip) {
+    circle_cover_count = 0;
     for (lv_obj_t *node = object; lv_obj_get_parent(node) != NULL;
          node = lv_obj_get_parent(node)) {
         lv_obj_t *parent = lv_obj_get_parent(node);
@@ -75,9 +104,22 @@ static bool visible_clock_clip(lv_obj_t *object, lv_area_t *clip) {
             if (lv_obj_has_flag(cover, LV_OBJ_FLAG_HIDDEN) ||
                 lv_obj_get_style_opa(cover, 0) != LV_OPA_COVER ||
                 lv_obj_get_style_bg_opa(cover, 0) != LV_OPA_COVER ||
-                lv_obj_get_style_radius(cover, 0) != 0 ||
+                lv_obj_get_style_opa_layered(cover, 0) != LV_OPA_COVER ||
                 lv_obj_get_style_transform_angle(cover, 0) != 0 ||
                 lv_obj_get_style_transform_zoom(cover, 0) != 256) continue;
+            const lv_coord_t radius = lv_obj_get_style_radius(cover, 0);
+            if (radius != 0) {
+                if (radius == LV_RADIUS_CIRCLE &&
+                    lv_area_get_width(&cover->coords) == lv_area_get_height(&cover->coords) &&
+                    lv_obj_get_style_radius(parent, 0) == 0 &&
+                    lv_obj_get_style_opa(parent, 0) == LV_OPA_COVER &&
+                    lv_obj_get_style_opa_layered(parent, 0) == LV_OPA_COVER &&
+                    circle_cover_count < 2) {
+                    circle_covers[circle_cover_count++] = (circle_cover_t){
+                        .bounds = cover->coords, .parent_bounds = parent->coords};
+                }
+                continue;
+            }
             lv_area_t area;
             if (!_lv_area_intersect(&area, &cover->coords, &parent->coords) ||
                 !_lv_area_intersect(&area, &area, clip)) continue;
@@ -187,6 +229,7 @@ static void draw_circle(lv_draw_ctx_t *ctx, float cx, float cy, float radius,
         .x2 = (lv_coord_t)lroundf(cx + radius),
         .y2 = (lv_coord_t)lroundf(cy + radius),
     };
+    if (covered_by_circle(&area, ctx->clip_area)) return;
     lv_draw_rect(ctx, &dsc, &area);
 }
 
@@ -199,6 +242,9 @@ static void draw_line(lv_draw_ctx_t *ctx, lv_point_t start, lv_point_t end,
         (start.x > clip->x2 + margin && end.x > clip->x2 + margin) ||
         (start.y < clip->y1 - margin && end.y < clip->y1 - margin) ||
         (start.y > clip->y2 + margin && end.y > clip->y2 + margin)) return;
+    const lv_area_t bounds = {LV_MIN(start.x,end.x)-margin, LV_MIN(start.y,end.y)-margin,
+                             LV_MAX(start.x,end.x)+margin, LV_MAX(start.y,end.y)+margin};
+    if (covered_by_circle(&bounds, clip)) return;
     lv_draw_line_dsc_t dsc;
     lv_draw_line_dsc_init(&dsc);
     dsc.color = lv_color_hex(color);
@@ -228,6 +274,7 @@ static void draw_text(lv_draw_ctx_t *ctx, float cx, float cy, const char *text,
     /* Same label bounds checked by LVGL, before descriptor initialization. */
     lv_area_t intersection;
     if (!_lv_area_intersect(&intersection, &area, ctx->clip_area)) return;
+    if (covered_by_circle(&area, ctx->clip_area)) return;
     lv_draw_label_dsc_t dsc;
     lv_draw_label_dsc_init(&dsc);
     dsc.font = font;
@@ -244,6 +291,12 @@ static int normalize_lv_arc_angle(float watch_angle) {
 static void draw_arc(lv_draw_ctx_t *ctx, float cx, float cy, int radius,
                      float start_watch_angle, float end_watch_angle,
                      uint32_t color, int width) {
+    if (circle_cover_count) {
+        const lv_area_t bounds = {(lv_coord_t)floorf(cx-radius-width-2),
+            (lv_coord_t)floorf(cy-radius-width-2), (lv_coord_t)ceilf(cx+radius+width+2),
+            (lv_coord_t)ceilf(cy+radius+width+2)};
+        if (covered_by_circle(&bounds, ctx->clip_area)) return;
+    }
     lv_draw_arc_dsc_t dsc;
     lv_draw_arc_dsc_init(&dsc);
     dsc.color = lv_color_hex(color);

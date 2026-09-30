@@ -1122,3 +1122,19 @@ primeiro contato somente para despertar. A comparação de pixels confirma que
 um redesenho incidental mantém a imagem e que segurar captura a hora atual.
 Os builds padrão e `display_profile_o2` passaram. A fluidez,
 hora ao despertar e convivência dos gestos ainda precisam de teste físico.
+
+### Confirmação no relógio
+
+Na captura de 30/09 enviada após `6c8173e`, o usuário confirmou: “ficou bom
+assim”. Os resumos deixam de aparecer continuamente em repouso, coerente
+com a emissão condicionada à existência de frames. Durante contato parado,
+duas janelas mostram dois frames em aproximadamente 2 s, com intervalo entre
+frames de 998–1.009 ms. Cada desenho completo continua custando cerca de
+232 ms; o benefício é evitar repetições desnecessárias, não acelerar esse
+desenho. A captura também registra abertura de `apps` e retorno a `watch`.
+
+A RAM interna livre ficou entre 142.759 e 142.847 bytes após o encerramento
+do Wi-Fi, com maior bloco DMA de 38.912 bytes. Não há erro no trecho enviado.
+O relato aprova o comportamento geral; a captura mostra retorno de DIMMED
+para ACTIVE, mas não contém ciclo OFF/sono nem discrimina teste de alarmes
+ou virada de data. Esses casos não são declarados revalidados fisicamente.

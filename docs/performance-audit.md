@@ -1138,3 +1138,25 @@ do Wi-Fi, com maior bloco DMA de 38.912 bytes. Não há erro no trecho enviado.
 O relato aprova o comportamento geral; a captura mostra retorno de DIMMED
 para ACTIVE, mas não contém ciclo OFF/sono nem discrimina teste de alarmes
 ou virada de data. Esses casos não são declarados revalidados fisicamente.
+
+## Painéis circulares durante as transições
+
+A pedido do usuário, launcher e acessos rápidos passam a usar raio circular
+e recorte dos filhos no contêiner de 412 × 412 px. O hit test avançado respeita
+o raio do contêiner. A lista continua em arco e os atalhos mantêm a disposição
+2–3–2, com os mesmos gestos e coalescência de 20 ms.
+
+O recorte antecipado do mostrador já ignora superfícies com raio diferente
+de zero, evitando apagar indevidamente o fundo nos cantos transparentes.
+Isso também significa que a otimização retangular não beneficia mais esses
+painéis. Esta etapa é visual: não comprova ganho de desempenho e pode aumentar
+o custo durante transições. Não houve mudança de buffers, QSPI ou caches.
+
+Build padrão e `tests/run_Relogio_ui.ps1 -System` passaram. As capturas
+`quick-settings-circle-transition.png` e `launcher-circle-transition.png`
+em `.pio/host-tests/` foram inspecionadas, mostrando a borda circular sobre
+o mostrador. A suíte cobre também rolagem, retorno e controles do painel.
+No host, há 71.472 bytes livres com apps retidos e 28.784 com editor e alerta;
+o build usa 55.020 bytes de RAM estática e 1.661.496 de flash. Falta validar
+no relógio abertura/fechamento lento e rápido, cancelamento do gesto,
+arraste pelo arco de brilho e rolagem nos extremos, observando fluidez e rastros.

@@ -479,7 +479,9 @@ static void create_quick_settings(void) {
     lv_obj_set_style_bg_color(settings_panel, lv_color_hex(COLOR_PANEL), 0);
     lv_obj_set_style_bg_opa(settings_panel, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(settings_panel, 0, 0);
-    lv_obj_set_style_radius(settings_panel, 0, 0);
+    lv_obj_set_style_radius(settings_panel, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_clip_corner(settings_panel, true, 0);
+    lv_obj_add_flag(settings_panel, LV_OBJ_FLAG_ADV_HITTEST);
     lv_obj_set_style_pad_all(settings_panel, 0, 0);
     lv_obj_add_event_cb(settings_panel, menu_touch_event, LV_EVENT_ALL, NULL);
 

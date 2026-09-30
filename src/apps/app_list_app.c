@@ -151,7 +151,9 @@ static lv_obj_t *create_app_list(lv_obj_t *parent) {
     lv_obj_set_style_bg_color(root, lv_color_hex(COLOR_PANEL), 0);
     lv_obj_set_style_bg_opa(root, LV_OPA_COVER, 0);
     lv_obj_set_style_border_width(root, 0, 0);
-    lv_obj_set_style_radius(root, 0, 0);
+    lv_obj_set_style_radius(root, LV_RADIUS_CIRCLE, 0);
+    lv_obj_set_style_clip_corner(root, true, 0);
+    lv_obj_add_flag(root, LV_OBJ_FLAG_ADV_HITTEST);
     lv_obj_clear_flag(root, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(root, app_list_touch_event, LV_EVENT_ALL, NULL);
 

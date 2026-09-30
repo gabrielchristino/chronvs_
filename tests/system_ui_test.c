@@ -208,6 +208,10 @@ int main(void) {
     lv_obj_t *panel=lv_obj_get_child(lv_scr_act(),1);assert(panel);
     lv_obj_clear_flag(panel,LV_OBJ_FLAG_HIDDEN);lv_obj_set_y(panel,0);
     chronvs_system_ui_set_battery(72,3.9f);capture("13-quick-settings");
+    assert(lv_obj_get_style_radius(panel,0)==LV_RADIUS_CIRCLE);
+    assert(lv_obj_get_style_clip_corner(panel,0));
+    lv_obj_set_y(panel,-160); capture("quick-settings-circle-transition");
+    lv_obj_set_y(panel,0);
     unsigned circles=0;
     for(unsigned i=0;i<lv_obj_get_child_cnt(panel);++i) {
         lv_obj_t *child=lv_obj_get_child(panel,i);
@@ -281,6 +285,13 @@ int main(void) {
     lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);
     assert(chronvs_app_open("apps"));capture("14-app-list");
     lv_obj_t *launcher = lv_obj_get_child(chronvs_app_content_layer(), -1);
+    assert(lv_obj_get_style_radius(launcher,0)==LV_RADIUS_CIRCLE);
+    assert(lv_obj_get_style_clip_corner(launcher,0));
+    assert(chronvs_app_open("watch"));
+    assert(chronvs_app_preview_y("apps",160));
+    capture("launcher-circle-transition");
+    chronvs_app_cancel_preview();
+    assert(chronvs_app_open("apps"));
     lv_obj_t *app_list = lv_obj_get_child(launcher, 0);
     assert(lv_obj_get_child_cnt(app_list) == 5);
     lv_obj_t *first_row = lv_obj_get_child(app_list, 0);

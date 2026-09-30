@@ -151,8 +151,11 @@ o mesmo par de pílulas do aviso de alarme. Não há labels de próxima página.
 
 ### Acessos rápidos
 
-O painel usa fundo retangular opaco `#26302B`, botões `#748173`, texto claro e
+O painel usa fundo circular opaco de 412 × 412 px em `#26302B`, botões `#748173`, texto claro e
 acento amarelo `#F2B84B`, a mesma linguagem visual da lista de apps.
+O conteúdo é recortado pela borda circular durante abertura e fechamento;
+fora do círculo, o mostrador permanece visível. A lista de apps usa o mesmo
+formato circular, mantendo sua disposição em arco e os gestos existentes.
 
 - O arco externo seleciona brilho de 10% a 100%.
 - O botão superior esquerdo alterna os perfis `15s`, `30s` e `ON`.
@@ -449,7 +452,9 @@ driver não podem ser copiados diretamente.
   devem pausar timers em `on_hide` quando não forem necessários; `Relogio` já faz
   isso para seu timer de interface.
 - O desenho vetorial do mostrador recorta as regiões cobertas por superfícies
-  retangulares opacas acima dele (painel rápido e lista de apps). O recorte
+  retangulares opacas acima dele. Painel rápido e lista de apps agora são
+  circulares e ficam fora dessa otimização, preservando o mostrador visível
+  nos cantos expostos durante o movimento. Para superfícies retangulares, o recorte
   acompanha as coordenadas atuais dessas superfícies durante o arraste e a
   animação; ao recuarem, a região exposta volta a ser desenhada normalmente.
 - Submostradores inteiramente fora da faixa de desenho são descartados antes

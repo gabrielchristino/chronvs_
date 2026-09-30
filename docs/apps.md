@@ -140,10 +140,13 @@ preservando a referência válida quando uma leitura posterior de RTC falha.
 boot, ao acordar e a cada 60 s com referência válida. Sem referência, tenta
 novamente após 1 s; com tela apagada não acessa I2C. A contagem compartilhada
 continua avançando por tempo monotônico entre consultas. A leitura ainda é
-síncrona, com timeout de 100 ms. O timer do mostrador consome essa contagem e
-invalida uma vez por segundo apenas quando visível, incluindo prévias de
-navegação; `on_show` atualiza imediatamente. Atualizar a hora armazenada não
-gera uma segunda invalidação periódica.
+síncrona, com timeout de 100 ms. O mostrador guarda uma amostra da hora para
+todas as faixas de desenho, sem interpolação durante renderizações incidentais.
+`on_show`, despertar e primeira referência válida no boot solicitam uma
+atualização. Seu timer permanece pausado em repouso e em `on_hide`; a UI
+global o ativa a cada segundo somente durante pressão prolongada de 600 ms,
+pausando ao soltar, cancelar por movimento ou apagar a tela. O serviço de
+tempo e os prazos de alarmes continuam independentes da imagem estática.
 
 O diagnóstico de listras usou uma espera de 2 s antes da sessão Wi-Fi.
 Após corrigir a pressão de memória e confirmar a tela no relógio, o atraso

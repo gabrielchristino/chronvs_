@@ -2,7 +2,7 @@
 
 Bring-up em PlatformIO/ESP-IDF para a **Waveshare ESP32-S3-Touch-LCD-1.46**. A placa é uma ESP32-S3R8 com 16 MB de Flash e 8 MB de PSRAM OPI; portanto não é compatível com a definição genérica `esp32-s3-devkitc-1` N8.
 
-O firmware inicializa o barramento I2C, o expansor de GPIO, a tela redonda SPD2010 por QSPI e o touch. Em seguida, apresenta um mostrador orbital inspirado no Ressence Type 3. O PCF85063 fornece a hora de referência; o mostrador a mantém avançando durante o sono da tela.
+O firmware inicializa o barramento I2C, o expansor de GPIO, a tela redonda SPD2010 por QSPI e o touch. Em seguida, apresenta um mostrador orbital inspirado no Ressence Type 3. O PCF85063 fornece a hora de referência. A imagem atualiza ao acordar ou voltar ao mostrador; pressionar e segurar permite acompanhar as órbitas a cada segundo.
 
 O código é organizado como um runtime de aplicativos: o núcleo registra e troca
 apps, serviços isolam RTC e bateria, a camada de plataforma inicializa a placa e

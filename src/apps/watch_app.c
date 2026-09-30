@@ -3,7 +3,6 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#include "esp_timer.h"
 #include "lvgl.h"
 
 #include "apps/watch_app.h"
@@ -42,7 +41,7 @@ static chronvs_time_t displayed_time = {
     .second = 0, .minute = 0, .hour = 12, .day = 18,
     .weekday = 3, .month = 11, .year = 26, .valid = true,
 };
-static int64_t displayed_time_us;
+static lv_timer_t *animation_timer;
 static float ambient_temperature_c = 24.0f;
 
 /* Geometry only, never pixels. Reused across partial-buffer draw calls. */
@@ -432,9 +431,7 @@ static void clock_draw_event(lv_event_t *event) {
     lv_draw_rect(ctx, &background_dsc, coords);
     CHRONVS_WATCH_PROFILE_MARK(BACKGROUND);
 
-    const int64_t elapsed_us = esp_timer_get_time() - displayed_time_us;
-    const float elapsed_seconds = (float)elapsed_us / 1000000.0f;
-    const float seconds = displayed_time.second + elapsed_seconds;
+    const float seconds = displayed_time.second;
     const float minutes = displayed_time.minute + seconds / 60.0f;
     const float hours = (displayed_time.hour % 12) + minutes / 60.0f;
 
@@ -491,10 +488,16 @@ static void clock_draw_event(lv_event_t *event) {
 }
 
 static void animation_timer_cb(lv_timer_t *timer) {
+    (void)timer;
+    chronvs_watch_app_refresh();
+}
+
+void chronvs_watch_app_refresh(void) {
+    if (!clock_face) return;
     if (chronvs_system_ui_display_is_off() || !lv_obj_is_visible(clock_face)) return;
     chronvs_time_t time;
     if (chronvs_Relogio_time(&time)) chronvs_watch_app_set_time(&time);
-    lv_obj_invalidate((lv_obj_t *)timer->user_data);
+    lv_obj_invalidate(clock_face);
 }
 
 static lv_obj_t *create_watch_app(lv_obj_t *parent) {
@@ -505,8 +508,8 @@ static lv_obj_t *create_watch_app(lv_obj_t *parent) {
     lv_obj_clear_flag(clock_face, LV_OBJ_FLAG_SCROLLABLE);
     lv_obj_add_event_cb(clock_face, clock_draw_event, LV_EVENT_DRAW_MAIN, NULL);
 
-    displayed_time_us = esp_timer_get_time();
-    lv_timer_t *animation_timer = lv_timer_create(animation_timer_cb, 1000, clock_face);
+    animation_timer = lv_timer_create(animation_timer_cb, 1000, clock_face);
+    lv_timer_pause(animation_timer);
     chronvs_system_ui_init(clock_face, animation_timer);
     return clock_face;
 }
@@ -520,10 +523,9 @@ void chronvs_watch_app_set_ambient_temperature(float temperature_c) {
 }
 
 void chronvs_watch_app_set_time(const chronvs_time_t *time) {
-    if (!time->valid) return; /* Keep the animated fallback instead of a blank face. */
+    if (!time->valid) return; /* Keep the last snapshot instead of a blank face. */
 
-    /* Keep the interpolation origin stable when the RTC returns the same
-     * second, including after an early refresh caused by waking the screen. */
+    /* Keep one snapshot for every draw slice and incidental redraw. */
     if (time->second == displayed_time.second &&
         time->minute == displayed_time.minute &&
         time->hour == displayed_time.hour &&
@@ -535,14 +537,16 @@ void chronvs_watch_app_set_time(const chronvs_time_t *time) {
     }
 
     displayed_time = *time;
-    displayed_time_us = esp_timer_get_time();
-    /* The one-second visual timer owns periodic invalidation. */
+    /* Only explicit refresh requests invalidate the snapshot. */
 }
 
 static void show_watch_app(void) {
-    chronvs_time_t time;
-    if (chronvs_Relogio_time(&time)) chronvs_watch_app_set_time(&time);
-    if (clock_face != NULL) lv_obj_invalidate(clock_face);
+    lv_timer_pause(animation_timer);
+    chronvs_watch_app_refresh();
+}
+
+static void hide_watch_app(void) {
+    lv_timer_pause(animation_timer);
 }
 
 const chronvs_app_t chronvs_watch_app = {
@@ -552,7 +556,7 @@ const chronvs_app_t chronvs_watch_app = {
     .launcher_visible = false,
     .create = create_watch_app,
     .on_show = show_watch_app,
-    .on_hide = NULL,
+    .on_hide = hide_watch_app,
 };
 
 CHRONVS_REGISTER_APP(chronvs_watch_app)

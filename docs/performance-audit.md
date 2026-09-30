@@ -1103,3 +1103,22 @@ gestos, ON e ECO desligado. Conferir também reaparecimento das linhas nos
 extremos da rolagem, abertura dos apps e retorno ao mostrador. Manter apenas
 se a medição física não indicar regressão; a redução de callbacks, por si só,
 não demonstra melhora de fluidez.
+
+## Mostrador sob demanda
+
+Por decisão do usuário, as órbitas deixam de avançar a cada segundo em repouso.
+Amostras novas são exibidas ao acordar, voltar ao mostrador, obter a primeira
+hora válida no boot ou segurar o toque por 600 ms. Durante a pressão, há uma
+atualização por segundo; soltar ou mover mais de 12 px cancela. Os limites e
+conflitos com navegação estão em `interface.md`. A hora compartilhada, timers
+e alarmes continuam avançando independentemente da imagem.
+
+A interpolação durante o desenho foi retirada para que invalidações de outras
+camadas não movam as órbitas nem produzam posições diferentes entre faixas.
+Não houve alteração de buffers, QSPI, cache circular ou período LVGL de 20 ms.
+O teste integrado confirma zero frames em dez segundos de repouso, retomada
+por pressão, parada ao soltar/mover, atividade durante contato prolongado e
+primeiro contato somente para despertar. A comparação de pixels confirma que
+um redesenho incidental mantém a imagem e que segurar captura a hora atual.
+Os builds padrão e `display_profile_o2` passaram. A fluidez,
+hora ao despertar e convivência dos gestos ainda precisam de teste físico.

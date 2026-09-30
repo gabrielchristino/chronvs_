@@ -13,6 +13,7 @@
 
 #include "Display_SPD2010.h"
 #include "core/app_manager.h"
+#include "apps/watch_app.h"
 #include "ui/control_style.h"
 #include "services/sound_service.h"
 #include "services/weather_service.h"
@@ -32,6 +33,8 @@
 #define ECO_OFF_AFTER_MS 15000
 #define POWER_TIMER_PERIOD_MS 500
 #define CLOCK_REDRAW_PERIOD_MS 1000
+#define CLOCK_HOLD_MS 600
+#define CLOCK_HOLD_SLOP 12
 #define MENU_EDGE_START_Y 90
 #define MENU_DRAG_SLOP 5
 #define MENU_DRAG_FRAME_MS 20
@@ -94,6 +97,9 @@ static bool menu_dragging;
 static bool menu_suppress_click;
 static bool clock_swipe_candidate;
 static bool app_swipe_dragging;
+static bool clock_hold_candidate;
+static bool clock_hold_active;
+static uint32_t clock_press_tick;
 static int16_t gesture_start_x;
 static int16_t gesture_start_y;
 static int16_t menu_gesture_start_y;
@@ -134,8 +140,8 @@ static void set_display_state(display_state_t state) {
         if (wake_guard) { lv_obj_del(wake_guard); wake_guard = NULL; }
         set_output_brightness(active_output_brightness());
         lv_timer_set_period(clock_animation_timer, CLOCK_REDRAW_PERIOD_MS);
-        lv_timer_resume(clock_animation_timer);
-        lv_obj_invalidate(clock_surface);
+        lv_timer_pause(clock_animation_timer);
+        chronvs_watch_app_refresh();
     }
     else if (state == DISPLAY_DIMMED) {
         const uint8_t dim_limit = eco_enabled ? ECO_DIM_BRIGHTNESS : DIM_BRIGHTNESS;
@@ -143,7 +149,7 @@ static void set_display_state(display_state_t state) {
         const uint8_t dimmed = active < dim_limit ? active : dim_limit;
         set_output_brightness(dimmed);
         lv_timer_set_period(clock_animation_timer, CLOCK_REDRAW_PERIOD_MS);
-        lv_timer_resume(clock_animation_timer);
+        lv_timer_pause(clock_animation_timer);
     }
     else { /* DISPLAY_OFF */
         if (!wake_guard) {
@@ -578,6 +584,27 @@ static void clock_touch_event(lv_event_t *event) {
     const lv_event_code_t code = lv_event_get_code(event);
     lv_point_t point;
 
+    if (code == LV_EVENT_PRESSING && touch_contact_active && !wake_only_contact) {
+        mark_activity();
+        lv_indev_get_point(lv_indev_get_act(), &point);
+        const int dx = point.x - gesture_start_x;
+        const int dy = point.y - gesture_start_y;
+        if (dx > CLOCK_HOLD_SLOP || dx < -CLOCK_HOLD_SLOP ||
+            dy > CLOCK_HOLD_SLOP || dy < -CLOCK_HOLD_SLOP ||
+            app_swipe_dragging || menu_dragging || menu_open) {
+            clock_hold_candidate = false;
+            clock_hold_active = false;
+            lv_timer_pause(clock_animation_timer);
+        }
+        if (clock_hold_candidate && !clock_hold_active &&
+            lv_tick_elaps(clock_press_tick) >= CLOCK_HOLD_MS) {
+            clock_hold_active = true;
+            chronvs_watch_app_refresh();
+            lv_timer_reset(clock_animation_timer);
+            lv_timer_resume(clock_animation_timer);
+        }
+    }
+
     if (code == LV_EVENT_PRESSED) {
         if (touch_contact_active) return;
         touch_contact_active = true;
@@ -587,6 +614,10 @@ static void clock_touch_event(lv_event_t *event) {
         gesture_start_x = point.x;
         gesture_start_y = point.y;
         clock_swipe_candidate = !wake_only_contact;
+        clock_hold_candidate = !wake_only_contact && !menu_open;
+        clock_hold_active = false;
+        clock_press_tick = lv_tick_get();
+        mark_activity();
         if (wake_only_contact) {
             mark_activity();
             set_display_state(DISPLAY_ACTIVE);
@@ -631,6 +662,9 @@ static void clock_touch_event(lv_event_t *event) {
         }
     }
     else if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+        lv_timer_pause(clock_animation_timer);
+        clock_hold_candidate = false;
+        clock_hold_active = false;
         if (app_swipe_dragging) {
             lv_indev_get_point(lv_indev_get_act(), &point);
             if (gesture_start_y - point.y >= APP_SWIPE_COMMIT_DISTANCE) {

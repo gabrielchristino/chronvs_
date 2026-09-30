@@ -172,19 +172,38 @@ int main(void) {
     chronvs_display_profile_init(); chronvs_display_profile_init();
     chronvs_app_manager_init(lv_scr_act());assert(chronvs_apps_register_all());
     assert(chronvs_app_open("watch"));capture("12-watch");
+    unsigned char *frozen_pixels=malloc(sizeof(pixels)); assert(frozen_pixels);
+    memcpy(frozen_pixels,pixels,sizeof(pixels));
     refresh_count=0;
     for (unsigned i=0; i<1000; ++i) {
         now_us+=10000;
-        if (i%100==50) {
-            chronvs_time_t shared;
-            assert(chronvs_Relogio_time(&shared));
-            chronvs_watch_app_set_time(&shared);
-        }
         lv_tick_inc(10); lv_timer_handler();
     }
-    printf("Watch: %u refreshes over 10 seconds with offset time updates.\n",refresh_count);
-    assert(refresh_count>=9 && refresh_count<=11);
+    printf("Watch idle: %u refreshes over 10 seconds.\n",refresh_count);
+    assert(refresh_count==0);
     assert(frames>=refresh_count && touch_reads>0);
+    lv_obj_invalidate(chronvs_app_content_layer()); elapse(100);
+    assert(!memcmp(frozen_pixels,pixels,sizeof(pixels))); /* Incidental redraw stays frozen. */
+    refresh_count=0;
+    touch(206,206,LV_INDEV_STATE_PR); elapse(350);
+    assert(refresh_count==0); /* Short contacts do not refresh the snapshot. */
+    elapse(350);
+    assert(refresh_count==1); /* Hold recognized after 600 ms. */
+    assert(memcmp(frozen_pixels,pixels,sizeof(pixels))); /* Samples the current time. */
+    free(frozen_pixels);
+    refresh_count=0; elapse(3000);
+    assert(refresh_count==3);
+    elapse(16000); assert(LCD_Backlight>12); /* Hold counts as real activity. */
+    touch(206,206,LV_INDEV_STATE_REL); elapse(100);
+    refresh_count=0; elapse(3000); assert(refresh_count==0);
+    touch(206,206,LV_INDEV_STATE_PR); elapse(700);
+    touch(230,206,LV_INDEV_STATE_PR); elapse(100);
+    refresh_count=0; elapse(2000); assert(refresh_count==0); /* Drift cancels. */
+    touch(230,206,LV_INDEV_STATE_REL);
+    elapse(46000); assert(LCD_Backlight==0);
+    touch(206,206,LV_INDEV_STATE_PR); elapse(100);
+    refresh_count=0; elapse(2500); assert(refresh_count==0); /* Wake-only hold. */
+    touch(206,206,LV_INDEV_STATE_REL);
     chronvs_system_ui_notify_activity();
     lv_obj_t *panel=lv_obj_get_child(lv_scr_act(),1);assert(panel);
     lv_obj_clear_flag(panel,LV_OBJ_FLAG_HIDDEN);lv_obj_set_y(panel,0);

@@ -59,6 +59,12 @@ A implementação e os limites da validação estão na
 
 ## Comparação no dispositivo
 
+O mostrador agora fica estático em repouso. Segure por 600 ms para atualizar
+imediatamente e depois a cada segundo até soltar. Para comparar o custo de
+desenho com capturas antigas, mantenha essa pressão; ausência de resumos
+`display_perf` quando não há frames é esperada. A mudança reduz a frequência
+de desenho, não demonstra redução do custo individual de cada quadro.
+
 Use o PlatformIO instalado em `C:\Users\gabri\.platformio\penv\Scripts\platformio.exe`
 se `pio` não estiver no PATH. Execute na raiz:
 

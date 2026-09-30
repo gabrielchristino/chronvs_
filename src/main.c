@@ -6,6 +6,7 @@
 #include "lvgl.h"
 
 #include "apps/app_catalog.h"
+#include "apps/watch_app.h"
 #include "core/app_manager.h"
 #include "platform/board.h"
 #include "platform/display_profile.h"
@@ -39,6 +40,7 @@ void app_main(void) {
 
     TickType_t next_battery_update = 0;
     bool display_was_off = false;
+    bool watch_time_initialized = false;
     /* At 100 Hz, pdMS_TO_TICKS(5) is zero: always block for at least one tick. */
     const TickType_t ui_delay = pdMS_TO_TICKS(5) > 0 ? pdMS_TO_TICKS(5) : 1;
 
@@ -50,6 +52,13 @@ void app_main(void) {
         TickType_t now = xTaskGetTickCount();
         const bool display_is_off = chronvs_system_ui_display_is_off();
         chronvs_rtc_refresh(display_is_off);
+        if (!display_is_off && !watch_time_initialized) {
+            chronvs_time_t initial_time;
+            if (chronvs_Relogio_time(&initial_time)) {
+                chronvs_watch_app_refresh();
+                watch_time_initialized = true;
+            }
+        }
         if (display_is_off) {
             if (!display_was_off)
                 ESP_LOGI(TAG, "Display off: light sleep enabled");

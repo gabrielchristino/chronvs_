@@ -41,6 +41,7 @@ microfone para iniciar outra sessão. O procedimento de teste está em
 | --- | --- | --- |
 | Mostrador | Arrastar da borda superior para baixo | Abre os acessos rápidos sobre o mostrador, acompanhando o dedo com ganho visual 2×; menos de 120 px cancela a abertura. |
 | Mostrador | Arrastar para cima | Revela a lista de apps sobre o mostrador, acompanhando o dedo desde a borda inferior. |
+| Mostrador | Pressionar e segurar por 600 ms | Atualiza a hora imediatamente e a cada segundo enquanto mantém o contato. Soltar ou deslocar mais de 12 px em qualquer eixo encerra a atualização. |
 | Acessos rápidos | Arrastar para cima | Fecha o painel. O limiar é 5 px e vale também sobre o arco de brilho. |
 | Lista de apps | Tocar uma linha | Abre o app selecionado. |
 | Lista de apps | Arrastar para baixo a partir do topo | Fecha a lista acompanhando o dedo; o gesto precisa avançar 120 px. |
@@ -210,10 +211,17 @@ apagada. O loop LVGL continua normal após cada despertar. O timeout máximo é
 prazo desse evento. Os binários das etapas testadas estão preservados em
 `.pio/diagnostics/`. Sessões Wi-Fi impedem o sono até que o rádio seja
 desligado. O primeiro toque apenas acorda o relógio; não aciona controles.
-O mostrador interpola a hora com `esp_timer_get_time()`, que inclui o tempo
-passado em light sleep. Ao voltar, uma leitura válida do RTC ajusta a hora;
-se ela falhar ou vier atrasada em relação ao relógio em execução, o mostrador
-usa a hora monotônica já mantida pelo serviço de alarmes.
+O mostrador mantém uma imagem estática da hora, incluindo todas as órbitas.
+Atualiza ao receber a primeira hora válida no boot, ao acordar e ao voltar
+dos apps. Sem interação, não avança a cada segundo, inclusive em ON.
+Pressionar por 600 ms atualiza imediatamente e depois uma vez por segundo
+até soltar; mover mais de 12 px em qualquer eixo cancela essa atualização
+durante o restante do contato. Os gestos de navegação têm prioridade.
+Manter o contato registra atividade e impede o apagamento por inatividade.
+O primeiro contato com a tela apagada somente acorda, mesmo se prolongado.
+A imagem usa a hora monotônica mantida pelo serviço de alarmes, que inclui
+o tempo em light sleep; alarmes, timers e cronômetro continuam avançando.
+As consultas ao RTC mantêm sua política própria e não causam animação.
 Esses testes confirmam o funcionamento do despertar e do timer, mas não medem
 a corrente nem a autonomia da bateria de 150 mAh.
 
@@ -412,7 +420,7 @@ invalidadas e evitar trabalho por quadro continuam válidos, mas os detalhes do
 driver não podem ser copiados diretamente.
 
 - `LV_DISP_DEF_REFR_PERIOD` é 20 ms, com alvo de até 50 FPS durante um gesto.
-  O mostrador normal continua atualizado uma vez por segundo.
+  O mostrador normal fica estático; atualiza por segundo durante pressão prolongada.
   Um único timer controla sua invalidação periódica; quando oculto, não
   invalida. Ao abrir e durante as prévias dos gestos, volta a mostrar a hora.
   A referência RTC é consultada no boot, ao acordar e a cada minuto com tela

@@ -52,6 +52,11 @@ Após a retirada, o usuário confirmou a fluidez e os logs mostraram retorno
 dos círculos a cerca de 57 ms e refresh de 227–230 ms em repouso. Veja a
 [confirmação física](performance-audit.md#recuperação-confirmada-após-retirar-o-recorte).
 
+O launcher interrompe o desenho dos nomes com opacidade zero,
+preservando as linhas no layout, os ícones e o fade original quando visíveis.
+A implementação e os limites da validação estão na
+[análise do launcher](performance-audit.md#launcher-interromper-desenho-de-nomes-totalmente-transparentes).
+
 ## Comparação no dispositivo
 
 Use o PlatformIO instalado em `C:\Users\gabri\.platformio\penv\Scripts\platformio.exe`

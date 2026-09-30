@@ -61,6 +61,12 @@ static void update_curve(lv_timer_t *timer) {
             lv_obj_set_style_translate_x(rows[i], x, 0);
         if (!context->curve_set || context->opacity != opacity)
             lv_obj_set_style_opa(rows[i], opacity, 0);
+        /* Skip invisible names before drawing; custom icons retain their own
+         * opacity behavior. Child 1 is the name created below the badge. */
+        if (!context->curve_set ||
+            (context->opacity == LV_OPA_TRANSP) != (opacity == LV_OPA_TRANSP))
+            lv_obj_set_style_opa_layered(lv_obj_get_child(rows[i], 1),
+                opacity == LV_OPA_TRANSP ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
         context->translate_x = x;
         context->opacity = opacity;
         context->curve_set = true;

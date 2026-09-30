@@ -1057,3 +1057,49 @@ investigar composição das linhas com opacidade parcial e seus ícones,
 comparando pixels e memória antes de qualquer mudança. Essa é uma hipótese
 de investigação, não uma causa isolada pelos logs. A instrumentação atual
 foi validada nesta captura; esta etapa apenas documenta o resultado.
+
+## Launcher: interromper desenho de nomes totalmente transparentes
+
+A inspeção do LVGL local mostrou que `opa` é herdada pelos descendentes,
+mas não interrompe o percurso da árvore em `refr_obj`. A mudança mantém
+essa opacidade para todos os fades e usa `opa_layered = 0` somente no nome,
+quando a linha chega a opacidade zero. Nesse caso o LVGL retorna antes de
+desenhar o texto ou alocar uma camada. Quando a linha reaparece, `opa_layered`
+volta a 255, mantendo a composição original. A propriedade só é reaplicada
+ao cruzar zero, além da inicialização.
+
+Não se usa HIDDEN: a linha continua participando dos limites de rolagem e
+do hit testing. Posições, curva, transição de opacidade e gestos permanecem
+iguais. Não há cache de pixels, mudança no mostrador ou em parâmetros de
+display/touch. É uma redução localizada de trabalho; não se espera que
+elimine todo o custo medido do launcher.
+
+Uma primeira tentativa aplicou essa propriedade à linha inteira. Foi
+descartada: 11 das 37 capturas mudaram, pois callbacks de ícones personalizados
+usam descritores próprios que não seguem integralmente a opacidade herdada.
+O ajuste final se limita ao label padrão do nome e preserva esses ícones.
+
+Antes da alteração, o nome de uma linha transparente ainda parcialmente
+dentro da tela recebeu três callbacks de desenho em um refresh integrado.
+O teste agora exige zero callbacks nessa situação e percorre 21 posições
+de rolagem, incluindo limites de fade, além das 16 capturas da interface.
+As 37 referências anteriores estão preservadas localmente em
+`.pio/audit/launcher-pruning-before.json`. O firmware anterior está em
+`.pio/diagnostics/pre-launcher-pruning-4e78c24/`.
+
+A validação de 30/09 passou em `tests/run_Relogio_ui.ps1 -System`: zero
+callbacks para o nome invisível e SHA-256 idêntico nas 37 capturas anteriores.
+Os testes também cobrem rolagem, abertura de apps, retorno, inatividade e
+primeiro toque somente para acordar. No host, os estilos adicionais custaram
+88 bytes do pool LVGL: 71.600 → 71.512 bytes livres com os apps retidos e
+28.912 → 28.824 bytes com editor e alerta. Isso não mede o heap físico ESP32.
+O build padrão passou com RAM estática de 55.012 bytes e flash de 1.661.156
+bytes (96 bytes de flash a mais que a referência).
+O build `display_profile_o2` também passou: RAM estática de 58.336 bytes
+e flash de 1.779.788 bytes.
+
+O ganho de tempo ainda depende da comparação no dispositivo, com os mesmos
+gestos, ON e ECO desligado. Conferir também reaparecimento das linhas nos
+extremos da rolagem, abertura dos apps e retorno ao mostrador. Manter apenas
+se a medição física não indicar regressão; a redução de callbacks, por si só,
+não demonstra melhora de fluidez.

@@ -144,6 +144,10 @@ static void capture(const char *name) {
     fwrite(h,1,54,f);fwrite(pixels,1,sizeof(pixels),f);fclose(f);
 }
 static unsigned refresh_count;
+static unsigned transparent_label_draws;
+static void count_transparent_label_draw(lv_event_t *event) {
+    (void)event; ++transparent_label_draws;
+}
 static unsigned render_start_count;
 static void count_render_start(lv_disp_drv_t *drv) { (void)drv; ++render_start_count; }
 static void count_refresh(lv_disp_drv_t *drv,uint32_t ms,uint32_t px) {
@@ -271,6 +275,25 @@ int main(void) {
     elapse(100); refresh_count=0;
     for (unsigned i=0;i<10;++i) { lv_event_send(app_list,LV_EVENT_SCROLL,NULL); elapse(35); }
     assert(refresh_count==0); /* Unchanged curve must not invalidate row styles. */
+    /* Include the fade endpoints and rows still on-screen with zero opacity. */
+    const int opacity_offsets[] = {0,8,33,34,40,48,81,82,100,130,131,164,177,178,179,180,181,200,246,328,410};
+    for (unsigned i=0;i<sizeof(opacity_offsets)/sizeof(opacity_offsets[0]);++i) {
+        lv_obj_scroll_to_y(app_list,opacity_offsets[i],LV_ANIM_OFF); elapse(70);
+        char name[64]; snprintf(name,sizeof(name),"launcher-opacity-%03d",opacity_offsets[i]);
+        capture(name);
+    }
+    lv_obj_scroll_to_y(app_list,180,LV_ANIM_OFF); elapse(70);
+    assert(lv_obj_get_style_opa(first_row,0)==LV_OPA_TRANSP);
+    assert(first_row->coords.y2 >= app_list->coords.y1);
+    lv_obj_t *transparent_name = lv_obj_get_child(first_row,1);
+    assert(lv_obj_check_type(transparent_name,&lv_label_class));
+    lv_obj_add_event_cb(transparent_name,count_transparent_label_draw,LV_EVENT_DRAW_MAIN_BEGIN,NULL);
+    transparent_label_draws=0;
+    lv_obj_invalidate(app_list); lv_refr_now(NULL);
+    printf("Transparent launcher label: %u draw callbacks.\n",transparent_label_draws);
+    assert(transparent_label_draws==0);
+    lv_obj_remove_event_cb(transparent_name,count_transparent_label_draw);
+    lv_obj_scroll_to_y(app_list,82,LV_ANIM_OFF); elapse(70);
     capture("19-launcher-arc");
     /* A vertical drag on an app scrolls the arc without launching on release. */
     touch(150,206,LV_INDEV_STATE_PR);

@@ -1,6 +1,12 @@
 # Diagnóstico de fluidez
 
 O ambiente padrão compila o LVGL com `-O2` e não instala callbacks de diagnóstico.
+O desenho orbital em `apps/watch_app.c` também usa `-O2`, por uma diretiva GCC
+local após os includes. Isso evita que o modo debug do PlatformIO o rebaixe
+para `-Og`; não habilita fast-math nem altera opções dos drivers ou outros apps.
+`tests/run_watch_optimization_tests.ps1` compara 60 cenários em `-Og`/`-O2`
+mantendo o LVGL em `-O2`, exigindo o mesmo SHA-256 dos pixels. O ganho de tempo
+desse ajuste ainda precisa ser medido no dispositivo com o mostrador orbital.
 Também desativa logs da aplicação/ESP-IDF e do bootloader de software em
 compilação (`LOG_DEFAULT_LEVEL=0`, `LOG_MAXIMUM_LEVEL=0`) e os consoles UART
 e USB (`ESP_CONSOLE_NONE`, `ESP_CONSOLE_SECONDARY_NONE`). Os `printf` diretos

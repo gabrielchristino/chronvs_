@@ -1224,3 +1224,28 @@ do fundo orbital à lentidão percebida. O próximo foco é reduzir esse custo
 mantendo o mostrador, por reutilização de trabalho estático e investigação
 isolada das primitivas mais caras. O experimento não justifica remover os
 gestos nem alterar buffers/QSPI e não comprova sincronismo perfeito do painel.
+
+## Otimização local do código orbital
+
+A inspeção da compilação revelou que apenas o LVGL usava `-O2`; o arquivo
+`watch_app.c`, com cálculos e chamadas de desenho personalizadas, continuava
+em `-Og`. O ajuste agora usa `#pragma GCC optimize ("O2")` após os includes
+somente nesse arquivo. Não há fast-math, reserva de pixels ou mudança de
+drivers. A aplicação via propriedade CMake foi descartada porque a etapa
+`ConfigureDebugFlags()` do PlatformIO sobrescreve a opção por `-Og`.
+
+O teste `run_watch_optimization_tests.ps1` compara 60 horários/posições com
+LVGL O2 e altera somente a otimização do mostrador. Os pixels foram idênticos
+em Og e O2, com SHA-256
+`CDBAEE2A64F4C5F8E6314E59F8C74ADDC036A2E3497B1C5A9718D307A38A8E4D`.
+A suíte integrada também passou, preservando pressão prolongada, repouso,
+despertar e gestos. A contagem de primitivas permaneceu igual: este ajuste
+acelera potencialmente a execução, sem eliminar chamadas de desenho.
+
+O build padrão passou com 55.052 bytes de RAM estática e 1.663.544 de flash
+(mais 1.184 bytes de flash, sem aumento da RAM estática). O ganho físico ainda
+não foi medido: testar o mostrador orbital com `display_profile_o2`, comparando
+arrastes dos dois painéis e a atualização enquanto segura. O fundo liso
+continua sendo apenas uma referência de diagnóstico.
+O build `display_profile_o2` também passou; as 22 capturas circulares da suíte
+integrada mantiveram o SHA-256 da referência anterior.

@@ -4,7 +4,12 @@
 #include <stdint.h>
 #include "lvgl.h"
 #include "src/misc/lv_gc.h"
+#pragma GCC push_options
+#ifdef CHRONVS_TEST_WATCH_BASELINE
+#pragma GCC optimize ("Og")
+#endif
 #include "../src/apps/watch_app.c"
+#pragma GCC pop_options
 
 int64_t esp_timer_get_time(void) { return 0; }
 bool chronvs_system_ui_display_is_off(void) { return false; }

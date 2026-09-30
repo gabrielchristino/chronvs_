@@ -12,6 +12,13 @@
 #include "core/app_manager.h"
 #include "ui/system_ui.h"
 
+/* PlatformIO's debug mode overrides per-source CMake -O2 with -Og.
+ * Optimize only this translation unit, without fast-math or driver changes.
+ * The baseline switch is used by the host pixel comparison. */
+#if defined(__GNUC__) && !defined(CHRONVS_TEST_WATCH_BASELINE)
+#pragma GCC optimize ("O2")
+#endif
+
 #define DISPLAY_SIZE 412
 #define PI_F 3.14159265358979323846f
 

@@ -156,6 +156,9 @@ acento amarelo `#F2B84B`, a mesma linguagem visual da lista de apps.
 O conteúdo é recortado pela borda circular durante abertura e fechamento;
 fora do círculo, o mostrador permanece visível. A lista de apps usa o mesmo
 formato circular, mantendo sua disposição em arco e os gestos existentes.
+O build experimental `display_profile_flat` substitui o mostrador ao fundo
+por uma cor lisa para isolar custo de renderização durante arrastes; não é
+o visual padrão. Procedimento em [`performance.md`](performance.md#isolamento-do-fundo-durante-arrastes-circulares).
 
 - O arco externo seleciona brilho de 10% a 100%.
 - O botão superior esquerdo alterna os perfis `15s`, `30s` e `ON`.

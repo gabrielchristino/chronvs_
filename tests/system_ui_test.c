@@ -195,7 +195,11 @@ int main(void) {
     assert(refresh_count==0); /* Short contacts do not refresh the snapshot. */
     elapse(350);
     assert(refresh_count==1); /* Hold recognized after 600 ms. */
+#ifdef CHRONVS_WATCH_FLAT_BACKGROUND
+    assert(!memcmp(frozen_pixels,pixels,sizeof(pixels))); /* Flat diagnostic stays flat. */
+#else
     assert(memcmp(frozen_pixels,pixels,sizeof(pixels))); /* Samples the current time. */
+#endif
     free(frozen_pixels);
     refresh_count=0; elapse(3000);
     assert(refresh_count==3);

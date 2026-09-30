@@ -138,6 +138,11 @@ void chronvs_display_profile_init(void) {
         break;
     }
     window_start = esp_timer_get_time();
+#ifdef CHRONVS_WATCH_FLAT_BACKGROUND
+    ESP_LOGI("display_perf", "watch_background=flat; orbital rendering disabled for A/B test");
+#else
+    ESP_LOGI("display_perf", "watch_background=orbital");
+#endif
     ESP_LOGI("display_perf", "enabled; refresh includes synchronous flush; LVGL optimization=%s",
              CHRONVS_LVGL_OPT_LABEL);
 }

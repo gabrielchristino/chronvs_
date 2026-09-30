@@ -1,4 +1,4 @@
-param([switch]$System)
+param([switch]$System, [switch]$FlatWatch)
 $ErrorActionPreference = 'Stop'
 Push-Location (Join-Path $PSScriptRoot '..')
 try {
@@ -10,6 +10,7 @@ try {
         'tests/Relogio_ui_test.c', 'src/services/Relogio_service.c', 'src/core/calendar.c', 'src/core/Notas_text.c', 'src/ui/Notas_font.c', 'src/ui/Relogio_widgets.c', 'src/ui/control_style.c') + $sources + @('-o', '.pio/host-tests/Relogio_ui_test.exe')
     $executable = '.pio/host-tests/Relogio_ui_test.exe'
     if ($System) {
+        if ($FlatWatch) { $arguments += @('-DCHRONVS_WATCH_FLAT_BACKGROUND') }
         $arguments += @('-Wl,--wrap=lv_draw_rect')
         $arguments += @('-DCHRONVS_DISPLAY_PROFILE')
         $executable = '.pio/host-tests/system_ui_test.exe'

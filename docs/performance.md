@@ -59,6 +59,35 @@ A implementação e os limites da validação estão na
 
 ## Comparação no dispositivo
 
+### Isolamento do fundo durante arrastes circulares
+
+O ambiente `display_profile_flat` herda o diagnóstico O2 e troca somente o
+desenho orbital por fundo liso escuro. O mostrador fica sem hora visível neste
+experimento. Mantém eventos, invalidações, painéis circulares, gestos, buffers,
+transferência QSPI e logs. O serviço de horário e os alarmes continuam ativos.
+O boot identifica `watch_background=flat`; o diagnóstico normal identifica
+`watch_background=orbital`. O padrão de uso diário continua orbital e silencioso.
+
+Compare `display_profile_o2` e `display_profile_flat`, ambos com ON e ECO
+desligado, após terminar o NTP. Em cada versão, repita abertura/fechamento dos
+atalhos e launcher, lentamente e rapidamente, incluindo cancelar a abertura.
+Separe cada sequência por 3 s sem tocar. Registre se a borda deforma e compare
+`refresh_avg_ms`, `render_max_us`, `flush_avg_us` e `px_avg` em gestos equivalentes.
+No fundo liso, as seções de órbitas ficam zeradas; setup e background permanecem.
+
+```powershell
+& 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' run -e display_profile_flat -t upload
+& 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' device monitor -e display_profile_flat -p COM3 -b 115200
+```
+
+Para voltar à comparação orbital, use `run -e display_profile_o2 -t upload`.
+Para uso diário sem logs, use `run -t upload`. Encerre o monitor com Ctrl+C
+antes de trocar o firmware. Melhora com fundo liso indica contribuição do
+desenho orbital; persistência do efeito não comprova sozinha falha de sincronismo,
+pois o próprio painel circular ainda exige renderização.
+
+### Procedimento geral
+
 O mostrador agora fica estático em repouso. Segure por 600 ms para atualizar
 imediatamente e depois a cada segundo até soltar. Para comparar o custo de
 desenho com capturas antigas, mantenha essa pressão; ausência de resumos

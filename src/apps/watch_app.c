@@ -165,6 +165,7 @@ static lv_point_t polar_point(float cx, float cy, float radius, float angle_deg)
     return p;
 }
 
+#ifndef CHRONVS_WATCH_FLAT_BACKGROUND
 static void update_chapter_geometry(float cx, float cy, uint8_t day) {
     const bool moved = !chapter.valid || chapter.cx != cx || chapter.cy != cy;
     if (moved) {
@@ -191,6 +192,7 @@ static void update_chapter_geometry(float cx, float cy, uint8_t day) {
     chapter.day = day;
     chapter.valid = true;
 }
+#endif
 
 static point_f_t rotate_offset(point_f_t p, float angle_deg) {
     const float angle = radians(angle_deg);
@@ -469,7 +471,9 @@ static void clock_draw_event(lv_event_t *event) {
     const lv_area_t *coords = &object->coords;
     const float cx = (coords->x1 + coords->x2) * 0.5f;
     const float cy = (coords->y1 + coords->y2) * 0.5f;
+#ifndef CHRONVS_WATCH_FLAT_BACKGROUND
     update_chapter_geometry(cx, cy, displayed_time.day);
+#endif
     CHRONVS_WATCH_PROFILE_MARK(SETUP);
 
     /*
@@ -483,6 +487,12 @@ static void clock_draw_event(lv_event_t *event) {
     background_dsc.border_opa = LV_OPA_TRANSP;
     lv_draw_rect(ctx, &background_dsc, coords);
     CHRONVS_WATCH_PROFILE_MARK(BACKGROUND);
+
+#ifdef CHRONVS_WATCH_FLAT_BACKGROUND
+    /* A/B diagnostic only: keep normal invalidation, clipping and transfers. */
+    ctx->clip_area = original_clip;
+    return;
+#endif
 
     const float seconds = displayed_time.second;
     const float minutes = displayed_time.minute + seconds / 60.0f;

@@ -1185,3 +1185,21 @@ não foram medidos. O diagnóstico O2 também compilou com sucesso. Ambos
 ainda dependem do teste de abertura, fechamento e cancelamento no relógio.
 As transferências continuam parciais e síncronas; esta mudança não promete
 atualização atômica de toda a tela.
+
+## Experimento: painéis circulares sobre fundo liso
+
+O usuário relatou melhora com o descarte, mas deformação da borda durante
+arrastes. Para separar o custo orbital do restante da transição, foi criado
+`display_profile_flat`, derivado de `display_profile_o2`. A flag
+`CHRONVS_WATCH_FLAT_BACKGROUND` interrompe o desenho após limpar o fundo,
+sem alterar gestos, posições, invalidações ou configuração do painel.
+O build padrão continua mostrando as órbitas; a variante serve só para teste.
+
+`tests/run_Relogio_ui.ps1 -System -FlatWatch` passou, incluindo painéis,
+atividade, despertar e pressão prolongada. A captura do launcher sobre fundo
+liso foi inspecionada. A comparação física deve usar os dois diagnósticos,
+com a mesma política de logs, conforme `performance.md`. Ainda não há resultado
+no dispositivo que isole a causa da deformação ou justifique alterar sincronismo.
+As suítes orbital e lisa passaram, assim como os builds padrão e experimental.
+O diagnóstico liso usa 57.760 bytes de RAM estática e 1.775.684 bytes de flash;
+esses números não medem a RAM interna livre ou a fluidez no dispositivo.

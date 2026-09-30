@@ -1203,3 +1203,24 @@ no dispositivo que isole a causa da deformação ou justifique alterar sincronis
 As suítes orbital e lisa passaram, assim como os builds padrão e experimental.
 O diagnóstico liso usa 57.760 bytes de RAM estática e 1.775.684 bytes de flash;
 esses números não medem a RAM interna livre ou a fluidez no dispositivo.
+
+### Resultado físico do fundo liso
+
+Na captura seguinte, o usuário relatou “ficou extremamente fluido”. As seções
+de geometria, círculos, textos orbitais e ponteiros aparecem zeradas, coerente
+com o diagnóstico liso. Um refresh de 169.744 pixels levou 26 ms, com 14,45 ms
+de flush, frente a cerca de 232 ms para o mostrador orbital completo nas
+capturas anteriores. São cenários de desenho diferentes, não uma medição
+pareada da mesma trajetória de arraste nem um ganho percentual de FPS.
+
+As janelas de movimento ainda variam: médias de 39–96 ms e máximos até 138 ms;
+portanto não se declara 60 FPS ou eliminação mensurada de tearing. A RAM
+interna ficou entre 143.343 e 143.431 bytes e o maior bloco DMA em 38.912 bytes,
+sem erro no trecho. Vários resumos chegaram com o mesmo timestamp do monitor;
+para cadência, usam-se `window_ms` e os tempos internos, não a chegada ao PC.
+
+O relato e a queda no custo do desenho são evidência forte de contribuição
+do fundo orbital à lentidão percebida. O próximo foco é reduzir esse custo
+mantendo o mostrador, por reutilização de trabalho estático e investigação
+isolada das primitivas mais caras. O experimento não justifica remover os
+gestos nem alterar buffers/QSPI e não comprova sincronismo perfeito do painel.

@@ -148,6 +148,13 @@ global o ativa a cada segundo somente durante pressão prolongada de 600 ms,
 pausando ao soltar, cancelar por movimento ou apagar a tela. O serviço de
 tempo e os prazos de alarmes continuam independentes da imagem estática.
 
+O mostrador retém uma linha de 824 bytes no pool LVGL em PSRAM para reproduzir
+os dois anéis externos a partir de dados RLE constantes na flash. Não aloca
+por quadro e mantém o caminho vetorial se a linha não estiver disponível,
+se o mostrador estiver deslocado ou houver máscara externa. O gerador e a
+comparação de pixels estão documentados em `performance.md`; mudanças na
+paleta ou geometria dos anéis exigem regenerar esses dados.
+
 O diagnóstico de listras usou uma espera de 2 s antes da sessão Wi-Fi.
 Após corrigir a pressão de memória e confirmar a tela no relógio, o atraso
 foi retirado; os logs de memória nas etapas de rede/TLS foram mantidos.

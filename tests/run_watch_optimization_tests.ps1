@@ -1,3 +1,4 @@
+param([switch]$RingCache)
 $ErrorActionPreference = 'Stop'
 Push-Location (Join-Path $PSScriptRoot '..')
 try {
@@ -5,7 +6,8 @@ try {
     $lvglRoot = '.vendor-reference/example/ESP-IDF-5.3.2/ESP32-S3-Touch-LCD-1.46-Test/components/lvgl__lvgl'
     $sources = @(rg --files "$lvglRoot/src" -g '*.c')
     $hashes = @()
-    foreach ($variant in @('Og', 'O2')) {
+    $variants = if ($RingCache) { @('reference','cached') } else { @('Og','O2') }
+    foreach ($variant in $variants) {
         $exe = ".pio/host-tests/watch-optimization-$variant.exe"
         $pixels = ".pio/host-tests/watch-optimization-$variant.rgb565"
         $arguments = @('-std=c11', '-O2', '-DLV_ASSERT_HANDLER=abort();', '-include', 'stdlib.h',
@@ -14,6 +16,8 @@ try {
             $sources + @('-Wl,--wrap=lv_draw_mask_radius_init', '-lm', '-o', $exe)
         # Only watch_app.c changes optimization; LVGL stays O2 in both runs.
         if ($variant -eq 'Og') { $arguments += '-DCHRONVS_TEST_WATCH_BASELINE' }
+        if ($variant -eq 'reference') { $arguments += '-DCHRONVS_WATCH_RINGS_REFERENCE' }
+        if ($RingCache) { $arguments += '-DCHRONVS_TEST_RING_CACHE' }
         ($arguments | ForEach-Object { '"' + $_.Replace('\','/') + '"' }) |
             Set-Content '.pio/host-tests/watch-optimization.rsp'
         & gcc '@.pio/host-tests/watch-optimization.rsp'
@@ -22,6 +26,6 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "Watch $variant rendering failed" }
         $hashes += (Get-FileHash $pixels).Hash
     }
-    if ($hashes[0] -ne $hashes[1]) { throw 'Watch pixels differ between Og and O2' }
+    if ($hashes[0] -ne $hashes[1]) { throw 'Watch pixels differ between variants' }
     Write-Output "60 watch scenarios match: $($hashes[1])"
 } finally { Pop-Location }

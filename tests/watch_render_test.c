@@ -24,6 +24,41 @@ static uint32_t checksum = 2166136261u;
 static size_t peak_used;
 static size_t smallest_block = LV_MEM_SIZE;
 static FILE *pixel_stream;
+#if defined(CHRONVS_TEST_RING_CACHE) && !defined(CHRONVS_WATCH_RINGS_REFERENCE)
+static void test_ring_fallbacks(void) {
+    static lv_color_t pixels[412 * 20], reference[412 * 20];
+    lv_draw_sw_ctx_t sw;
+    lv_draw_sw_init_ctx(NULL, &sw.base_draw);
+    lv_color_t *saved_line = ring_cache_line;
+    assert(saved_line);
+    circle_cover_count = 0;
+    const lv_area_t mask_area = {5,5,406,406};
+    for (int masked=0; masked<2; ++masked) {
+        lv_draw_mask_radius_param_t mask;
+        int16_t mask_id=-1;
+        if (masked) {
+            lv_draw_mask_radius_init(&mask,&mask_area,200,false);
+            mask_id=lv_draw_mask_add(&mask,NULL); assert(mask_id>=0);
+        }
+        const int rows[]={0,190,392};
+        for(unsigned i=0;i<3;++i) {
+            lv_area_t area={0,rows[i],411,rows[i]+19};
+            sw.base_draw.buf=pixels; sw.base_draw.buf_area=&area;
+            sw.base_draw.clip_area=&area;
+            for(int mode=0;mode<2;++mode) {
+                ring_cache_line=mode ? saved_line : NULL;
+                for(unsigned x=0;x<412*20;++x) pixels[x]=lv_color_hex(COLOR_BEZEL_DARK);
+                draw_case_rings(&sw.base_draw,205.5f,205.5f);
+                if(!mode) memcpy(reference,pixels,sizeof(pixels));
+                else assert(!memcmp(reference,pixels,sizeof(pixels)));
+            }
+        }
+        if(masked) { lv_draw_mask_remove_id(mask_id); lv_draw_mask_free_param(&mask); }
+    }
+    ring_cache_line=saved_line;
+    puts("Ring cache: absent scratch and external-mask fallbacks match reference pixels.");
+}
+#endif
 void __real_lv_draw_mask_radius_init(lv_draw_mask_radius_param_t *, const lv_area_t *, lv_coord_t, bool);
 void __wrap_lv_draw_mask_radius_init(lv_draw_mask_radius_param_t *param,
                                    const lv_area_t *area, lv_coord_t radius, bool inv) {
@@ -84,5 +119,8 @@ int main(int argc, char **argv) {
            LV_CIRCLE_CACHE_SIZE, checksum, misses, large_misses,
            (unsigned)(memory.total_size-memory.free_size), (unsigned)memory.free_biggest_size,
            (unsigned)peak_used, (unsigned)smallest_block);
+#if defined(CHRONVS_TEST_RING_CACHE) && !defined(CHRONVS_WATCH_RINGS_REFERENCE)
+    test_ring_fallbacks();
+#endif
     return 0;
 }

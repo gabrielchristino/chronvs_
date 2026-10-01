@@ -11,6 +11,14 @@
 #include "services/Relogio_service.h"
 #include "core/app_manager.h"
 #include "ui/system_ui.h"
+#include "src/draw/sw/lv_draw_sw.h"
+#if !defined(CHRONVS_WATCH_RINGS_REFERENCE) && !defined(CHRONVS_WATCH_FLAT_BACKGROUND)
+#if LV_COLOR_DEPTH != 16 || LV_COLOR_16_SWAP != 1
+#error "Regenerate the watch ring cache before changing its RGB565 format"
+#endif
+#include "apps/watch_ring_cache.h"
+static lv_color_t *ring_cache_line;
+#endif
 
 /* PlatformIO's debug mode overrides per-source CMake -O2 with -Og.
  * Optimize only this translation unit, without fast-math or driver changes.
@@ -325,6 +333,33 @@ static void draw_hand(lv_draw_ctx_t *ctx, float cx, float cy, float tail,
 
 static void draw_case_rings(lv_draw_ctx_t *ctx, float cx, float cy) {
 
+#if !defined(CHRONVS_WATCH_RINGS_REFERENCE) && !defined(CHRONVS_WATCH_FLAT_BACKGROUND)
+    /* Exact reference pixels for the stationary 412px case only. A row-sized
+     * scratch allocation comes from the existing PSRAM LVGL pool, never DMA.
+     * Moving the face or applying an external mask keeps the vector path. */
+    if (ring_cache_line && cx == 205.5f && cy == 205.5f &&
+        ctx->draw_rect == lv_draw_sw_rect && !lv_draw_mask_is_any(ctx->clip_area)) {
+        const int first_y = LV_MAX(0, ctx->clip_area->y1);
+        const int last_y = LV_MIN(411, ctx->clip_area->y2);
+        for (int y = first_y; y <= last_y; ++y) {
+            lv_area_t row = {0, y, 411, y};
+            if (covered_by_circle(&row, ctx->clip_area)) continue;
+            unsigned x = 0;
+            for (unsigned run = watch_ring_offsets[y]; run < watch_ring_offsets[y+1]; ++run) {
+                lv_color_t color = {.full = watch_ring_runs[run][1]};
+                const unsigned end = watch_ring_runs[run][0];
+                while (x < end) ring_cache_line[x++] = color;
+            }
+            lv_draw_sw_blend_dsc_t blend = {0};
+            blend.blend_area = &row;
+            blend.src_buf = ring_cache_line;
+            blend.opa = LV_OPA_COVER;
+            lv_draw_sw_blend(ctx, &blend);
+        }
+        return;
+    }
+#endif
+
     /* Overscan hides the antialiased edge beyond the round panel aperture. */
     draw_circle(ctx, cx, cy, 206, COLOR_DATE_RING, COLOR_TRACK, 1);
     draw_circle(ctx, cx, cy, 183, COLOR_FACE_DARK, COLOR_TRACK, 2);
@@ -571,6 +606,9 @@ void chronvs_watch_app_refresh(void) {
 }
 
 static lv_obj_t *create_watch_app(lv_obj_t *parent) {
+#if !defined(CHRONVS_WATCH_RINGS_REFERENCE) && !defined(CHRONVS_WATCH_FLAT_BACKGROUND)
+    if (!ring_cache_line) ring_cache_line = lv_mem_alloc(DISPLAY_SIZE * sizeof(lv_color_t));
+#endif
     clock_face = lv_obj_create(parent);
     lv_obj_remove_style_all(clock_face);
     lv_obj_set_size(clock_face, DISPLAY_SIZE, DISPLAY_SIZE);

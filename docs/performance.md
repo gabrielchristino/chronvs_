@@ -7,6 +7,15 @@ para `-Og`; não habilita fast-math nem altera opções dos drivers ou outros ap
 `tests/run_watch_optimization_tests.ps1` compara 60 cenários em `-Og`/`-O2`
 mantendo o LVGL em `-O2`, exigindo o mesmo SHA-256 dos pixels. O ganho de tempo
 desse ajuste ainda precisa ser medido no dispositivo com o mostrador orbital.
+Os dois anéis externos usam um cache RGB565 comprimido por sequências de cores
+na flash (24.666 bytes). Uma linha de 824 bytes no pool LVGL em PSRAM é
+descomprimida por vez; não é um framebuffer de tela inteira nem um buffer DMA.
+O desenho vetorial é usado se faltar essa alocação, se o mostrador estiver
+deslocado ou se houver máscara externa. As cores/medidas do cache são fixas:
+mudanças exigem regeneração com `tests/generate_watch_ring_cache.ps1` e revisão
+do arquivo produzido em `.pio/host-tests/`. A comparação
+`tests/run_watch_optimization_tests.ps1 -RingCache` verifica os pixels contra
+o desenho vetorial. O ganho físico ainda depende de medição.
 Também desativa logs da aplicação/ESP-IDF e do bootloader de software em
 compilação (`LOG_DEFAULT_LEVEL=0`, `LOG_MAXIMUM_LEVEL=0`) e os consoles UART
 e USB (`ESP_CONSOLE_NONE`, `ESP_CONSOLE_SECONDARY_NONE`). Os `printf` diretos

@@ -1249,3 +1249,36 @@ arrastes dos dois painéis e a atualização enquanto segura. O fundo liso
 continua sendo apenas uma referência de diagnóstico.
 O build `display_profile_o2` também passou; as 22 capturas circulares da suíte
 integrada mantiveram o SHA-256 da referência anterior.
+
+## Cache compacto dos anéis externos
+
+A captura posterior ao O2 mostrou 236–242 ms para quadros completos, contra
+26 ms no diagnóstico liso. Geometria ficou perto de 1 ms e os anéis perto de
+60 ms por quadro; não se confirmou ganho relevante do ajuste O2. A comparação
+não é pareada por trajetória e não atribui regressão à opção do compilador.
+
+O próximo experimento substitui apenas os dois anéis fixos por dados RGB565
+comprimidos por sequências de cores (RLE). O próprio LVGL 8.3.11 gera as linhas
+de referência, incluindo fundo e antialiasing. São 5.960 sequências e 413
+índices, totalizando 24.666 bytes constantes na flash. Não existe imagem
+completa descomprimida: uma única linha de 824 bytes é mantida no pool LVGL
+em PSRAM. Isso custa 832 bytes com o controle TLSF; não exige RAM interna DMA.
+
+O cache só vale para o mostrador estacionário de 412 px, RGB565 com bytes
+trocados e renderização software sem máscara externa. Posição diferente,
+máscara ou falha de alocação mantém o desenho vetorial. A memória vive com o
+app retido; não há alocação por frame. Os demais elementos permanecem vetoriais
+e os buffers de display, QSPI e espera síncrona ficam iguais.
+
+`tests/run_watch_optimization_tests.ps1 -RingCache` confirmou pixels idênticos
+em 60 cenários, inclusive posições deslocadas que usam o fallback. SHA-256:
+`CDBAEE2A64F4C5F8E6314E59F8C74ADDC036A2E3497B1C5A9718D307A38A8E4D`.
+A suíte integrada passou e as 22 capturas circulares também ficaram idênticas.
+No host, restaram 70.640 bytes do pool com apps retidos e 27.952 com editor
+e alerta. O ganho de tempo e a ausência de artefatos ainda precisam ser
+medidos no relógio, sobretudo ao abrir/fechar/cancelar os painéis e ao segurar
+o mostrador para atualizar. Não se conclui fluidez equivalente ao fundo liso.
+O build padrão passou com 55.060 bytes de RAM estática e 1.688.500 de flash.
+O build `display_profile_o2` também passou. Os testes específicos de ausência
+da linha temporária e presença de máscara externa reproduziram os pixels do
+desenho vetorial, confirmando esses caminhos de fallback no host.

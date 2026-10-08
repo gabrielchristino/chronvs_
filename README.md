@@ -28,13 +28,17 @@ registram o diagnóstico das listras e distinguem o heap de objetos dos buffers 
 
 ## Estado validado
 
-- Fluidez do firmware padrão confirmada no relógio com LVGL em `-O2` e logs/consoles desativados. Histórico, limites e builds de diagnóstico em [`docs/performance.md`](docs/performance.md).
+- Firmware padrão release compilado e gravado no relógio em 08/10/2026, com hashes de gravação verificados. A proteção do arco de brilho passou no teste integrado LVGL; a interação corrigida ainda aguarda confirmação no dispositivo.
+
+- LVGL em `-O2` e logs/consoles desativados melhoraram a fluidez do padrão. O teste silencioso P6 confirmou menus rápidos e responsivos, mas ainda há faixas do menu em posições diferentes durante o movimento (efeito gelatina). A otimização isolada do código dos painéis é experimental. Histórico, limites e builds em [`docs/performance.md`](docs/performance.md).
+- Melhorias restantes do mostrador e dos painéis circulares, com prioridades
+  e critérios de teste: [`docs/performance-plan.md`](docs/performance-plan.md).
 
 - Compilação com PlatformIO `espressif32 @ 6.9.0` e ESP-IDF 5.3.1.
 - Configuração correta: ESP32-S3R8, 16 MB Flash e 8 MB OPI PSRAM.
 - I2C detectado: TCA9554 (`0x20`), PCF85063 RTC (`0x51`), touch SPD2010 (`0x53`) e QMI8658 (`0x6B`).
 - A tela recebe comandos QSPI e exibe o mostrador de relógio.
-- Interface vetorial LVGL validada no painel circular de 412 × 412 pixels na composição orbital anterior. A composição com submostradores fixos ainda requer validação visual no dispositivo.
+- Interface vetorial LVGL de 412 × 412 pixels e composição com submostradores fixos confirmadas no dispositivo. A retirada dos contornos internos e a última correção do brilho ainda requerem avaliação visual e de interação no relógio.
 - Sincronização NTP validada em hardware: conexão WPA2, horário local UTC−3 gravado no PCF85063 e rádio Wi-Fi desligado em seguida.
 - Partição de aplicação ampliada de 1 MiB para 4 MiB.
 - O target padrão `pio run -t upload` grava as três imagens no mapa correto e reinicia a placa automaticamente; o conteúdo gravado foi confirmado por checksum.
@@ -140,8 +144,8 @@ O resumo abaixo descreve os controles persistentes.
 
 O mostrador inteiro funciona como superfície de toque:
 
-- Arrastar a partir da borda superior para baixo revela um painel retangular de acessos rápidos sobre o mostrador. O painel acompanha o dedo e completa ou cancela a abertura conforme a distância percorrida.
-- O arco externo do painel controla continuamente o brilho entre 10% e 100%.
+- Arrastar a partir da borda superior para baixo revela um painel circular de acessos rápidos sobre o mostrador. O painel acompanha o dedo e completa ou cancela a abertura conforme a distância percorrida.
+- O arco externo do painel controla continuamente o brilho entre 10% e 100%. Arrastes iniciados nele ficam reservados ao ajuste até soltar; para fechar o painel, arraste para cima fora do arco.
 - Os atalhos ocupam uma grade 2–3–2. O primeiro botão mostra `15s`, `30s` ou `ON` e alterna entre `AUTO 15s / 45s`, `AUTO 30s / 2min` e `SEMPRE LIGADA`. O segundo reúne bateria e economia. O círculo central abre os apps; à esquerda, o volume percorre `0 → 1 → 2 → 3 → 4 → 5 → 0`. Zero silencia os avisos e cinco é o máximo. À direita, o indicador Clima mostra ícone e temperatura apenas do cache salvo, sem ligar Wi-Fi; sem cache, mostra somente `CLIMA`. Dois slots continuam reservados.
 - O modo `ECO`, indicado pela borda amarela e pelo texto no botão da bateria, preserva a preferência normal, mas limita temporariamente o brilho e o indicador do arco a 35%, reduz para 5% após 5 segundos e apaga a iluminação após 15 segundos — inclusive quando o perfil normal está em `ON`.
 - Tocar no atalho Clima abre o app e fecha o painel; a abertura do app solicita a atualização dos dados.
@@ -153,7 +157,7 @@ O mostrador inteiro funciona como superfície de toque:
 
 A tensão da bateria é lida pelo ADC1 no GPIO 8, usando o divisor 3:1 da placa e a calibração do ESP-IDF. O firmware tira oito amostras, calcula uma estimativa por curva de descarga de uma célula Li-ion e atualiza o percentual uma vez por minuto ou imediatamente ao reativar a tela. A leitura fica suspensa enquanto a tela está apagada e o valor aparece somente no botão superior direito do painel.
 
-O mostrador é redesenhado uma vez por segundo, tanto em brilho normal quanto reduzido. Quando a iluminação é apagada, o PWM do backlight é colocado em 0%, o timer de animação, o tick periódico do LVGL e as leituras do RTC e bateria são suspensos. O ESP32-S3 entra em light sleep e acorda pelo touch, pelo botão power, por um aviso agendado ou pelo timeout máximo de 5 minutos. A hora continua a avançar durante o sono e o RTC é consultado ao reativar a tela. Sessões Wi-Fi mantêm o processador acordado até que o rádio seja desligado. A autonomia com bateria de 150 mAh ainda não foi medida.
+O mostrador permanece estático sem interação, tanto em brilho normal quanto reduzido; pressionar por 600 ms inicia a atualização a cada segundo até soltar ou mover o dedo. Quando a iluminação é apagada, o PWM do backlight é colocado em 0%, o timer do mostrador, o tick periódico do LVGL e as leituras do RTC e bateria são suspensos. O ESP32-S3 entra em light sleep e acorda pelo touch, pelo botão power, por um aviso agendado ou pelo timeout máximo de 5 minutos. A hora continua a avançar durante o sono e o RTC é consultado ao reativar a tela. Sessões Wi-Fi mantêm o processador acordado até que o rádio seja desligado. A autonomia com bateria de 150 mAh ainda não foi medida.
 
 ### Halo de pixels na borda
 
@@ -177,4 +181,11 @@ estão em [`docs/performance.md`](docs/performance.md).
 - `CONFIG_SPIRAM_USE_MALLOC=y` mantém a política de PSRAM validada no relógio; buffers e pool LVGL continuam solicitando PSRAM explicitamente. Os defaults preservam 32 KiB de reserva interna e o limiar de 16 KiB do alocador.
 - A partição e o Flash são explicitamente configurados para 16 MB; a mensagem de “Expected 16MB, found 2MB” deixa de ocorrer com `sdkconfig.defaults` aplicado.
 - A fonte de referência da Waveshare está em `.vendor-reference/`, ignorada pelo Git. Não a remova enquanto quiser compilar localmente.
+- O CMake exclui o módulo RGB paralelo de `esp_lcd`, sem uso nesta placa QSPI, para evitar uma falha interna do GCC 13.2.0 no build sem logs. O transporte SPI/QSPI e o driver SPD2010 permanecem incluídos.
 - `partitions.csv` mantém NVS em `0x11000`, dados PHY em `0x17000` e a aplicação em `0x20000`, agora com 4 MiB disponíveis dentro da Flash física de 16 MB.
+
+## Carcaça
+
+Os arquivos de modelo e projeto de impressão ficam em [`body/`](body/README.md).
+O inventário distingue o STL atual, o projeto 3MF e o arquivo de referência;
+encaixe, impressão e montagem ainda precisam de validação física.

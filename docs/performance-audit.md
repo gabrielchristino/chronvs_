@@ -1,5 +1,175 @@
 # Análise de desempenho e estabilidade — 24/09/2026
 
+## 08/10/2026 — consolidação do estado atual e proteção do brilho
+
+As entradas anteriores são histórico. O firmware atual usa release/O2, três
+submostradores fixos, escala de minutos simplificada e atualização sob demanda.
+O relato de maior fluidez após simplificar o mostrador é qualitativo; os tempos
+das composições anteriores não podem ser reutilizados como benchmark atual.
+O cache MOTHER, snapshots do launcher e variantes de P6 seguem experimentais.
+
+Após relato de fechamento acidental ao ajustar brilho, o gesto de fechar
+passou a ignorar contatos iniciados no arco. Esses contatos continuam ajustando
+brilho e registrando atividade, inclusive quando o dedo sai do contorno.
+Fora do arco, o fechamento conserva o limiar de 5 px. A documentação e as
+instruções do repositório passam a refletir essa exceção e o mostrador estático.
+
+Passaram o build padrão e a suíte integrada `-System -Panels`. O firmware foi
+gravado pela COM3 em 08/10/2026: quatro imagens com hashes verificados, reset
+automático e término bem-sucedido em 75,86 s. Ainda não foi recebido retorno
+físico sobre o gesto corrigido. Também passaram, durante a consolidação,
+os 15 testes Python e a suíte integrada com `-LauncherIconCache`.
+Na composição atual, a comparação MOTHER voltou a passar nos 142 cenários,
+incluindo recortes, deslocamentos, máscara externa e fallback de memória,
+com pixels idênticos à referência vetorial.
+
+Arquivos de carcaça são documentados separadamente em [body/README.md](../body/README.md).
+Essa preservação de modelos não representa validação mecânica ou de impressão.
+
+## 07/10/2026 — P6: cache runtime dos ícones do launcher
+
+Preparado `launcher_icon_cache`, derivado da referência silenciosa com menus
+completos. Snapshots RGB565 de 44 × 44 precompostos sobre o badge fixo usam
+3.872 bytes por ícone em PSRAM, além dos objetos/descritores. Cache só em
+linhas opacas; fade mantém o vetor. Reserva/snapshot inválidos, tamanho não
+suportado ou colisão chroma key conservam o vetor. Exclusão do objeto de imagem
+invalida o decoder e libera a reserva; não há alocação por quadro ou despertar.
+Somente o experimento habilita snapshot; buffers de display e QSPI não mudam.
+
+Passou a suíte integrada e 148 capturas coincidiram com a referência, incluindo
+transições e todos os offsets de fade da suíte. Verificado uso do cache em
+linha opaca e retorno ao vetor no fade. Com falha forçada de todas as reservas
+de cache, a suíte e as mesmas 148 comparações também passaram. Exclusão das
+imagens liberou suas reservas. Logs: `test-launcher-cache-reference.log`,
+`test-launcher-cache.log`, `test-launcher-cache-fallback.log` e
+`launcher-cache-reference-pixels.json`, em `logs/`. O host cobre cinco apps;
+Vox não integra essa suíte. Pixel comparison não mede consumo ou fluidez física.
+
+Build padrão passou em 94,66 s e candidato em 110,64 s. As duas tentativas de
+upload falharam ao abrir COM3, embora a enumeração intermediária identificasse
+o dispositivo. Nenhuma imagem foi gravada; teste físico pendente. Logs:
+`build-launcher-cache-default.log`, `build-launcher-cache.log`,
+`upload-launcher-cache.log` e `upload-launcher-cache-retry.log`, em `logs/`.
+
+## 07/10/2026 — P6: ícones omitidos com textos restaurados
+
+Criado `panels_no_icons`, derivado de `panels_quiet` sem O2 adicional.
+`CHRONVS_PANEL_NO_ICONS` omite apenas ícones de apps, símbolo Clima e glifo
+de volume. Textos, círculos e arco permanecem, inclusive em repouso; objetos,
+eventos, layout e parâmetros do display são preservados. A referência sem
+conteúdo continua disponível para comparar o retorno dos textos.
+
+Passou `run_Relogio_ui.ps1 -System -Panels -PanelNoIcons`, incluindo
+controles, AUTO/ECO, despertar e fechamento/cancelamento pelo arco. Em item
+centralizado, zero callbacks de desenho do ícone e callbacks presentes do nome.
+Capturas do launcher/acessos rápidos inspecionadas: textos presentes e ícones
+ausentes. Log: `logs/test-panel-no-icons.log`. O resultado não mede melhora
+perceptiva, tempo físico de desenho ou autonomia.
+
+Build padrão passou em 102,23 s e `panels_no_icons` em 108,52 s. Upload pela
+COM3 concluído em 48,74 s, com hashes verificados e reinício automático.
+Logs: `logs/build-panel-no-icons-default.log`, `build-panel-no-icons.log`
+e `upload-panel-no-icons.log`. Aguarda comparação física separada dos dois
+menus com `panels_no_content` e `panels_quiet`.
+
+## 07/10/2026 — retorno físico dos menus sem conteúdo
+
+O usuário relatou gelatina aparentemente menor em `panels_no_content` e
+identificou duas experiências que ajudaram: fundo plano no lugar do mostrador
+e remoção do conteúdo dos menus. O teste atual omite textos e ícones juntos;
+não há atribuição isolada a ícones, tempos, comparação pareada ou distinção
+entre launcher/acessos rápidos no relato. `panels_code_o2` não apresentou
+diferença perceptível no teste anterior.
+
+Conclusão: custo de desenho contribui para o efeito observado, sem provar que
+seja a única causa ou descartar transmissão/varredura. Próximo isolamento P6:
+restaurar textos e omitir apenas ícones, preservando a referência silenciosa,
+as superfícies e todos os parâmetros validados do painel. A remoção de conteúdo
+continua exclusivamente diagnóstica; não promover menus vazios ao padrão.
+
+## 07/10/2026 — P6: isolar o conteúdo dos painéis
+
+Retorno físico de `panels_code_o2`: usuário ainda vê gelatina e não percebeu
+diferença. A otimização de código não recebeu aceite de ganho perceptível.
+
+Preparado `panels_no_content`, derivado de `panels_quiet` sem O2 adicional.
+`CHRONVS_PANEL_NO_CONTENT` aplica opacidade de camada zero aos nomes/ícones
+do launcher e aos rótulos/símbolo Clima dos acessos rápidos. Objetos continuam
+criados e com layout/callbacks originais; círculos, arco e máscara permanecem.
+O conteúdo é omitido também em repouso, evitando trabalho extra de alternância
+ao começar/terminar o movimento. Configuração padrão não ativa esse caminho.
+
+Passou a suíte integrada com `-System -Panels -PanelNoContent`, incluindo
+fechamento pelo arco, cancelamento, controles, AUTO/ECO e despertar. O teste
+de item centralizado confirmou ausência de callbacks de desenho do ícone/nome.
+As capturas do host foram inspecionadas: slots e badges visíveis, sem conteúdo.
+Não se exige igualdade de pixels com menus completos, pois a diferença é o
+próprio isolamento. Log: `logs/test-panel-no-content.log`. Nenhum ganho físico
+ou de autonomia é deduzido desses resultados.
+
+Build padrão passou em 108,68 s e `panels_no_content` em 113,89 s. Upload
+concluído pela COM3 em 48,69 s, com hashes verificados e reinício automático.
+Logs em `logs/build-panel-no-content-default.log`, `build-panel-no-content.log`
+e `upload-panel-no-content.log`. Aguarda relato físico comparando os menus
+sem conteúdo com `panels_quiet`; referência completa preservada anteriormente
+em `logs/firmware-references/20261007T160400941813Z-panels_quiet`.
+
+## 07/10/2026 — candidato P6: código dos painéis em O2
+
+O usuário esclareceu que as linhas são o próprio menu em posições diferentes
+durante abrir/fechar, desaparecendo em repouso. Preparado `panels_code_o2`,
+derivado de `panels_quiet`, com `CHRONVS_PANEL_CODE_O2` e diretiva GCC local
+nos arquivos `app_list_app.c` e `system_ui.c`. A referência mantém esses
+arquivos no modo debug. A alteração não usa fast-math nem altera buffers,
+driver, geometria, máscaras, desenho ou parâmetros de gesto.
+
+Passou a suíte integrada nas duas variantes, incluindo controles, contato,
+AUTO/ECO, despertar, editor/alerta e fechamento/cancelamento de painel.
+Os hashes das 148 capturas BMP coincidiram. O pool do host manteve 27.808
+bytes livres com editor e alerta em ambos. Esses resultados não medem tempo
+de desenho, memória interna/DMA ou autonomia no ESP32. Logs locais:
+`test-panel-code-reference.log`, `test-panel-code-o2.log` e
+`panel-code-reference-pixels.json`, em `logs/`.
+
+A primeira tentativa de build padrão falhou na geração da lista temporária
+de componentes do ESP-IDF; repetida sem limpar artefatos ou alterar o SDK.
+O candidato é experimental e precisa de comparação física com `panels_quiet`.
+
+Build padrão passou em 96,78 s após repetir a configuração; candidato passou
+em 109,76 s. Logs: `build-panel-code-default-retry.log` e
+`build-panel-code-o2.log`. Tentativa de upload falhou ao abrir COM3, sem
+gravação. A tentativa de arquivar `panels_quiet` também não concluiu porque
+seu `bootloader.bin` local estava ausente; não foi criada uma referência
+completa dessa variante. Reconstruir a referência antes da próxima gravação.
+
+Em seguida `panels_quiet` foi reconstruído com sucesso (109,62 s) e arquivado
+em `logs/firmware-references/20261007T160400941813Z-panels_quiet`. A nova
+tentativa de upload continuou falhando ao abrir COM3; nenhuma imagem do
+candidato foi gravada. Logs: `build-panel-code-reference.log` e
+`upload-panel-code-o2-retry.log`. O teste físico do candidato permanece pendente.
+
+Após nova solicitação do usuário, upload de `panels_code_o2` concluído em
+48,70 s na COM3, com hashes verificados e reinício automático. Essa tentativa
+superou o bloqueio de conexão; confirmação visual da variante permanece pendente.
+
+## 07/10/2026 — retorno físico do teste silencioso P6
+
+Upload de `panels_quiet` concluído pela COM3, com verificação de hashes das
+imagens e reinício automático. O usuário relatou: "os menus abrem e fecham
+bem rápidos, está bem responsivo, mas ainda vejo as linhas e o efeito gelatina".
+
+O resultado confirma resposta satisfatória percebida nessa versão, mas não
+aceitação visual completa. Os artefatos persistem sem profiling/logs; isso
+não mede a contribuição da instrumentação nem demonstra ganho atribuível
+à remoção da invalidação final. Não há caracterização das linhas paradas ou
+em movimento, confirmação específica do fechamento pelo arco ou medição de
+consumo. Manter o candidato experimental e continuar P6, preservando driver,
+buffers e espera síncrona QSPI. Sincronismo/TE permanece hipótese não comprovada.
+
+Este documento preserva a sequência histórica. A fila atual de pendências
+está em [performance-plan.md](performance-plan.md); títulos antigos de
+“próximo passo” não significam que o trabalho continua aberto.
+
 Base analisada: `934a138`, com LVGL em `-O2` e logs/consoles desativados.
 O usuário confirmou excelente fluidez nessa base. A análise original identifica trabalho desnecessário,
 casos ainda descobertos pelos testes e oportunidades de manutenção.
@@ -1282,3 +1452,350 @@ O build padrão passou com 55.060 bytes de RAM estática e 1.688.500 de flash.
 O build `display_profile_o2` também passou. Os testes específicos de ausência
 da linha temporária e presença de máscara externa reproduziram os pixels do
 desenho vetorial, confirmando esses caminhos de fallback no host.
+
+## Resultado físico do cache e continuidade — 01/10/2026
+
+Na captura posterior a `1067585`, o refresh completo de 169.744 pixels ficou
+perto de 166 ms, frente aos 236–242 ms anteriores. O flush permaneceu perto
+de 17 ms. Os acumuladores normalizados por quadro completo indicam cerca de
+5,9 ms para os anéis externos, antes perto de 60 ms. As capturas não são um
+ensaio pareado de arrastes; a redução aproximada de 30% no refresh completo
+não representa ganho de FPS de toda a navegação.
+
+O usuário percebeu melhora, ainda com “gelatina”. Ao repetir com o firmware
+sem logs, relatou melhora considerável e efeito residual leve: uma região
+parece mais avançada que outra durante o movimento. Não há medida numérica
+do custo dos logs nem identificação conclusiva da causa dessa diferença.
+
+MOTHER (~28 ms) e HOURS (~26 ms) são os primeiros candidatos restantes.
+MINUTES (~15 ms) mede a escala fixa de minutos; não é uma órbita separada.
+WEEKDAY (~14 ms), TEMPERATURE (~13 ms) e DATES (~12 ms) vêm depois, sujeitos
+a nova priorização pelas medições. São grupos de primitivas, não custos
+isolados de círculos ou texto. O plano detalha investigação, memória,
+comparação de pixels, regressão física e alternativas condicionais.
+
+## 01/10/2026 — preparação de P0/P1
+
+Preservados os builds locais padrão (30/09) e `display_profile_o2` (01/10)
+em `logs/firmware-references/20261001T111948000349Z-waveshare_esp32_s3_touch_lcd_146`
+e `logs/firmware-references/20261001T111948235602Z-display_profile_o2`.
+Os manifestos contêm SHA-256 de todas as imagens, incluindo modelos de voz,
+ELF e configurações. O commit observado do workspace foi `1067585`, com
+mudanças locais; não se afirma proveniência exata dos binários por esse commit.
+`firmware_reference.py` e o uploader permitem selecionar a referência sem
+reescrever os artefatos ativos e recusam hashes ou mapa incompatíveis.
+
+Implementado `display_profile_primitives`, derivado de O2, com sete medidas
+aninhadas de MOTHER/HOURS. HOURS separa também seu círculo interno: o custo
+do grupo não é atribuído inteiro à face externa. A ordem de desenho permanece
+idêntica. O analisador distingue cobertura dos novos campos, suporta logs
+antigos e valida a relação entre grupos e detalhes. O padrão e O2 sem detalhes
+não executam esses marcadores adicionais.
+
+Passaram nove testes do analisador, dois de preservação/seleção de imagens e
+dois da política de logs. A comparação LVGL de 60 cenários manteve o hash
+`CDBAEE2A64F4C5F8E6314E59F8C74ADDC036A2E3497B1C5A9718D307A38A8E4D`,
+incluindo os fallbacks do cache de anéis. Esses testes não medem os novos
+tempos no ESP32 nem comprovam redução de consumo.
+
+O build padrão foi tentado, mas o GCC 13.2.0 falhou internamente na passagem
+IRA de `esp_lcd_panel_rgb.c:795` (ESP-IDF), inclusive com dois jobs. Antes
+disso foi necessário apontar `IDF_PATH` ao ESP-IDF 5.3.1 do PlatformIO,
+pois o ambiente herdava outra instalação. O sdkconfig.h efetivo permaneceu
+igual ao da referência preservada. Não foram alterados compilador, driver
+ou parâmetros do display para contornar a falha. Log local:
+`logs/build-performance-default.log`. O bloqueio do build padrão impede
+considerar a entrega aprovada para uso.
+
+O build `display_profile_primitives` passou com o mesmo ESP-IDF e dois jobs,
+incluindo a compilação dos novos marcadores e a geração de firmware.bin.
+Log local: `logs/build-performance-primitives.log`. Esse resultado não
+substitui o build padrão: a política de logs difere entre os ambientes.
+Não houve upload nesta etapa.
+
+Ainda faltam medição física de P1, comparação da interferência dos marcadores,
+restauração real e ensaio de bateria de 150 mAh. Não há novo cache nem ganho
+de fluidez/autonomia declarado nesta etapa. P2/P3 aguardam essas medidas.
+
+## 01/10/2026 — candidato P2 e desbloqueio da compilação
+
+Preparado um candidato isolado para a face fixa de MOTHER, habilitado apenas
+em `display_profile_mother`. O gerador LVGL produziu 2.083 runs, totalizando
+9.982 bytes constantes. A reprodução reutiliza a linha dos anéis, mantendo
+a mesma reserva de 824 bytes em PSRAM. O cache cobre somente os trechos
+modificados pelo círculo; preserva as datas e a ordem ponteiro/centro/escala.
+Mantém vetor para deslocamento, máscara externa e ausência da linha.
+
+Passaram 142 comparações de cenas completas/recortadas, incluindo todas as
+fases de minuto estacionárias e 22 posições dos painéis. SHA-256 dos pixels:
+`9343417CAD277910064018A97B2EF838E0131D1ACFF7276856CC14D47CFD2900`.
+Os testes diretos de trechos, centros deslocados, máscara e falha de alocação
+também coincidiram. A suíte integrada com o experimento passou: 27.952 bytes
+livres no pool LVGL do host com editor e alerta, sem nova retenção. Isso não
+mede memória interna/DMA no relógio. Não houve mudança de interação.
+
+A falha interna do GCC em `esp_lcd_panel_rgb.c` voltou a ocorrer mesmo com
+um job. A inspeção confirmou ausência de chamadas à API RGB no Chronvs e
+nos componentes de tela/voz usados. O CMake do projeto passou a excluir
+somente esse fonte do componente `esp_lcd`, selecionado pelo ESP-IDF pela
+capacidade do SoC. O banco de comandos de compilação confirmou a exclusão
+do RGB e a permanência de `esp_lcd_panel_io_spi.c`. O SPD2010 usa QSPI;
+seus drivers, buffers, transferências e sincronismo não foram modificados.
+Não foi necessário alterar globalmente otimização, SDK ou toolchain.
+
+O candidato não substitui P1: ainda faltam medir `mother_face` e comparar
+o ganho líquido em transições com o mesmo diagnóstico. Nenhum ganho de
+autonomia foi medido. O padrão mantém a face vetorial até a aceitação física.
+
+O build padrão passou após essa exclusão, com dois jobs. Resultado em
+`logs/build-performance-default-final.log`: 55.060 bytes estáticos de RAM
+e 1.688.500 bytes de flash reportados pelo PlatformIO. Esses valores não
+medem a disponibilidade de RAM interna/DMA em operação. A regeneração do
+cache também passou. O bloqueio de build registrado na etapa anterior foi
+superado sem habilitar logs no padrão.
+
+Passaram também `display_profile_primitives` e `display_profile_mother`,
+registrados em `logs/build-performance-mother-comparison.log`. A inspeção
+dos símbolos confirmou as três tabelas do novo cache apenas no experimento
+(826 + 8.332 + 824 = 9.982 bytes); no padrão, somente as tabelas dos anéis.
+Os comandos para upload/captura A/B estão em `performance.md`. Não houve
+upload nem nova medição física nesta etapa.
+
+## 01/10/2026 — primeira captura física do candidato MOTHER
+
+Anexo `88f7ba41-fc3a-41d6-acce-ba37168b9745`, monitor identificado como
+`display_profile_mother`, timestamps internos 28.028–68.608 ms. O usuário
+relatou que não conseguiu perceber melhora. Não veio uma captura pareada
+de `display_profile_primitives`; o banner de inicialização também não consta.
+
+O texto colado contém campos numéricos sem espaço entre si. O analisador
+estrito aceitou 11 janelas e rejeitou nove. Para esta análise, preservou-se
+o original em `logs/mother-20261001-pasted.txt` e inseriram-se somente 14
+espaços em fronteiras inequívocas entre valor numérico e nome conhecido,
+em nove linhas. Os valores não foram alterados. As 20 janelas passaram
+então pela validação estrita. A cópia derivada está em
+`logs/mother-20261001-spacing-restored.log`; o relatório e a lista de reparos
+em `logs/mother-20261001-analysis.json`. SHA-256 do original:
+`322a1beef91aa8a4a9c256d48f34442a2f3b63f959b8d679253e43a1c524f571`.
+O parser de produção continua rejeitando linhas malformadas.
+
+Cinco janelas, seis quadros, apresentam 169.744 pixels por quadro, 21 faixas,
+`watch_frames == frames` e nenhum movimento detectado. As médias ponderadas
+nesse subconjunto foram:
+
+| Medida | Resultado |
+| --- | ---: |
+| Refresh | 142,33 ms (médias das janelas entre 142 e 144 ms) |
+| Flush | 17,33 ms, incluído no refresh |
+| MOTHER total | 9,87 ms |
+| MOTHER face / ponteiro / centro | 2,81 / 5,20 / 1,72 ms |
+| HOURS total | 22,81 ms |
+| HOURS face / escala / círculo interno / ponteiro | 8,75 / 6,34 / 5,70 / 1,63 ms |
+| MINUTES / WEEKDAY / TEMPERATURE | 17,22 / 13,55 / 11,51 ms |
+
+Área completa não prova, sozinha, ausência de cobertura. Não se misturaram
+essas janelas com arrastes ou quadros de áreas menores. A referência histórica
+era cerca de 166 ms de refresh e 28 ms de MOTHER. A diferença é compatível
+com redução localizada de custo, mas não é ensaio pareado: não comprova um
+percentual de ganho do cache nem de fluidez geral.
+
+Três janelas durante navegação, com `watch_frames=0`, somam 50 quadros,
+refresh médio ponderado de 74,68 ms e máximos de até 88 ms. Portanto, há custo
+relevante de navegação independente do mostrador; esse cache não atua nesses
+quadros. O maior máximo de refresh nas 20 janelas foi 172 ms. RAM interna
+livre mínima de 142.663 bytes e maior bloco DMA de 38.912 bytes nesta captura
+não constituem teste de estresse de memória ou de TLS/áudio.
+
+Decisão: manter o candidato experimental. O relato visual não confirma ganho
+perceptível; não promover ao padrão. Solicitar captura equivalente do vetor
+(`display_profile_primitives`) para fechar P1/P2. HOURS e o custo próprio dos
+painéis continuam alvos relevantes, sujeitos a essa comparação. Nenhuma
+medição de corrente/autonomia foi fornecida.
+
+## 01/10/2026 — comparação com a face vetorial
+
+O novo anexo `28e188ca-77e3-429d-9e1e-fe91bf21ef5f` identifica o monitor de
+`display_profile_primitives`. Foi localizado o arquivo bruto correspondente,
+`logs/device-monitor-261001-132534.log`, e ele foi preferido ao texto colado:
+24 janelas válidas, nenhuma rejeição, nenhum reparo de espaçamento. SHA-256:
+`079f09c357cfb7825e0f7d03a704c5fca576da05204b59190f988fae8d1d79de`.
+Relatório local: `logs/mother-vector-20261001-analysis.json`.
+
+Aplicando o mesmo filtro da captura do cache (169.744 pixels, 21 faixas por
+quadro, watch_frames igual a frames e nenhum movimento detectado), restam
+quatro janelas e sete quadros vetoriais. A comparação ponderada é:
+
+| Medida | Vetor, 7 quadros | Cache, 6 quadros |
+| --- | ---: | ---: |
+| Refresh | 163,71 ms | 142,33 ms |
+| Flush, já incluído | 17,30 ms | 17,33 ms |
+| MOTHER total | 30,04 ms | 9,87 ms |
+| Face fixa | 23,44 ms | 2,81 ms |
+| HOURS total | 20,76 ms | 22,81 ms |
+
+A redução da face fixa é de aproximadamente 88% nessas amostras; o grupo
+MOTHER cai cerca de 67%. O refresh observado cai cerca de 13%, não 88%.
+São execuções separadas, com horários/fases orbitais diferentes e sem
+trajetórias sincronizadas; outros grupos variam, como HOURS. Não se atribui
+toda a variação do refresh ao cache nem se converte essa diferença em FPS
+de navegação ou autonomia. Não foi isolado o custo dos marcadores, embora
+os dois ambientes tenham a mesma política de instrumentação.
+
+A versão vetorial contém uma janela de 22 quadros sem desenho do mostrador,
+refresh médio de 76 ms, máximo de 84 ms e área média de 165.055 pixels.
+No candidato, três janelas/50 quadros tinham média de 74,68 ms, máximo de
+88 ms e área média de 161.918 pixels. As áreas diferem: não é um ganho
+comparável de painel, mas confirma o custo remanescente fora do mostrador.
+Não há linhas E/W no arquivo vetorial analisado; isso não comprova ausência
+de artefatos físicos nem estabilidade nos demais fluxos.
+
+Decisão: ganho localizado da face demonstrado nas amostras, sem nova
+confirmação perceptiva. Preservar o candidato e sua referência; não promover
+ao padrão nesta análise. Priorizar o diagnóstico P6 para separar custos dos
+painéis e invalidações. P3 continua disponível com HOURS repartido, mas uma
+nova otimização do mostrador não atua nos quadros em que ele não é desenhado.
+Consumo e autonomia continuam sem medição.
+
+## 01/10/2026 — P6: diagnóstico por painel e invalidação final
+
+Preservados novos snapshots locais do padrão e de `display_profile_primitives`
+em `logs/firmware-references/20261001T163408370922Z-waveshare_esp32_s3_touch_lcd_146`
+e `logs/firmware-references/20261001T163408619225Z-display_profile_primitives`.
+
+A revisão confirmou que `lv_obj_set_x/y` já ignora coordenadas locais iguais;
+não se acrescentaram guardas redundantes no app. Encontrou-se uma invalidação
+explícita de todo o mostrador no fim da animação que fecha o painel rápido.
+O candidato `CHRONVS_PANEL_NO_CLOSE_REDRAW` a remove, conservando as
+invalidações do movimento e da ocultação LVGL. O padrão mantém a referência.
+
+O profiling opcional registra DRAW_MAIN_BEGIN/END e DRAW_POST_END em cada
+raiz (quick/launcher), sem alterar a árvore de desenho. Reporta tempos
+inclusivos da raiz/subárvore, área retangular de clip, frames, faixas e POSTs
+sem início correspondente. Esses últimos ocorrem quando o LVGL começa em
+um filho que cobre a região; não recebem tempo fictício. Não se trata ainda
+de uma separação individual de ícones/textos/máscaras. O analisador trata
+cobertura e denominadores independentes, inclusive logs sem novos campos.
+
+Os testes do gesto pelo arco falharam também na referência: os contatos do
+arco não propagavam ao handler do painel. Foi acrescentado EVENT_BUBBLE ao
+arco, corrigindo o contrato já documentado. A correção é comum ao padrão e
+aos dois diagnósticos de P6; a única diferença A/B é o redraw final. No host,
+o fechamento pelo arco passou após a correção. Validação física pendente.
+
+Ambas as variantes passaram a suíte integrada. Para cada sequência abaixo,
+a imagem final incremental coincidiu byte a byte com uma renderização
+completa posterior, sem atualizar a hora entre elas:
+
+| Sequência simulada | Referência, pixels enviados | Candidato, pixels enviados |
+| --- | ---: | ---: |
+| Cancelar abertura curta | 340.724 | 173.452 |
+| Fechar pelo botão | 801.780 | 635.332 |
+| Fechar pelo arco de brilho | 788.980 | 622.532 |
+
+São somas de pixels entregues ao flush do host durante cada sequência,
+não bytes medidos na QSPI nem tempos no painel físico. A cadência simulada
+é diferente da execução real. O candidato elimina cerca de um quadro
+completo de trabalho em cada sequência, mas não é correção de todos os
+quadros de 75 ms nem do efeito de atualização parcial.
+
+O teste de relógio controlado verificou acumulação, raiz contida no total,
+contagem por frame e POST sem início; apagar descartou todos os contadores.
+Passaram os dez testes do analisador, incluindo logs antigos, grupos
+incompletos e denominadores. Com os callbacks de diagnóstico, o pool do
+host manteve 27.808 bytes livres com editor e alerta (144 bytes a menos,
+iguais nas duas variantes). Não há alocação por quadro ou nova tarefa/timer.
+Logs locais: `test-panels-reference.log` e `test-panels-candidate.log`.
+
+O build padrão passou (`logs/build-panels-default.log`). P6 ainda precisa
+de medições físicas separadas de launcher/acessos rápidos e de confirmação
+do fechamento pelo arco. Não há ganho de autonomia declarado.
+
+Os dois builds `display_profile_panels_reference` e `display_profile_panels`
+também passaram, conforme `logs/build-panels-comparison.log`. Nenhum firmware
+foi gravado nesta etapa. A comparação física deve usar essas duas versões,
+pois ambas contêm a correção do arco e os mesmos novos marcadores.
+
+## 01/10/2026 — P6: primeiras capturas físicas dos painéis
+
+Analisados os originais locais `logs/device-monitor-261001-135106.log`
+(29 janelas, 321 frames) e `logs/device-monitor-261001-135342.log`
+(16 janelas, 209 frames). Nenhuma janela foi rejeitada pelo parser estrito;
+não foi necessário recuperar os espaços ausentes no texto colado.
+Relatório derivado: `logs/panels-20261001-analysis.json`.
+
+A segunda versão é identificada pelo upload/monitor de
+`display_profile_panels` no anexo. A primeira é tratada como referência
+pela ordem do procedimento; o trecho fornecido não contém seu comando
+de upload nem um identificador de variante no boot. Essa atribuição não
+é confirmação independente do binário. Nenhum dos originais contém o
+banner de otimização; o analisador preserva `unknown`.
+
+Médias de refresh/flush/pixels ponderadas pelos frames das janelas;
+tempos de subárvore usam o número de frames medidos do respectivo painel.
+Janelas em que os dois painéis aparecem são excluídas dos recortes
+`quick_only` e `launcher_only`, evitando atribuí-las a um único cenário.
+
+| Recorte | Primeira captura | Candidato |
+| --- | ---: | ---: |
+| Só acessos rápidos: janelas / frames totais | 15 / 192 | 8 / 85 |
+| Refresh médio nesse recorte | 73,870 ms | 63,082 ms |
+| Flush médio nesse recorte | 6,798 ms | 5,706 ms |
+| Pixels médios nesse recorte | 66.005 | 54.636 |
+| Subárvore quick por frame medido | 31,882 ms | 30,971 ms |
+| Só launcher: janelas / frames totais | 12 / 127 | 4 / 59 |
+| Refresh médio nesse recorte | 97,150 ms | 91,983 ms |
+| Launcher sem mostrador: janelas / frames | 1 / 21 | 1 / 19 |
+| Refresh médio sem mostrador | 78 ms | 82 ms |
+| Flush médio sem mostrador | 15,625 ms | 15,887 ms |
+| Subárvore launcher sem mostrador | 45,541 ms | 48,954 ms |
+| Raiz launcher, já incluída na subárvore | 16,147 ms | 16,501 ms |
+
+Todos os contadores `post_only` são zero. No launcher sem mostrador, a
+diferença entre subárvore e raiz é 29,394/32,454 ms; inclui filhos,
+travessia e pós-desenho, não pode ser atribuída exclusivamente aos ícones.
+O restante do refresh tampouco está todo explicado pelos novos marcadores.
+
+A redução observada de 14,6% no refresh dos acessos rápidos acompanha
+17,2% menos pixels por frame, mas não demonstra causalidade: duração,
+trajetórias e quantidade de gestos diferem, e as janelas não identificam
+cada fechamento/cancelamento. A média global também mistura cenários.
+O experimento só modifica a invalidação final do painel rápido; não se
+espera que resolva o custo sustentado do launcher.
+
+Não há linhas de erro ESP-IDF (`E (...)`) nos arquivos. O maior bloco DMA
+mínimo é 38.912 bytes em ambos. RAM interna mínima global: 133.787 e
+142.539 bytes, em contextos diferentes; não é ganho de memória atribuível
+à alteração. Os logs não comprovam ausência de rastros, correção do gesto
+pelo arco, consumo nem autonomia. Confirmação perceptiva solicitada.
+
+Decisão: manter o candidato experimental e seguir P6 decompondo o custo
+da subárvore do launcher (máscaras, ícones e textos), com cenário controlado.
+Os logs confirmam custo próprio do painel mesmo sem o mostrador. Não há
+alteração de firmware nesta análise; somente relatório e documentação.
+
+## 02/10/2026 — P6: gelatina residual e repetição silenciosa
+
+O usuário respondeu que ainda vê um pouco de efeito gelatina e sugeriu
+que o processamento dos logs pode contribuir. Não houve confirmação
+específica de ausência de rastros/listras ou de fechamento pelo arco;
+esses itens permanecem sem aceite físico explícito.
+
+Criado `panels_quiet`, derivado do padrão com apenas
+`CHRONVS_PANEL_NO_CLOSE_REDRAW`, copiando o sdkconfig de referência.
+Mantém o candidato P6, mas remove tanto os marcadores de profiling quanto
+logs/consoles. O padrão é a referência sem a alteração de invalidação.
+Nenhum parâmetro de tela, gesto ou caminho vetorial foi alterado. O README
+passou a distinguir a melhora histórica da gelatina residual relatada.
+
+O teste permite comparar o mesmo candidato com/sem instrumentação;
+não antecipa que os logs sejam a causa. Validação visual e energética
+continuam dependentes do relógio. Não houve upload automático.
+
+Validação: build padrão passou em 102,6 s e `panels_quiet` em 136,0 s
+(`logs/build-p6-quiet-default-retry.log` e `logs/build-p6-quiet.log`). A
+primeira tentativa do padrão falhou antes da compilação por ausência de
+arquivo temporário da lista de componentes ESP-IDF; repetir resolveu sem
+limpeza ou alteração de código. O sdkconfig silencioso tem nível de log
+zero e console NONE; o ELF não contém o poll nem o bind de painel do
+profiling. RAM estática reportada: 55.060 bytes em ambos. Nenhum teste
+físico nem ganho de bateria foi inferido desses resultados.

@@ -42,7 +42,7 @@ microfone para iniciar outra sessão. O procedimento de teste está em
 | Mostrador | Arrastar da borda superior para baixo | Abre os acessos rápidos sobre o mostrador, acompanhando o dedo com ganho visual 2×; menos de 120 px cancela a abertura. |
 | Mostrador | Arrastar para cima | Revela a lista de apps sobre o mostrador, acompanhando o dedo desde a borda inferior. |
 | Mostrador | Pressionar e segurar por 600 ms | Atualiza a hora imediatamente e a cada segundo enquanto mantém o contato. Soltar ou deslocar mais de 12 px em qualquer eixo encerra a atualização. |
-| Acessos rápidos | Arrastar para cima | Fecha o painel. O limiar é 5 px e vale também sobre o arco de brilho. |
+| Acessos rápidos | Arrastar para cima fora do arco de brilho | Fecha o painel. O limiar é 5 px; contatos iniciados no arco ficam reservados ao brilho até soltar. |
 | Lista de apps | Tocar uma linha | Abre o app selecionado. |
 | Lista de apps | Arrastar para baixo a partir do topo | Fecha a lista acompanhando o dedo; o gesto precisa avançar 120 px. |
 | Relogio | Arrastar 80 px para a direita | Volta à lista de apps. |
@@ -177,6 +177,17 @@ o mesmo par de pílulas do aviso de alarme. Não há labels de próxima página.
 
 ### Acessos rápidos
 
+O contorno interativo e a alça do arco de brilho recebem o arraste exclusivamente
+para ajustar o brilho. Um contato iniciado no arco não move nem fecha o painel,
+mesmo se o dedo sair do contorno antes de soltar. Os eventos propagados pelo
+arco registram atividade real, mas são ignorados pelo gesto de fechamento.
+Arrastes iniciados no restante do painel, inclusive nos atalhos, continuam
+fechando para cima com o limiar de 5 px. O teste integrado cobre ajuste pelo
+arco sem fechamento, fechamento fora dele e cancelamento de abertura;
+a alteração ainda requer confirmação física no relógio. Em 08/10/2026,
+o build padrão foi gravado pela COM3, com hashes verificados e reset automático.
+Upload concluído não comprova o comportamento do gesto no dispositivo.
+
 O painel usa fundo circular opaco de 412 × 412 px em `#26302B`, botões `#748173`, texto claro e
 acento amarelo `#F2B84B`, a mesma linguagem visual da lista de apps.
 O conteúdo é recortado pela borda circular durante abertura e fechamento;
@@ -249,6 +260,7 @@ dos apps. Sem interação, não avança a cada segundo, inclusive em ON.
 Pressionar por 600 ms atualiza imediatamente e depois uma vez por segundo
 até soltar; mover mais de 12 px em qualquer eixo cancela essa atualização
 durante o restante do contato. Os gestos de navegação têm prioridade.
+
 Manter o contato registra atividade e impede o apagamento por inatividade.
 O primeiro contato com a tela apagada somente acorda, mesmo se prolongado.
 A imagem usa a hora monotônica mantida pelo serviço de alarmes, que inclui
@@ -433,6 +445,33 @@ lista e arcos. A simulação LVGL no host não mede fluidez nem áudio físicos.
 
 ## Renderização e desempenho
 
+`launcher_icon_cache` é um candidato de P6 com menus completos. Reutiliza
+ícones em RGB565 somente nas linhas totalmente opacas, preservando o vetor
+nas linhas com fade. Mantém aparência, layout, gestos e parâmetros do display;
+ganho e equivalência física ainda precisam ser confirmados. Não altera o
+desenho dos acessos rápidos. Detalhes em `performance.md`.
+
+O diagnóstico `panels_no_icons` restaura os textos omitidos por
+`panels_no_content`, mantendo ausentes apenas os ícones do launcher e os
+símbolos Clima/volume. Números e nomes ficam visíveis; círculos, arco e
+controles permanecem ativos. A omissão vale também em repouso, exclusivamente
+no experimento, para separar o custo dos textos daquele dos ícones.
+
+O diagnóstico `panels_no_content` omite nomes/ícones do launcher e textos/
+símbolo Clima dos acessos rápidos durante toda a sessão. Círculos e arco
+continuam visíveis; áreas de toque e ações permanecem ativas, sem identificação
+textual. Isso isola o custo do conteúdo durante arrastes, não é mudança no
+firmware padrão. Restaurar `panels_quiet` após a comparação. O teste físico
+de `panels_code_o2` não apresentou melhora perceptível segundo o usuário.
+
+No teste silencioso P6 de 07/10/2026, os menus foram percebidos como rápidos
+e responsivos. O usuário descreveu as linhas como faixas do próprio menu
+em posições diferentes somente durante abrir/fechar; a imagem parada fica
+correta. A causa ainda não foi isolada. O experimento `panels_code_o2`
+otimiza localmente o código do launcher e do painel rápido, preservando
+desenho, gestos e parâmetros do display; não há ganho físico confirmado.
+Procedimento e referência em [`performance.md`](performance.md).
+
 O build padrão não habilita logs de software nem consoles UART/USB. A saída
 serial do Vox e os diagnósticos de memória/tempo ficam nos builds opcionais
 descritos em [`performance.md`](performance.md); o conteúdo exibido na tela
@@ -495,8 +534,9 @@ driver não podem ser copiados diretamente.
   ganho de fluidez e a ausência de rastros ainda precisam ser medidos no painel.
 
 Para validar no dispositivo, abra e feche os acessos rápidos lentamente e
-rapidamente (também pelo arco), revele a lista e cancele o gesto, e retorne da
-lista ao relógio. Observe especialmente a borda móvel e os submostradores que
+rapidamente fora do arco; deslize no arco de brilho e confirme que o painel
+permanece aberto, inclusive ao sair do contorno. Revele a lista, cancele o
+gesto e retorne ao relógio. Observe especialmente a borda móvel e os submostradores que
 reaparecem. Repita após apagar e acordar a tela, verificando que o primeiro
 toque apenas acorda e que a hora é atualizada.
 

@@ -1,5 +1,11 @@
-param([switch]$System, [switch]$FlatWatch)
+param([switch]$System, [switch]$FlatWatch, [switch]$MotherCache, [switch]$Panels, [switch]$KeepCloseRedraw, [switch]$PanelCodeO2, [switch]$PanelNoContent, [switch]$PanelNoIcons, [switch]$LauncherIconCache)
 $ErrorActionPreference = 'Stop'
+if ($LauncherIconCache -and (-not $System -or $PanelNoContent -or $PanelNoIcons)) { throw 'LauncherIconCache requires System with full icons' }
+if ($MotherCache -and (-not $System -or $FlatWatch)) { throw 'MotherCache requires System with the orbital watch' }
+if (($Panels -or $KeepCloseRedraw) -and -not $System) { throw 'Panel diagnostics require System' }
+if ($PanelCodeO2 -and -not $System) { throw 'PanelCodeO2 requires System' }
+if ($PanelNoContent -and -not $System) { throw 'PanelNoContent requires System' }
+if ($PanelNoIcons -and (-not $System -or $PanelNoContent)) { throw 'PanelNoIcons requires System without PanelNoContent' }
 Push-Location (Join-Path $PSScriptRoot '..')
 try {
     New-Item -ItemType Directory -Force '.pio/host-tests' | Out-Null
@@ -10,6 +16,15 @@ try {
         'tests/Relogio_ui_test.c', 'src/services/Relogio_service.c', 'src/core/calendar.c', 'src/core/Notas_text.c', 'src/ui/Notas_font.c', 'src/ui/Relogio_widgets.c', 'src/ui/control_style.c') + $sources + @('-o', '.pio/host-tests/Relogio_ui_test.exe')
     $executable = '.pio/host-tests/Relogio_ui_test.exe'
     if ($System) {
+        if ($LauncherIconCache) { $arguments += '-DCHRONVS_LAUNCHER_ICON_CACHE' }
+        if ($PanelCodeO2) { $arguments += '-DCHRONVS_PANEL_CODE_O2' }
+        if ($PanelNoContent) { $arguments += '-DCHRONVS_PANEL_NO_CONTENT' }
+        if ($PanelNoIcons) { $arguments += '-DCHRONVS_PANEL_NO_ICONS' }
+        if ($Panels) {
+            $arguments += '-DCHRONVS_PANEL_PROFILE'
+            if (-not $KeepCloseRedraw) { $arguments += '-DCHRONVS_PANEL_NO_CLOSE_REDRAW' }
+        }
+        if ($MotherCache) { $arguments += @('-DCHRONVS_WATCH_MOTHER_CACHE') }
         if ($FlatWatch) { $arguments += @('-DCHRONVS_WATCH_FLAT_BACKGROUND') }
         $arguments += @('-Wl,--wrap=lv_draw_rect')
         $arguments += @('-DCHRONVS_DISPLAY_PROFILE')

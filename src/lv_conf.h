@@ -31,6 +31,9 @@
 #define LV_FONT_MONTSERRAT_24 1
 #define LV_FONT_MONTSERRAT_48 1
 #define LV_FONT_DEFAULT &lv_font_montserrat_18
+#ifdef CHRONVS_LAUNCHER_ICON_CACHE
+#define LV_USE_SNAPSHOT 1
+#endif
 
 #endif
 #endif

@@ -14,10 +14,16 @@
 #include "Display_SPD2010.h"
 #include "core/app_manager.h"
 #include "apps/watch_app.h"
+#include "platform/display_profile.h"
 #include "ui/control_style.h"
 #include "services/sound_service.h"
 #include "services/weather_service.h"
 #include "ui/weather_icon.h"
+
+/* PlatformIO debug flags otherwise leave this translation unit at -Og. */
+#if defined(__GNUC__) && defined(CHRONVS_PANEL_CODE_O2)
+#pragma GCC optimize ("O2")
+#endif
 
 #define COLOR_PANEL       0x26302B
 #define COLOR_PANEL_EDGE  0x748173
@@ -368,7 +374,10 @@ static void menu_animation_ready(lv_anim_t *animation) {
     else {
         lv_obj_set_y(panel, -menu_height());
         lv_obj_add_flag(panel, LV_OBJ_FLAG_HIDDEN);
+#ifndef CHRONVS_PANEL_NO_CLOSE_REDRAW
+        /* P6 reference: the candidate relies on LVGL's move/hide invalidation. */
         lv_obj_invalidate(clock_surface);
+#endif
     }
 }
 
@@ -441,6 +450,15 @@ static void menu_touch_event(lv_event_t *event) {
     const lv_event_code_t code = lv_event_get_code(event);
     lv_point_t point;
 
+    /* LVGL retains the pressed target until release: arc drags own the contact. */
+    if (lv_event_get_target(event) == brightness_arc) {
+        if (code == LV_EVENT_PRESSED || code == LV_EVENT_PRESSING ||
+            code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+            mark_activity();
+        }
+        return;
+    }
+
     if (code == LV_EVENT_PRESSED) {
         lv_indev_get_point(lv_indev_get_act(), &point);
         menu_gesture_start_y = point.y;
@@ -467,6 +485,15 @@ static void menu_touch_event(lv_event_t *event) {
     }
 }
 
+#ifdef CHRONVS_PANEL_NO_CONTENT
+static void omit_panel_labels(lv_obj_t *tree) {
+    if (lv_obj_check_type(tree, &lv_label_class))
+        lv_obj_set_style_opa_layered(tree, LV_OPA_TRANSP, 0);
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(tree); ++i)
+        omit_panel_labels(lv_obj_get_child(tree, i));
+}
+#endif
+
 static void create_quick_settings(void) {
     lv_obj_t *screen = lv_scr_act();
     settings_panel = lv_obj_create(screen);
@@ -488,7 +515,7 @@ static void create_quick_settings(void) {
     brightness_arc = lv_arc_create(settings_panel);
     lv_obj_set_size(brightness_arc, width - 24, height - 24);
     lv_obj_center(brightness_arc);
-    lv_obj_add_flag(brightness_arc, LV_OBJ_FLAG_ADV_HITTEST);
+    lv_obj_add_flag(brightness_arc, LV_OBJ_FLAG_ADV_HITTEST | LV_OBJ_FLAG_EVENT_BUBBLE);
     
     lv_arc_set_range(brightness_arc, 10, 100);
     lv_arc_set_bg_angles(brightness_arc, 135, 45);
@@ -579,6 +606,16 @@ static void create_quick_settings(void) {
                           chronvs_ui_hex_offsets[placeholder_indices[index]].y - 72, false);
     }
 
+#ifdef CHRONVS_PANEL_NO_CONTENT
+    omit_panel_labels(settings_panel);
+#endif
+#if defined(CHRONVS_PANEL_NO_CONTENT) || defined(CHRONVS_PANEL_NO_ICONS)
+    lv_obj_set_style_opa_layered(weather_symbol, LV_OPA_TRANSP, 0);
+#endif
+#ifdef CHRONVS_PANEL_NO_ICONS
+    lv_obj_set_style_opa_layered(volume_icon, LV_OPA_TRANSP, 0);
+#endif
+    CHRONVS_PANEL_PROFILE_BIND(settings_panel, QUICK);
     lv_obj_add_flag(settings_panel, LV_OBJ_FLAG_HIDDEN);
 }
 

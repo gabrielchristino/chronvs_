@@ -1,5 +1,32 @@
 # Diagnóstico de fluidez
 
+## Estado consolidado e última gravação (08/10/2026)
+
+O firmware de uso é `waveshare_esp32_s3_touch_lcd_146`, em release/O2,
+sem logs, consoles ou profiling. O mostrador tem três submostradores fixos
+(horas, semana e temperatura), sem submostrador de segundos nem contornos
+internos; a escala de minutos contém apenas os 12 números. Mantém atualização
+ao acordar/voltar e a cada segundo somente sob pressão prolongada.
+
+Os caches da face principal e dos ícones do launcher, a omissão de conteúdo
+e a retirada do redraw final continuam restritos aos ambientes experimentais.
+O cache dos anéis externos faz parte do padrão. Os relatos e métricas de
+experimentos anteriores abaixo não medem o desempenho desta composição atual.
+
+O usuário relatou fechamento acidental ao deslizar no brilho. O painel agora
+ignora, para navegação, contatos cujo alvo inicial é o arco, mantendo o ajuste
+e o registro de atividade até soltar. Um novo arraste fora do arco fecha.
+Contrato e roteiro de teste em [interface.md](interface.md#acessos-rápidos).
+
+Validação desta correção: build padrão aprovado; suíte integrada
+`tests/run_Relogio_ui.ps1 -System -Panels` aprovada, incluindo mudança de
+valor sem movimento do painel, saída do contorno e fechamento posterior fora
+do arco. Upload padrão pela COM3 concluído em 75,86 s, com verificação de
+hashes de bootloader, partições, firmware e modelos de voz, e reset automático.
+O build enviado reportou 1.586.154 bytes de programa e 52.056 bytes estáticos.
+A interação corrigida, a fluidez residual e a autonomia aguardam teste físico;
+gravação verificada não equivale a validação funcional.
+
 ## Firmware padrão release (08/10/2026)
 
 Por pedido do usuário, o padrão passa de `debug` para `release`, com `-O2`
@@ -32,13 +59,370 @@ scanner I2C de diagnóstico ou callback de log do Clima. O firmware ficou com
 1.586.122 bytes de programa e 52.056 bytes estáticos, contra 1.687.676 e
 54.628 no build anterior. Esses números não medem RAM interna livre/DMA em uso.
 
+## P6 — cache experimental dos ícones do launcher (07/10/2026)
+
+Retorno de `panels_no_icons`: somente os textos pareceu igual ao teste sem
+conteúdo. Interpretado como ausência de piora perceptível ao restaurar textos;
+não é medição individual de custo. Próximo candidato: `launcher_icon_cache`,
+derivado de `panels_quiet`, com menus completos e cache somente do launcher.
+
+`CHRONVS_LAUNCHER_ICON_CACHE` habilita snapshot LVGL apenas no experimento.
+Na criação do launcher, gera cada ícone de 44 × 44 em RGB565 sobre a cor fixa
+do badge. Pixels dessa cor viram chroma key; as bordas antialiasadas permanecem
+precompostas. Reserva 3.872 bytes por ícone diretamente em PSRAM, além de
+descritores/objetos no pool existente. Não é framebuffer, buffer DMA ou asset
+bitmap versionado. Não há reconstrução ao acordar nem reserva por quadro.
+
+O cache só substitui o vetor em linhas totalmente opacas; o fade conserva
+os objetos originais. Snapshot inválido, tamanho diferente, colisão com chroma
+key ou falha na reserva conserva o vetor. Geometria/paleta fixas são requisito;
+essa composição não serve como imagem transparente genérica. Menus completos,
+arco, gestos, driver e buffers permanecem. Comparar com `panels_quiet`,
+observando launcher separado dos acessos rápidos (estes não usam o cache).
+
+Host: `tests/run_Relogio_ui.ps1 -System -Panels -LauncherIconCache`, com
+comparação de capturas contra a referência. Ganho físico ainda pendente.
+
+## P6 — textos restaurados, somente ícones omitidos (07/10/2026)
+
+`panels_no_icons` herda `panels_quiet` e define apenas
+`CHRONVS_PANEL_NO_ICONS`. Restaura nomes do launcher e textos dos acessos
+rápidos, mantendo omitidos os ícones dos apps e os símbolos Clima/volume.
+Círculos, arco, layout e interação permanecem. O símbolo de volume é um
+glifo LVGL, classificado pela função visual de ícone; seu número permanece.
+A omissão vale em repouso e movimento, sem alternância. Comparar com
+`panels_no_content` para avaliar a volta dos textos e com `panels_quiet`
+para avaliar os ícones, no mesmo brilho/ECO e com arrastes lentos/rápidos.
+Registrar separadamente launcher e acessos rápidos. Buffers/QSPI não mudam.
+
+```powershell
+& 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' run -e panels_no_icons -t upload
+```
+
+Host: `tests/run_Relogio_ui.ps1 -System -Panels -PanelNoIcons`. Restaurar
+`panels_quiet` para retornar aos menus completos. Ganho físico ainda pendente.
+
+## P6 — isolar ícones e textos (07/10/2026)
+
+O usuário não percebeu diferença com `panels_code_o2`: gelatina persiste.
+Não promover essa otimização ao padrão com base no teste perceptivo.
+
+`panels_no_content` herda `panels_quiet`, sem a otimização adicional O2,
+e acrescenta somente `CHRONVS_PANEL_NO_CONTENT`. Omite o desenho de nomes
+e ícones do launcher e de todos os rótulos e símbolo Clima do painel rápido,
+inclusive em repouso. Mantém círculos dos slots/badges, arco, máscara circular,
+geometria, layout, áreas de toque, callbacks e acompanhamento do dedo.
+A ausência permanece durante todo o teste para evitar que esconder/restaurar
+conteúdo introduza invalidações nas fronteiras do movimento. É um diagnóstico,
+não a interface proposta para uso; controles continuam ativos sem seus textos.
+
+Comparar abertura/fechamento dos dois menus com `panels_quiet`, no mesmo
+brilho/ECO e com arrastes lentos/rápidos. Melhora indicaria contribuição do
+conteúdo, sem separar ícones de textos nem provar a causa exclusiva. Persistência
+também não prova problema de TE: superfícies, máscaras, mostrador exposto,
+transmissão e varredura continuam presentes. Buffers e QSPI não mudam.
+
+```powershell
+& 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' run -e panels_no_content -t upload
+```
+
+Para restaurar a interface completa, gravar `panels_quiet`. Teste do host:
+`tests/run_Relogio_ui.ps1 -System -Panels -PanelNoContent`.
+
+Retorno físico: o usuário percebeu gelatina menor e identificou melhora em
+dois isolamentos: mostrador substituído por fundo plano e menus sem conteúdo.
+O resultado é qualitativo, sem tempos/corrente e sem discriminar os dois menus.
+O teste atual remove ícones e textos juntos, portanto não atribuir o ganho só
+aos ícones. Os relatos indicam contribuição do trabalho de desenho, sem
+excluir varredura/transmissão como parte do efeito residual. Próximo isolamento:
+restaurar os textos e omitir apenas os ícones, com a mesma referência silenciosa.
+
+## P6 — otimização isolada do código dos painéis (07/10/2026)
+
+O usuário esclareceu que as linhas são partes do próprio menu em posições
+diferentes somente durante abrir/fechar; a imagem parada fica correta.
+Isso caracteriza atualização parcial visível, sem identificar sua causa.
+
+`panels_code_o2` herda `panels_quiet` e acrescenta somente
+`CHRONVS_PANEL_CODE_O2`: `app_list_app.c` e `system_ui.c` usam uma diretiva
+GCC local `O2`, como o mostrador. Não habilita fast-math, logs ou profiling.
+Inclui a política de energia existente no mesmo arquivo do painel rápido;
+por isso a regressão integrada cobre AUTO/ECO, despertar e controles.
+Drivers, buffers, QSPI, máscara circular e limites de gesto permanecem iguais.
+O padrão e `panels_quiet` conservam a referência sem essa diretiva.
+
+Essa comparação foi preparada antes da adoção de release/O2 no padrão.
+Atualmente, os arquivos dos painéis já recebem O2 pela configuração global;
+`panels_code_o2` não representa uma nova otimização isolada nesse contexto.
+
+Comparar fisicamente com `panels_quiet`, com mesmo brilho/ECO e arrastes
+lentos/rápidos, incluindo cancelamento, ajuste pelo arco e fechamento fora dele. Não há ganho
+medido nem promessa de eliminar a gelatina: o custo dominante pode estar no
+LVGL já otimizado ou na apresentação das faixas. Para gravar o candidato:
+
+```powershell
+& 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' run -e panels_code_o2 -t upload
+```
+
+Regressão do host: `tests/run_Relogio_ui.ps1 -System -Panels`, repetida com
+`-PanelCodeO2`, comparando também hashes das capturas BMP. A referência para
+restaurar no relógio é `panels_quiet`.
+
+## P6 — repetição sem instrumentação (02/10/2026)
+
+O usuário relatou que ainda percebe efeito gelatina na segunda captura P6
+e levantou a hipótese de custo dos logs. As capturas têm refreshes de
+78–82 ms mesmo sem desenho do mostrador, mas não isolam o custo dos logs.
+Desligar apenas o monitor não remove a instrumentação compilada no firmware.
+
+`panels_quiet` mantém o candidato que omite a invalidação final do painel
+rápido, MOTHER vetorial, anéis em cache e LVGL `-O2`. Herda a configuração
+do padrão, sem `CHRONVS_DISPLAY_PROFILE`, sem `CHRONVS_PANEL_PROFILE` e com
+logs/consoles desativados. Não modifica driver, buffers, gestos ou animação.
+
+```powershell
+& 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' run -e panels_quiet -t upload
+```
+
+Não é necessário abrir o monitor. Repetir com o mesmo brilho: abrir/fechar
+launcher e acessos rápidos, inverter o arraste, cancelar abertura curta e
+ajustar brilho pelo arco e fechar fora dele. Registrar sensação de acompanhamento do dedo, gelatina,
+rastros e funcionamento dos gestos. Comparar com `display_profile_panels`
+isola conjuntamente profiling/logs; comparar com o padrão silencioso
+isola a invalidação final (somente nos acessos rápidos):
+
+```powershell
+& 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' run -e waveshare_esp32_s3_touch_lcd_146 -t upload
+```
+
+Em 07/10/2026, o upload de `panels_quiet` passou, com hashes verificados e
+reinício automático. O usuário confirmou menus abrindo e fechando bem
+rápido e interface responsiva, mas ainda observa linhas e efeito gelatina.
+Portanto, profiling/logs não são condição necessária para esses artefatos;
+o relato não quantifica sua contribuição nem o ganho da invalidação final.
+A aparência das linhas e sua persistência com o menu parado ainda precisam
+ser caracterizadas, assim como o fechamento especificamente pelo arco.
+Continuar a decomposição do desenho dos painéis em P6; não há comprovação
+de problema de sincronismo/TE nem medição de corrente/autonomia.
+
+## P6 — painéis e fechamento (01/10/2026)
+
+`display_profile_panels_reference` mantém o redraw completo ao terminar de
+fechar/cancelar os acessos rápidos. `display_profile_panels` remove somente
+essa invalidação explícita, usando as regiões expostas já invalidadas pelo
+movimento/ocultação LVGL. Ambos usam mostrador vetorial para MOTHER, anéis
+em cache e a mesma instrumentação. O padrão mantém o redraw de referência
+até a aceitação física. Não muda duração, coalescência, formato ou gestos.
+Os dois ambientes incluem a correção de propagação dos eventos do arco ao
+painel, também presente no padrão; assim ela não varia na comparação A/B.
+
+Cada linha `display_perf` acrescenta dois conjuntos, `quick_*` e `launcher_*`:
+
+| Sufixo | Significado |
+| --- | --- |
+| `frames` | Refreshes com ao menos uma medição completa dessa raiz |
+| `slices` | Inícios de desenho da raiz na janela |
+| `clip_px` | Soma das áreas retangulares de clip desses inícios |
+| `draw_us` | Tempo entre DRAW_MAIN_BEGIN e DRAW_POST_END, incluindo filhos |
+| `root_us` | Parte até DRAW_MAIN_END, incluindo desenho da raiz e preparação de máscara |
+| `post_only` | Fins de desenho de ancestral cujo início o LVGL omitiu |
+
+`root_us` já está em `draw_us`; não some os dois. A diferença inclui filhos,
+recorte, travessia e pós-desenho, não mede exclusivamente ícones ou textos.
+As medidas incluem preempções e custo dos marcadores. O flush fica fora do
+escopo. `clip_px` não é contagem de pixels coloridos nem união de áreas:
+inclui cantos transparentes e pode repetir regiões. Não compare médias de
+áreas diferentes como se fossem cenas iguais.
+
+O LVGL pode iniciar o refresh em um filho opaco e enviar somente eventos
+POST aos ancestrais. Esses trechos não têm tempo atribuível ao painel e
+aparecem em `post_only`; não se inventa uma duração para eles. Os dois
+painéis podem participar do mesmo quadro; não some seus frames como se
+fossem disjuntos. O analisador usa o denominador de cada painel e informa
+cobertura, somas e médias por frame; logs antigos retornam `null`.
+
+Há três callbacks por raiz, vinculados uma vez na criação, e contadores
+estáticos para dois painéis. Não há alocação por quadro, nova tarefa ou
+timer. O build normal não registra esses callbacks. Ao apagar a tela, as
+amostras são descartadas pela política existente de profiling.
+
+Na captura, separe acessos rápidos e launcher. Para os acessos rápidos,
+inclua abrir, cancelar uma abertura curta, fechar por botão e fechar pelo
+arco de brilho. Repita lento/rápido cinco vezes com o mesmo brilho/ECO.
+Use `-f log2file`, sem pipe, como no procedimento de P2 abaixo. Compare
+primeiro referência e candidato, ambos instrumentados. Ainda não há ganho
+de fluidez/autonomia medido para essa mudança.
+
+```powershell
+.\tests\run_Relogio_ui.ps1 -System -Panels -KeepCloseRedraw
+.\tests\run_Relogio_ui.ps1 -System -Panels
+& 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' run -e display_profile_panels_reference
+& 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' run -e display_profile_panels
+```
+
+## P0/P1 e candidato P2 (01/10/2026)
+
+### P2 experimental: face fixa do disco principal
+
+`display_profile_mother` herda `display_profile_primitives` e habilita somente
+o cache da face de MOTHER. Compare `watch_mother_face_us` e o total da transição
+nos dois ambientes, com cenas e áreas iguais. Não está habilitado no padrão;
+P1 e a aceitação física permanecem pendentes. A face vetorial continua como
+referência independente nos testes e como fallback no runtime.
+
+O gerador desenha os anéis, guarda a linha anterior e desenha o círculo de
+raio 154 pelo LVGL 8.3.11. Em cada linha, encontra os limites dos pixels
+modificados e codifica somente esse trecho em RLE RGB565 com fim exclusivo.
+São 413 offsets, 412 inícios e 2.083 pares fim/cor: **9.982 bytes** na flash.
+A composição reutiliza os 824 bytes já reservados pelos anéis. Não há
+reconstrução ao acordar. Ponteiro e centro são desenhados depois, na ordem
+original; a escala de minutos continua posterior ao disco.
+
+As bordas antialiasadas incorporam o fundo fixo dos anéis. Isso só é válido
+na geometria e paleta atuais, em que as datas ficam fora do disco. Não é um
+bitmap transparente genérico. Centro deslocado, máscara externa, outro
+renderizador ou ausência da linha temporária mantêm o desenho vetorial.
+Trechos totalmente ocultos pelo painel circular são descartados; a área
+fora dos trechos não é sobrescrita. Alterações em geometria, cores, formato
+RGB565 ou fundo exigem regeneração e nova comparação.
+
+```powershell
+.\tests\generate_watch_ring_cache.ps1 -Mother
+.\tests\run_watch_optimization_tests.ps1 -MotherCache
+.\tests\run_Relogio_ui.ps1 -System -MotherCache
+& 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' run -e display_profile_mother
+```
+
+O gerador escreve em `.pio/host-tests/watch_mother_cache.h` e confere o arquivo
+versionado. Para atualizar dados, revise esse arquivo gerado e aplique o diff.
+Os testes comparam 142 cenários (60 anteriores, 60 fases estacionárias e 22
+posições de painel), além de recortes parciais, deslocamentos, máscara e falta
+de memória. O total de pixels deve coincidir exatamente com a referência.
+
+Para a comparação física, use primeiro `display_profile_primitives` e depois
+`display_profile_mother`, conservando brilho, perfil e ECO. Em cada um, capture
+separadamente: despertar; segurar para atualizar; abrir/fechar/cancelar acessos
+rápidos; abrir/fechar/cancelar launcher. Repita cada arraste cinco vezes, lento
+e rápido, e registre horário exibido e observação visual. Inclua fechamento
+fora do arco e ajuste exclusivo do brilho no contorno. Exemplo para preparar e capturar um cenário:
+
+```powershell
+& 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' run -e display_profile_primitives -t nobuild -t upload
+& 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' device monitor -e display_profile_primitives -p COM3 -b 115200 -f log2file
+```
+
+O filtro `log2file` salva em `logs/device-monitor-YYMMDD-HHMMSS.log` e informa
+o caminho ao iniciar, mantendo o terminal interativo. Não use pipe com
+`Tee-Object` nesse monitor. Identifique qual arquivo pertence a cada ambiente.
+Encerre o monitor antes do próximo upload. Para a segunda execução, troque
+o ambiente por `display_profile_mother` nos comandos de upload e monitor.
+Passe os dois arquivos ao analisador. Compare `watch_mother_face_us` por
+quadro apenas nas janelas de áreas equivalentes; refresh, flush e observação
+visual devem ser avaliados separadamente. A instrumentação tem a mesma
+política nos dois ambientes. Não adote o cache se o ganho não for repetível
+ou houver regressão visual, de memória ou ao acordar. O firmware padrão
+preservado continua disponível pelo procedimento abaixo.
+
+### Recuperação e diagnóstico de primitivas
+
+Nesta máquina, o shell herdava `IDF_PATH` de outra instalação. Para os
+comandos abaixo, a validação usou o ESP-IDF 5.3.1 do PlatformIO, configurando
+somente a sessão de PowerShell:
+
+```powershell
+$env:IDF_PATH = Join-Path $env:USERPROFILE '.platformio/packages/framework-espidf'
+```
+
+Antes de compilar um experimento, preserve os artefatos existentes:
+
+```powershell
+& 'C:\Users\gabri\.platformio\penv\Scripts\python.exe' scripts/firmware_reference.py --save waveshare_esp32_s3_touch_lcd_146
+& 'C:\Users\gabri\.platformio\penv\Scripts\python.exe' scripts/firmware_reference.py --save display_profile_o2
+```
+
+Cada execução cria uma pasta nova em `logs/firmware-references/`, ignorada
+pelo Git, com manifesto SHA-256, bootloader, partições, firmware, ELF,
+`srmodels.bin`, sdkconfig local e cabeçalho gerado, INI e uploader.
+O commit e o status registrados são do workspace no momento da cópia;
+não comprovam qual fonte produziu um binário anterior. Não execute enquanto
+houver build ativo. Os artefatos binários podem incorporar credenciais:
+essas cópias são locais e não devem ser compartilhadas.
+
+Para verificar uma cópia e restaurá-la pelo uploader customizado, use o
+caminho exato impresso ao salvar, no lugar de `CAMINHO_DA_REFERENCIA`:
+
+```powershell
+& 'C:\Users\gabri\.platformio\penv\Scripts\python.exe' scripts/firmware_reference.py --verify 'CAMINHO_DA_REFERENCIA'
+$env:CHRONVS_FIRMWARE_REFERENCE = 'CAMINHO_DA_REFERENCIA'
+try {
+    & 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' run -e waveshare_esp32_s3_touch_lcd_146 -t nobuild -t upload
+} finally {
+    Remove-Item Env:CHRONVS_FIRMWARE_REFERENCE
+}
+```
+
+A variável seleciona as imagens arquivadas; não substitui arquivos do build.
+O uploader verifica o mapa e todos os hashes antes de aceitar a referência.
+Preserva os endereços `0x0`, `0x10000`, `0x20000` e `0x420000` para os modelos
+de voz. O teste no host confere os argumentos e rejeita cópia corrompida;
+uma restauração real ainda precisa ser verificada no relógio.
+
+`display_profile_primitives` herda O2 e a política de logs de
+`display_profile_o2`. Acrescenta estes acumuladores em microssegundos:
+
+| Campo `watch_*_us` | Primitivas abrangidas por invocação |
+| --- | --- |
+| `mother_face` | Círculo de raio 154, preenchimento e borda |
+| `mother_hand` | Ponteiro de minutos |
+| `mother_center` | Círculo central de raio 4 |
+| `hours_face` | Círculo externo de raio 75 |
+| `hours_scale` | Seis numerais, letra P e cinco traços; inclui posicionamento |
+| `hours_inner` | Campo histórico do círculo interno de raio 55; zero no desenho atual, que removeu esse contorno |
+| `hours_hand` | Ponteiro de horas |
+
+Recortes e cobertura podem eliminar primitivas. As contagens acima descrevem
+o código, não quantas chegaram ao rasterizador. Os tempos incluem verificações
+e preempções; não são tempos exclusivos da rasterização. Os grupos MOTHER/HOURS
+continuam abrangendo seus detalhes e a instrumentação: **não some ambos**.
+Os temporizadores aninhados não incrementam `watch_frames` ou `watch_slices`.
+
+```powershell
+& 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' run -e display_profile_primitives
+& 'C:\Users\gabri\.platformio\penv\Scripts\python.exe' scripts/analyze_display_profile.py logs/cenario.log
+```
+
+O analisador retorna `watch_primitive_detail_windows`, a quantidade de frames
+cobertos e `watch_primitive_detail_avg_us`; logs antigos mantêm valores `null`.
+Detalhes incompletos ou cuja soma exceda o grupo pai são rejeitados.
+Compare cenas e áreas iguais, com cinco repetições por gesto, entre O2 com e
+sem detalhes para avaliar a interferência dos marcadores. O build normal
+não executa os novos temporizadores nem imprime esses campos. Não há tarefa,
+timer LVGL ou alocação por quadro acrescentados. Esta etapa prepara a escolha
+de P2/P3; ainda não reduz o trabalho de desenho do firmware normal.
+
+Para avaliar a bateria de 150 mAh, registre separadamente firmware, brilho,
+perfil, ECO, duração de tela ligada, consultas Clima/NTP e uso de áudio/Vox.
+Compare ciclos equivalentes no build normal, fora do USB. A estimativa por
+tensão mostrada na UI não mede corrente nem energia: tempo de render menor
+não permite afirmar um percentual de autonomia. Ainda faltam os ensaios
+físicos de desempenho e consumo desta etapa.
+
+A fila atual de trabalho, prioridades, critérios de aceitação e testes
+pendentes está no [plano de continuidade](performance-plan.md). A auditoria
+registra o histórico; seus antigos “próximos passos” podem já estar concluídos.
+
+## Configuração e histórico da otimização
+
+As adoções e medidas históricas abaixo antecedem a simplificação do mostrador
+e o release de 08/10/2026. O estado vigente está no início deste documento.
+
 O ambiente padrão compila o LVGL com `-O2` e não instala callbacks de diagnóstico.
-O desenho orbital em `apps/watch_app.c` também usa `-O2`, por uma diretiva GCC
+O desenho em `apps/watch_app.c` também usa `-O2`, por uma diretiva GCC
 local após os includes. Isso evita que o modo debug do PlatformIO o rebaixe
 para `-Og`; não habilita fast-math nem altera opções dos drivers ou outros apps.
 `tests/run_watch_optimization_tests.ps1` compara 60 cenários em `-Og`/`-O2`
 mantendo o LVGL em `-O2`, exigindo o mesmo SHA-256 dos pixels. O ganho de tempo
-desse ajuste ainda precisa ser medido no dispositivo com o mostrador orbital.
+desse ajuste na composição atual ainda precisa ser medido no dispositivo.
 Os dois anéis externos usam um cache RGB565 comprimido por sequências de cores
 na flash (24.666 bytes). Uma linha de 824 bytes no pool LVGL em PSRAM é
 descomprimida por vez; não é um framebuffer de tela inteira nem um buffer DMA.
@@ -47,7 +431,10 @@ deslocado ou se houver máscara externa. As cores/medidas do cache são fixas:
 mudanças exigem regeneração com `tests/generate_watch_ring_cache.ps1` e revisão
 do arquivo produzido em `.pio/host-tests/`. A comparação
 `tests/run_watch_optimization_tests.ps1 -RingCache` verifica os pixels contra
-o desenho vetorial. O ganho físico ainda depende de medição.
+o desenho vetorial. Na captura após `1067585`, os anéis caíram para cerca de
+5,9 ms e o refresh completo para 166 ms. O usuário confirmou melhora adicional
+sem logs, com leve diferença de posição entre regiões durante o arraste ainda
+visível. Limites da comparação e trabalho restante estão no plano de continuidade.
 Também desativa logs da aplicação/ESP-IDF e do bootloader de software em
 compilação (`LOG_DEFAULT_LEVEL=0`, `LOG_MAXIMUM_LEVEL=0`) e os consoles UART
 e USB (`ESP_CONSOLE_NONE`, `ESP_CONSOLE_SECONDARY_NONE`). Os `printf` diretos
@@ -109,11 +496,12 @@ A implementação e os limites da validação estão na
 ### Isolamento do fundo durante arrastes circulares
 
 O ambiente `display_profile_flat` herda o diagnóstico O2 e troca somente o
-desenho orbital por fundo liso escuro. O mostrador fica sem hora visível neste
+desenho do mostrador por fundo liso escuro. O mostrador fica sem hora visível neste
 experimento. Mantém eventos, invalidações, painéis circulares, gestos, buffers,
 transferência QSPI e logs. O serviço de horário e os alarmes continuam ativos.
 O boot identifica `watch_background=flat`; o diagnóstico normal identifica
-`watch_background=orbital`. O padrão de uso diário continua orbital e silencioso.
+`watch_background=orbital`, nome histórico mantido no protocolo mesmo com
+submostradores fixos. O padrão de uso diário mantém o mostrador completo e silencioso.
 
 Compare `display_profile_o2` e `display_profile_flat`, ambos com ON e ECO
 desligado, após terminar o NTP. Em cada versão, repita abertura/fechamento dos
@@ -127,10 +515,10 @@ No fundo liso, as seções de órbitas ficam zeradas; setup e background permane
 & 'C:\Users\gabri\.platformio\penv\Scripts\platformio.exe' device monitor -e display_profile_flat -p COM3 -b 115200
 ```
 
-Para voltar à comparação orbital, use `run -e display_profile_o2 -t upload`.
+Para voltar à comparação com o mostrador completo, use `run -e display_profile_o2 -t upload`.
 Para uso diário sem logs, use `run -t upload`. Encerre o monitor com Ctrl+C
 antes de trocar o firmware. Melhora com fundo liso indica contribuição do
-desenho orbital; persistência do efeito não comprova sozinha falha de sincronismo,
+desenho do mostrador; persistência do efeito não comprova sozinha falha de sincronismo,
 pois o próprio painel circular ainda exige renderização.
 
 ### Procedimento geral
@@ -249,16 +637,16 @@ janela**, não médias por faixa:
 | --- | --- |
 | `watch_setup_us` | Contexto, recorte de superfícies opacas e atualização do cache |
 | `watch_background_us` | Limpeza opaca do fundo |
-| `watch_geometry_us` | Interpolação da hora, ângulos e posições orbitais |
+| `watch_geometry_us` | Ângulos e preparação geométrica; centros atualmente fixos |
 | `watch_case_us` | Aros externos e números da data |
 | `watch_rings_us` | Somente os dois círculos externos, com preenchimento e borda |
 | `watch_dates_us` | Somente os 31 números da data |
 | `watch_mother_us` | Disco central, ponteiro de minutos e centro |
-| `watch_minutes_us` | Escala de minutos, números e traços |
+| `watch_minutes_us` | Escala de minutos; atualmente somente os números |
 | `watch_hours_us` | Submostrador de horas |
 | `watch_weekday_us` | Submostrador de dia da semana |
 | `watch_temperature_us` | Submostrador de temperatura |
-| `watch_seconds_us` | Submostrador de segundos |
+| `watch_seconds_us` | Campo histórico; zero após retirada do submostrador de segundos |
 | `watch_marker_us` | Marcador fixo da data |
 
 `watch_case_us` é a soma de `watch_rings_us` e `watch_dates_us`, preservada

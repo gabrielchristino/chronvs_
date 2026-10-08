@@ -84,6 +84,46 @@ static void flush(lv_disp_drv_t *driver, const lv_area_t *area, lv_color_t *colo
     lv_disp_flush_ready(driver);
 }
 
+#ifdef CHRONVS_TEST_MOTHER_CACHE
+static void test_mother_fallbacks(void) {
+    static lv_color_t pixels[412 * 20], reference[412 * 20];
+    lv_draw_sw_ctx_t sw;
+    lv_draw_sw_init_ctx(NULL, &sw.base_draw);
+    lv_color_t *saved_line = ring_cache_line;
+    assert(saved_line);
+    const lv_area_t clips[] = {{0,0,411,19}, {0,52,411,71}, {39,190,371,209},
+                               {180,350,235,369}, {0,392,411,411}};
+    const float centers[][2] = {{205.5f,205.5f}, {204.5f,205.5f}, {205.5f,185.5f}};
+    for (int masked=0; masked<2; ++masked) {
+        lv_draw_mask_radius_param_t mask;
+        int16_t id = -1;
+        if (masked) {
+            const lv_area_t bounds = {20,20,391,391};
+            lv_draw_mask_radius_init(&mask, &bounds, 185, false);
+            id = lv_draw_mask_add(&mask, NULL); assert(id >= 0);
+        }
+        for (unsigned c=0;c<3;++c) for (unsigned i=0;i<5;++i) {
+            lv_area_t buffer = {0,clips[i].y1,411,clips[i].y2};
+            sw.base_draw.buf = pixels; sw.base_draw.buf_area = &buffer;
+            sw.base_draw.clip_area = &clips[i];
+            for (int mode=0;mode<3;++mode) {
+                ring_cache_line = mode == 2 ? NULL : saved_line;
+                for (unsigned x=0;x<412*20;++x) pixels[x] = lv_color_hex(COLOR_BEZEL_DARK);
+                draw_case_rings(&sw.base_draw, centers[c][0], centers[c][1]);
+                if (!mode) draw_circle(&sw.base_draw, centers[c][0], centers[c][1],
+                                       154, COLOR_FACE, COLOR_TRACK, 1);
+                else draw_mother_face(&sw.base_draw, centers[c][0], centers[c][1]);
+                if (!mode) memcpy(reference,pixels,sizeof(pixels));
+                else assert(!memcmp(reference,pixels,sizeof(pixels)));
+            }
+        }
+        if (masked) { lv_draw_mask_remove_id(id); lv_draw_mask_free_param(&mask); }
+    }
+    ring_cache_line = saved_line;
+    puts("Mother spans, partial clips, displaced centers, external mask and allocation fallback match.");
+}
+#endif
+
 int main(int argc, char **argv) {
     assert(argc == 2);
     lv_init();
@@ -111,6 +151,27 @@ int main(int argc, char **argv) {
         lv_obj_invalidate(clock_face);
         lv_refr_now(display);
     }
+#ifdef CHRONVS_TEST_MOTHER_CACHE
+    lv_obj_set_pos(clock_face, 0, 0);
+    for (unsigned i=0;i<60;++i) {
+        chronvs_time_t time = {.valid=true,.year=26,.month=10,.day=1+i%31,
+            .weekday=i%7,.hour=i%24,.minute=i,.second=59-i};
+        chronvs_watch_app_set_time(&time);
+        lv_obj_invalidate(clock_face); lv_refr_now(display);
+    }
+    lv_obj_t *panel = lv_obj_create(lv_scr_act());
+    lv_obj_remove_style_all(panel);
+    lv_obj_set_size(panel,412,412);
+    lv_obj_set_style_radius(panel,LV_RADIUS_CIRCLE,0);
+    lv_obj_set_style_bg_opa(panel,LV_OPA_COVER,0);
+    lv_obj_set_style_bg_color(panel,lv_color_hex(0x26302b),0);
+    for (int direction=-1;direction<=1;direction+=2) for (int i=0;i<=10;++i) {
+        lv_obj_set_pos(panel,0,direction*(412-i*41));
+        lv_obj_invalidate(clock_face); lv_refr_now(display);
+    }
+    lv_obj_del(panel);
+    circle_cover_count = 0;
+#endif
     lv_mem_monitor_t memory;
     lv_mem_monitor(&memory);
     assert(memory.free_biggest_size > 16384);
@@ -121,6 +182,9 @@ int main(int argc, char **argv) {
            (unsigned)peak_used, (unsigned)smallest_block);
 #if defined(CHRONVS_TEST_RING_CACHE) && !defined(CHRONVS_WATCH_RINGS_REFERENCE)
     test_ring_fallbacks();
+#endif
+#ifdef CHRONVS_TEST_MOTHER_CACHE
+    test_mother_fallbacks();
 #endif
     return 0;
 }

@@ -55,8 +55,9 @@ Preserve estes contratos, salvo pedido explícito do usuário:
 
 - Mostrador: arrastar da borda superior para baixo abre acessos rápidos;
   arrastar para cima abre a lista de apps.
-- Painel rápido: arrastar para cima fecha, inclusive quando iniciado no arco
-  de brilho.
+- Painel rápido: arrastar para cima fora do arco de brilho fecha. Contatos
+  iniciados no contorno interativo ou na alça do arco ajustam somente o brilho
+  até soltar, inclusive se o dedo sair do contorno.
 - Lista de apps: tocar abre um item; arrastar para baixo a partir dos 60 px
   superiores volta ao relógio após 120 px de movimento.
 - Todo novo app deve voltar por arraste da esquerda para a direita, como o
@@ -105,8 +106,10 @@ firmware:
   Essas experiências causaram, respectivamente, listras pretas ou travamento.
 - Os gestos visuais devem ser coalescidos a cada 20 ms; não invalide a árvore
   LVGL a cada amostra do touch.
-- O mostrador só deve atualizar uma vez por segundo em repouso. Com a tela
-  apagada, não faça renderização, leitura de RTC nem leitura de bateria.
+- O mostrador fica estático em repouso e atualiza ao acordar ou voltar.
+  Pressionar por 600 ms inicia atualizações uma vez por segundo até soltar
+  ou mover mais de 12 px em qualquer eixo. Com a tela apagada, não faça
+  renderização, leitura de RTC nem leitura de bateria.
 
 Os drivers da Waveshare ficam em `.vendor-reference/`, que não é versionado.
 As correções persistentes são aplicadas por

@@ -7,6 +7,11 @@ callbacks opcionais de entrada e saída.
 
 ## Estrutura
 
+O experimento `launcher_icon_cache` gera snapshots dos ícones fixos na criação
+do launcher e os mantém em PSRAM enquanto o app permanece retido. Usa vetor
+durante fade e em falha de reserva/snapshot; não muda `create_icon` dos apps.
+Somente o experimento habilita snapshot LVGL. Limites em `performance.md`.
+
 ```text
 src/
 ├── apps/       catálogo, interfaces e estado visual de cada aplicativo
@@ -168,6 +173,15 @@ por quadro e mantém o caminho vetorial se a linha não estiver disponível,
 se o mostrador estiver deslocado ou houver máscara externa. O gerador e a
 comparação de pixels estão documentados em `performance.md`; mudanças na
 paleta ou geometria dos anéis exigem regenerar esses dados.
+
+No experimento `display_profile_mother`, a face fixa do disco principal
+reutiliza essa mesma linha, sequencialmente na tarefa da interface. São
+9.982 bytes adicionais constantes na flash, sem novo timer, tarefa, leitura
+de hardware ou alocação. O padrão continua vetorial para essa face. O cache
+experimental só atende o centro estacionário (205,5; 205,5), com renderizador
+software e sem máscara externa; nos demais casos, ou sem a linha temporária,
+usa o vetor. Paleta, raio, borda ou fundo dos anéis alterados exigem regenerar
+o cache e repetir a comparação antes de habilitá-lo.
 
 O diagnóstico de listras usou uma espera de 2 s antes da sessão Wi-Fi.
 Após corrigir a pressão de memória e confirmar a tela no relógio, o atraso

@@ -1,12 +1,13 @@
-param([switch]$RingCache)
+param([switch]$RingCache, [switch]$MotherCache)
 $ErrorActionPreference = 'Stop'
+if ($MotherCache -and $RingCache) { throw 'Select only one cache experiment at a time' }
 Push-Location (Join-Path $PSScriptRoot '..')
 try {
     New-Item -ItemType Directory -Force '.pio/host-tests' | Out-Null
     $lvglRoot = '.vendor-reference/example/ESP-IDF-5.3.2/ESP32-S3-Touch-LCD-1.46-Test/components/lvgl__lvgl'
     $sources = @(rg --files "$lvglRoot/src" -g '*.c')
     $hashes = @()
-    $variants = if ($RingCache) { @('reference','cached') } else { @('Og','O2') }
+    $variants = if ($MotherCache) { @('mother-reference','mother-cached') } elseif ($RingCache) { @('reference','cached') } else { @('Og','O2') }
     foreach ($variant in $variants) {
         $exe = ".pio/host-tests/watch-optimization-$variant.exe"
         $pixels = ".pio/host-tests/watch-optimization-$variant.rgb565"
@@ -18,6 +19,8 @@ try {
         if ($variant -eq 'Og') { $arguments += '-DCHRONVS_TEST_WATCH_BASELINE' }
         if ($variant -eq 'reference') { $arguments += '-DCHRONVS_WATCH_RINGS_REFERENCE' }
         if ($RingCache) { $arguments += '-DCHRONVS_TEST_RING_CACHE' }
+        if ($MotherCache) { $arguments += '-DCHRONVS_TEST_MOTHER_CACHE' }
+        if ($variant -eq 'mother-cached') { $arguments += '-DCHRONVS_WATCH_MOTHER_CACHE' }
         ($arguments | ForEach-Object { '"' + $_.Replace('\','/') + '"' }) |
             Set-Content '.pio/host-tests/watch-optimization.rsp'
         & gcc '@.pio/host-tests/watch-optimization.rsp'
@@ -27,5 +30,6 @@ try {
         $hashes += (Get-FileHash $pixels).Hash
     }
     if ($hashes[0] -ne $hashes[1]) { throw 'Watch pixels differ between variants' }
-    Write-Output "60 watch scenarios match: $($hashes[1])"
+    $scenarioCount = if ($MotherCache) { 142 } else { 60 }
+    Write-Output "$scenarioCount watch scenarios match: $($hashes[1])"
 } finally { Pop-Location }

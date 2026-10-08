@@ -17,6 +17,9 @@
 #error "Regenerate the watch ring cache before changing its RGB565 format"
 #endif
 #include "apps/watch_ring_cache.h"
+#ifdef CHRONVS_WATCH_MOTHER_CACHE
+#include "apps/watch_mother_cache.h"
+#endif
 static lv_color_t *ring_cache_line;
 #endif
 
@@ -360,21 +363,61 @@ static void draw_minute_chapter(lv_draw_ctx_t *ctx) {
     }
 }
 
+static void draw_mother_face(lv_draw_ctx_t *ctx, float cx, float cy) {
+#if defined(CHRONVS_WATCH_MOTHER_CACHE) && !defined(CHRONVS_WATCH_RINGS_REFERENCE) && !defined(CHRONVS_WATCH_FLAT_BACKGROUND)
+    /* The border was rendered over the fixed case background. Date labels
+     * lie outside this disk. Only changed spans are opaque: rectangular
+     * corners would erase dates. Keep vector drawing for other compositions. */
+    if (ring_cache_line && cx == 205.5f && cy == 205.5f &&
+        ctx->draw_rect == lv_draw_sw_rect && !lv_draw_mask_is_any(ctx->clip_area)) {
+        const int first_y = LV_MAX(0, ctx->clip_area->y1);
+        const int last_y = LV_MIN(411, ctx->clip_area->y2);
+        for (int y = first_y; y <= last_y; ++y) {
+            unsigned run = watch_mother_offsets[y], limit = watch_mother_offsets[y+1];
+            if (run == limit) continue;
+            unsigned start = watch_mother_starts[y];
+            lv_area_t row = {start, y, watch_mother_runs[limit-1][0]-1, y};
+            lv_area_t intersection;
+            if (!_lv_area_intersect(&intersection, &row, ctx->clip_area) ||
+                covered_by_circle(&row, ctx->clip_area)) continue;
+            unsigned x = start;
+            for (; run < limit; ++run) {
+                lv_color_t color = {.full = watch_mother_runs[run][1]};
+                while (x < watch_mother_runs[run][0]) ring_cache_line[x++] = color;
+            }
+            lv_draw_sw_blend_dsc_t blend = {0};
+            blend.blend_area = &row;
+            blend.src_buf = &ring_cache_line[start];
+            blend.opa = LV_OPA_COVER;
+            lv_draw_sw_blend(ctx, &blend);
+        }
+        return;
+    }
+#endif
+    draw_circle(ctx, cx, cy, 154, COLOR_FACE, COLOR_TRACK, 1);
+}
+
 static void draw_mother_disk(lv_draw_ctx_t *ctx, float cx, float cy,
                              float minute_angle) {
-    draw_circle(ctx, cx, cy, 154, COLOR_FACE, COLOR_TRACK, 1);
+    CHRONVS_WATCH_DETAIL_BEGIN();
+    draw_mother_face(ctx, cx, cy);
+    CHRONVS_WATCH_DETAIL_MARK(MOTHER_FACE);
 
     /* The dominant minute hand runs from the center to the disk edge. */
     draw_hand(ctx, cx, cy, 0, 149, minute_angle, COLOR_INK, 8);
+    CHRONVS_WATCH_DETAIL_MARK(MOTHER_HAND);
     draw_circle(ctx, cx, cy, 4, COLOR_FACE_DARK, COLOR_INK_DIM, 1);
+    CHRONVS_WATCH_DETAIL_MARK(MOTHER_CENTER);
 }
 
 static void draw_hour_dial(lv_draw_ctx_t *ctx, float cx, float cy,
                            float hour_angle) {
     if (!dial_visible(ctx, cx, cy, 73)) return;
+    CHRONVS_WATCH_DETAIL_BEGIN();
     static const char *numbers[] = {"", "1", "", "3", "", "5",
                                     "", "7", "", "9", "", "11"};
     draw_circle(ctx, cx, cy, 75, COLOR_FACE, COLOR_TRACK, 2);
+    CHRONVS_WATCH_DETAIL_MARK(HOURS_FACE);
 
     for (int hour = 0; hour < 12; ++hour) {
         if (numbers[hour][0] != '\0') {
@@ -394,8 +437,10 @@ static void draw_hour_dial(lv_draw_ctx_t *ctx, float cx, float cy,
         }
     }
 
+    CHRONVS_WATCH_DETAIL_MARK(HOURS_SCALE);
 
     draw_hand(ctx, cx, cy, 0, 46, hour_angle, COLOR_INK, 8);
+    CHRONVS_WATCH_DETAIL_MARK(HOURS_HAND);
 }
 
 static void draw_weekday_dial(lv_draw_ctx_t *ctx, float cx, float cy,

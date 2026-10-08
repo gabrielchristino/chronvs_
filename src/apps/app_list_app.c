@@ -9,6 +9,16 @@
 #include "ui/control_style.h"
 #include "ui/app_input.h"
 #include "ui/system_ui.h"
+#include "platform/display_profile.h"
+#ifdef CHRONVS_LAUNCHER_ICON_CACHE
+#include "esp_heap_caps.h"
+#include <stdlib.h>
+#endif
+
+/* Keep the panel optimization isolated from drivers and other apps. */
+#if defined(__GNUC__) && defined(CHRONVS_PANEL_CODE_O2)
+#pragma GCC optimize ("O2")
+#endif
 
 #define COLOR_PANEL       0x26302B
 #define COLOR_PANEL_EDGE  0x748173
@@ -31,7 +41,53 @@ typedef struct {
     int translate_x;
     lv_opa_t opacity;
     bool curve_set;
+#ifdef CHRONVS_LAUNCHER_ICON_CACHE
+    lv_obj_t *vector_icon;
+    lv_obj_t *cached_icon;
+    lv_img_dsc_t cache;
+#endif
 } app_row_context_t;
+
+#ifdef CHRONVS_LAUNCHER_ICON_CACHE
+static void delete_icon_cache(lv_event_t *event) {
+    app_row_context_t *context = lv_event_get_user_data(event);
+    lv_img_cache_invalidate_src(&context->cache);
+    free((void *)context->cache.data);
+    context->cache.data = NULL;
+    context->cached_icon = NULL;
+}
+
+static void cache_icon(app_row_context_t *context, lv_obj_t *icon) {
+    const uint32_t size = lv_snapshot_buf_size_needed(icon, LV_IMG_CF_TRUE_COLOR);
+    if (size != 44U * 44U * sizeof(lv_color_t)) return;
+    lv_color_t *pixels = heap_caps_calloc(1, size, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (pixels == NULL) return;
+    const lv_color_t background = lv_color_hex(COLOR_PANEL_EDGE);
+    lv_obj_set_style_bg_color(icon, background, 0);
+    lv_obj_set_style_bg_opa(icon, LV_OPA_COVER, 0);
+    const lv_res_t result = lv_snapshot_take_to_buf(icon, LV_IMG_CF_TRUE_COLOR,
+                                                   &context->cache, pixels, size);
+    lv_obj_set_style_bg_opa(icon, LV_OPA_TRANSP, 0);
+    if (result != LV_RES_OK) { free(pixels); return; }
+    /* Precompose AA on the fixed badge color; leave untouched pixels clear. */
+    for (uint32_t i = 0; i < 44U * 44U; ++i) {
+        if (pixels[i].full == LV_COLOR_CHROMA_KEY.full) {
+            free(pixels); return; /* Never discard a real icon color. */
+        }
+    }
+    for (uint32_t i = 0; i < 44U * 44U; ++i)
+        if (pixels[i].full == background.full) pixels[i] = LV_COLOR_CHROMA_KEY;
+    context->cache.header.cf = LV_IMG_CF_TRUE_COLOR_CHROMA_KEYED;
+    context->cache.data_size = size;
+    context->vector_icon = icon;
+    context->cached_icon = lv_img_create(lv_obj_get_parent(icon));
+    lv_img_set_src(context->cached_icon, &context->cache);
+    lv_obj_center(context->cached_icon);
+    lv_obj_clear_flag(context->cached_icon, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(context->cached_icon, delete_icon_cache, LV_EVENT_DELETE, context);
+    lv_obj_add_flag(context->cached_icon, LV_OBJ_FLAG_HIDDEN);
+}
+#endif
 
 static app_row_context_t row_contexts[8];
 static lv_obj_t *rows[8];
@@ -57,6 +113,18 @@ static void update_curve(lv_timer_t *timer) {
         const lv_opa_t opacity = dy >= 178 ? LV_OPA_TRANSP :
             dy <= 130 ? LV_OPA_COVER : (178 - dy) * LV_OPA_COVER / 48;
         app_row_context_t *context = &row_contexts[i];
+#ifdef CHRONVS_LAUNCHER_ICON_CACHE
+        if (context->cached_icon != NULL && (!context->curve_set ||
+            (context->opacity == LV_OPA_COVER) != (opacity == LV_OPA_COVER))) {
+            if (opacity == LV_OPA_COVER) {
+                lv_obj_add_flag(context->vector_icon, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_clear_flag(context->cached_icon, LV_OBJ_FLAG_HIDDEN);
+            } else {
+                lv_obj_clear_flag(context->vector_icon, LV_OBJ_FLAG_HIDDEN);
+                lv_obj_add_flag(context->cached_icon, LV_OBJ_FLAG_HIDDEN);
+            }
+        }
+#endif
         if (!context->curve_set || context->translate_x != x)
             lv_obj_set_style_translate_x(rows[i], x, 0);
         if (!context->curve_set || context->opacity != opacity)
@@ -66,7 +134,11 @@ static void update_curve(lv_timer_t *timer) {
         if (!context->curve_set ||
             (context->opacity == LV_OPA_TRANSP) != (opacity == LV_OPA_TRANSP))
             lv_obj_set_style_opa_layered(lv_obj_get_child(rows[i], 1),
+#ifdef CHRONVS_PANEL_NO_CONTENT
+                LV_OPA_TRANSP, 0);
+#else
                 opacity == LV_OPA_TRANSP ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
+#endif
         context->translate_x = x;
         context->opacity = opacity;
         context->curve_set = true;
@@ -213,6 +285,13 @@ static lv_obj_t *create_app_list(lv_obj_t *parent) {
             lv_obj_set_style_text_color(fallback, lv_color_hex(COLOR_ACCENT), 0);
             lv_obj_center(fallback);
         }
+#if defined(CHRONVS_PANEL_NO_CONTENT) || defined(CHRONVS_PANEL_NO_ICONS)
+        /* Omit drawing only; keep geometry, callbacks and hit targets. */
+        lv_obj_set_style_opa_layered(icon, LV_OPA_TRANSP, 0);
+#endif
+#ifdef CHRONVS_LAUNCHER_ICON_CACHE
+        cache_icon(&row_contexts[visible_index], icon);
+#endif
 
         lv_obj_t *name = lv_label_create(row);
         lv_label_set_text(name, app->name != NULL ? app->name : app->id);
@@ -245,6 +324,7 @@ static lv_obj_t *create_app_list(lv_obj_t *parent) {
     lv_obj_scroll_to_y(list, row_count ? (row_count - 1) * ROW_HEIGHT / 2 : 0, LV_ANIM_OFF);
     curve_dirty = true;
     update_curve(NULL);
+    CHRONVS_PANEL_PROFILE_BIND(root, LAUNCHER);
     return root;
 }
 

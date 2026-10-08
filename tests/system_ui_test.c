@@ -93,6 +93,10 @@ static lv_obj_t *find_label_text(lv_obj_t *tree, const char *text) {
 
 void *heap_caps_calloc(size_t count, size_t size, unsigned caps) {
     assert(caps == (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+#ifdef CHRONVS_LAUNCHER_ICON_CACHE
+    if (size == 44U * 44U * sizeof(lv_color_t) &&
+        getenv("CHRONVS_TEST_ICON_CACHE_FAIL") != NULL) return NULL;
+#endif
     return calloc(count, size);
 }
 static unsigned lvgl_pool_allocations;
@@ -125,12 +129,14 @@ int nvs_set_u8(nvs_handle_t h, const char *k, uint8_t v) {
 
 static unsigned char pixels[412*412*3];
 static unsigned rect_draws;
+static uint64_t flushed_pixels;
 void __real_lv_draw_rect(lv_draw_ctx_t *, const lv_draw_rect_dsc_t *, const lv_area_t *);
 void __wrap_lv_draw_rect(lv_draw_ctx_t *ctx, const lv_draw_rect_dsc_t *dsc, const lv_area_t *area) {
     ++rect_draws;
     __real_lv_draw_rect(ctx,dsc,area);
 }
 static void flush(lv_disp_drv_t *driver, const lv_area_t *area, lv_color_t *colors) {
+    flushed_pixels += lv_area_get_size(area);
     for(int y=area->y1;y<=area->y2;++y) for(int x=area->x1;x<=area->x2;++x) {
         lv_color32_t c={.full=lv_color_to32(*colors++)};
         unsigned char *p=&pixels[3*((411-y)*412+x)];
@@ -318,6 +324,44 @@ int main(void) {
     assert(lv_obj_get_child_cnt(app_list) == 5);
     lv_obj_t *first_row = lv_obj_get_child(app_list, 0);
     lv_obj_t *middle_row = lv_obj_get_child(app_list, 1);
+#ifdef CHRONVS_LAUNCHER_ICON_CACHE
+    if (getenv("CHRONVS_TEST_ICON_CACHE_FAIL") == NULL) {
+        lv_obj_scroll_to_y(app_list, 0, LV_ANIM_OFF); elapse(70);
+        lv_obj_t *cached_badge = lv_obj_get_child(first_row, 0);
+        assert(lv_obj_get_child_cnt(cached_badge) == 2);
+        lv_obj_t *vector_icon = lv_obj_get_child(cached_badge, 0);
+        lv_obj_t *cached_image = lv_obj_get_child(cached_badge, 1);
+        assert(lv_obj_has_flag(vector_icon, LV_OBJ_FLAG_HIDDEN));
+        assert(!lv_obj_has_flag(cached_image, LV_OBJ_FLAG_HIDDEN));
+        lv_obj_scroll_to_y(app_list, 164, LV_ANIM_OFF); elapse(70);
+        assert(!lv_obj_has_flag(vector_icon, LV_OBJ_FLAG_HIDDEN));
+        assert(lv_obj_has_flag(cached_image, LV_OBJ_FLAG_HIDDEN));
+    } else {
+        assert(lv_obj_get_child_cnt(lv_obj_get_child(first_row, 0)) == 1);
+    }
+#endif
+#if defined(CHRONVS_PANEL_NO_CONTENT) || defined(CHRONVS_PANEL_NO_ICONS)
+    /* A centered row keeps its hit target; verify icon and text separately. */
+    lv_obj_scroll_to_y(app_list, 0, LV_ANIM_OFF); elapse(70);
+    lv_obj_t *omitted_icon = lv_obj_get_child(lv_obj_get_child(first_row, 0), 0);
+    lv_obj_t *omitted_name = lv_obj_get_child(first_row, 1);
+    assert(lv_obj_get_style_opa(first_row, 0) == LV_OPA_COVER);
+    lv_obj_add_event_cb(omitted_icon, count_transparent_label_draw, LV_EVENT_DRAW_MAIN_BEGIN, NULL);
+    transparent_label_draws = 0;
+    lv_obj_invalidate(app_list); lv_refr_now(NULL);
+    assert(transparent_label_draws == 0);
+    lv_obj_remove_event_cb(omitted_icon, count_transparent_label_draw);
+    lv_obj_add_event_cb(omitted_name, count_transparent_label_draw, LV_EVENT_DRAW_MAIN_BEGIN, NULL);
+    transparent_label_draws = 0;
+    lv_obj_invalidate(app_list); lv_refr_now(NULL);
+#ifdef CHRONVS_PANEL_NO_ICONS
+    assert(transparent_label_draws > 0);
+#else
+    assert(transparent_label_draws == 0);
+#endif
+    lv_obj_remove_event_cb(omitted_name, count_transparent_label_draw);
+    lv_obj_scroll_to_y(app_list, 164, LV_ANIM_OFF); elapse(70);
+#endif
     assert(lv_obj_get_style_translate_x(first_row, 0) >
            lv_obj_get_style_translate_x(middle_row, 0));
     lv_obj_scroll_to_y(app_list, 0, LV_ANIM_OFF); elapse(70);
@@ -444,6 +488,19 @@ int main(void) {
     assert(chronvs_app_open("Relogio"));
     assert(chronvs_app_open("Notas"));
     lv_mem_monitor(&memory); assert(memory.free_biggest_size > 16384);
+    /* Brightness owns arc contacts, including upward motion and leaving its contour. */
+    lv_obj_clear_flag(panel, LV_OBJ_FLAG_HIDDEN); lv_obj_set_y(panel, 0);
+    lv_obj_t *brightness = lv_obj_get_child(panel, 0);
+    assert(lv_obj_check_type(brightness, &lv_arc_class));
+    const int brightness_before = lv_arc_get_value(brightness);
+    touch(20,206,LV_INDEV_STATE_PR);
+    touch(40,130,LV_INDEV_STATE_PR);
+    assert(lv_arc_get_value(brightness) != brightness_before);
+    assert(lv_obj_get_y(panel)==0);
+    touch(80,75,LV_INDEV_STATE_PR);
+    touch(120,70,LV_INDEV_STATE_PR); /* Move into the panel interior before release. */
+    touch(120,70,LV_INDEV_STATE_REL); elapse(300);
+    assert(!lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN) && lv_obj_get_y(panel)==0);
     /* Closing from the volume button must not change its level on release. */
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_HIDDEN); lv_obj_set_y(panel, 0);
     touch(292,206,LV_INDEV_STATE_PR); touch(292,170,LV_INDEV_STATE_PR);
@@ -518,10 +575,67 @@ int main(void) {
         (unsigned)memory.free_size,(unsigned)memory.free_biggest_size);
     tap(206,307); chronvs_Relogio_alert_poll(); assert(!reminder_ringing && chronvs_reminder_get(0)->done);
     assert(weather_rtc_reads==0); /* Apps use the shared clock, never I2C. */
+#ifdef CHRONVS_PANEL_PROFILE
+    /* Test incremental final composition independently of a forced full redraw. */
+    assert(chronvs_app_open("watch"));
+    chronvs_system_ui_notify_activity(); elapse(300);
+    for (unsigned scenario=0;scenario<3;++scenario) {
+        touch(206,30,LV_INDEV_STATE_PR);
+        touch(206,scenario ? 180 : 80,LV_INDEV_STATE_PR);
+        uint64_t before_close = flushed_pixels;
+        touch(206,scenario ? 180 : 80,LV_INDEV_STATE_REL); elapse(300);
+        if (scenario) {
+            assert(!lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN));
+            before_close = flushed_pixels;
+            if (scenario==2) {
+                touch(20,206,LV_INDEV_STATE_PR);
+                touch(40,130,LV_INDEV_STATE_PR);
+                touch(80,75,LV_INDEV_STATE_PR);
+                touch(80,75,LV_INDEV_STATE_REL); elapse(300);
+                assert(!lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN) && lv_obj_get_y(panel)==0);
+            }
+            const int x = 120; /* Close outside the arc, also after brightness adjustment. */
+            const int y = 206;
+            touch(x,y,LV_INDEV_STATE_PR);
+            touch(x,y-60,LV_INDEV_STATE_PR);
+            touch(x,y-120,LV_INDEV_STATE_PR);
+            touch(x,y-120,LV_INDEV_STATE_REL); elapse(300);
+        }
+        assert(lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN));
+        printf("Panel close scenario %u: %llu flushed pixels.\n",scenario,
+               (unsigned long long)(flushed_pixels-before_close));
+        unsigned char *incremental = malloc(sizeof(pixels)); assert(incremental);
+        memcpy(incremental,pixels,sizeof(pixels));
+        lv_obj_invalidate(lv_scr_act()); lv_refr_now(NULL);
+        assert(!memcmp(incremental,pixels,sizeof(pixels)));
+        free(incremental);
+    }
+    assert(panels[CHRONVS_PANEL_QUICK].slices > 0);
+    assert(panels[CHRONVS_PANEL_LAUNCHER].slices > 0);
+#endif
     assert(watch_frames > 0 && watch_slices > watch_frames);
     chronvs_display_profile_poll(true);
     assert(frames==0 && touch_reads==0 && pending_input_us==0);
     assert(watch_frames==0 && watch_slices==0);
+#ifdef CHRONVS_PANEL_PROFILE
+    for(unsigned i=0;i<CHRONVS_PANEL_COUNT;++i)
+        assert(!panels[i].frames && !panels[i].slices && !panels[i].draw_us);
+    /* Controlled clock: nested root/content time and parent-only POST events. */
+    lv_obj_t *probe=lv_obj_create(lv_layer_top());
+    chronvs_display_profile_bind_panel(probe,CHRONVS_PANEL_QUICK);
+    lv_area_t probe_clip={10,20,29,39};
+    lv_draw_ctx_t probe_ctx={.clip_area=&probe_clip};
+    lv_event_send(probe,LV_EVENT_DRAW_POST_END,&probe_ctx);
+    lv_event_send(probe,LV_EVENT_DRAW_MAIN_BEGIN,&probe_ctx);
+    now_us+=100; lv_event_send(probe,LV_EVENT_DRAW_MAIN_END,&probe_ctx);
+    now_us+=250; lv_event_send(probe,LV_EVENT_DRAW_POST_END,&probe_ctx);
+    profile_monitor(NULL,1,400);
+    assert(panels[0].frames==1 && panels[0].slices==1 && panels[0].clip_pixels==400);
+    assert(panels[0].root_us==100 && panels[0].draw_us==350 && panels[0].post_only==1);
+    chronvs_display_profile_poll(true);
+    assert(!panels[0].started && !panels[0].frames && !panels[0].post_only);
+    lv_obj_del(probe);
+#endif
     int64_t profile_test_start = chronvs_display_profile_watch_begin();
     now_us += 100;
     profile_test_start = chronvs_display_profile_watch_mark(CHRONVS_WATCH_SETUP, profile_test_start);
@@ -560,5 +674,17 @@ int main(void) {
     assert(render_started_us == 0 && render_finished_us == 0 && latest_motion_us == 0);
     assert(render_max_us == 0 && render_idle_max_us == 0 && motion_frames == 0 && motion_reads == 0);
     assert(motion_age_max_us == 0 && !render_had_motion);
+#ifdef CHRONVS_LAUNCHER_ICON_CACHE
+    for (unsigned i = 0; i < lv_obj_get_child_cnt(app_list); ++i) {
+        lv_obj_t *badge = lv_obj_get_child(lv_obj_get_child(app_list, i), 0);
+        if (lv_obj_get_child_cnt(badge) == 2) {
+            lv_obj_t *image = lv_obj_get_child(badge, 1);
+            const lv_img_dsc_t *descriptor = lv_img_get_src(image);
+            assert(descriptor->data != NULL);
+            lv_obj_del(image);
+            assert(descriptor->data == NULL);
+        }
+    }
+#endif
     return 0;
 }

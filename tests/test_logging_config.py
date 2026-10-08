@@ -16,6 +16,29 @@ class Environment(dict):
 
 
 class LoggingPolicyTest(unittest.TestCase):
+    def test_release_debug_round_trip_selects_optimization_and_silent_checks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "sdkconfig.test"
+            hardware = "CONFIG_SPIRAM_MODE_OCT=y\nCONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768\n"
+            config.write_text(hardware, encoding="utf-8")
+            env = Environment(PROJECT_DIR=directory)
+            for mode in ("release", "debug", "release"):
+                env["build_type"] = mode
+                runpy.run_path(str(SCRIPT), init_globals={"env": env, "Import": lambda _: None})
+                result = config.read_text(encoding="utf-8")
+                self.assertTrue(result.startswith(hardware))
+                release = mode == "release"
+                self.assertIn("CONFIG_COMPILER_OPTIMIZATION_" +
+                              ("PERF" if release else "DEBUG") + "=y\n", result)
+                self.assertIn("CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_" +
+                              ("SILENT" if release else "ENABLE") + "=y\n", result)
+                self.assertIn("CONFIG_ESP_SYSTEM_PANIC_" +
+                              ("SILENT_REBOOT" if release else "PRINT_REBOOT") + "=y\n", result)
+                self.assertIn("CONFIG_BOOT_ROM_LOG_" +
+                              ("ALWAYS_OFF" if release else "ALWAYS_ON") + "=y\n", result)
+                self.assertIn(("# CONFIG_ESP_DEBUG_OCDAWARE is not set\n" if release else
+                               "CONFIG_ESP_DEBUG_OCDAWARE=y\n"), result)
+
     def test_diagnostic_inherits_reference_without_modifying_it(self):
         with tempfile.TemporaryDirectory() as directory:
             reference = Path(directory) / "sdkconfig.reference"

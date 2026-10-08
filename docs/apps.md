@@ -148,6 +148,20 @@ global o ativa a cada segundo somente durante pressão prolongada de 600 ms,
 pausando ao soltar, cancelar por movimento ou apagar a tela. O serviço de
 tempo e os prazos de alarmes continuam independentes da imagem estática.
 
+Os centros dos três submostradores usam deslocamentos constantes relativos
+ao centro do objeto, preservando a composição anterior dos minutos em zero.
+Não há cálculo de órbitas por faixa de desenho. Os ângulos dos ponteiros
+continuam usando a mesma amostra de hora; o ponteiro de minutos é desenhado
+antes das faces fixas. Isso remove a trigonometria de posicionamento, sem
+adicionar cache, alocação ou tarefa. O ganho de fluidez ainda não foi medido
+no painel; o restante do desenho vetorial e das transferências é preservado.
+
+O submostrador de segundos e seu cálculo de ângulo foram removidos. A escala
+de minutos armazena somente 12 posições de números, sem geometria ou desenho
+dos 48 traços intermediários. Os segundos da amostra de hora continuam
+refinando os ângulos dos ponteiros de minutos e horas. A política de
+atualização da imagem e os serviços de tempo permanecem os mesmos.
+
 O mostrador retém uma linha de 824 bytes no pool LVGL em PSRAM para reproduzir
 os dois anéis externos a partir de dados RLE constantes na flash. Não aloca
 por quadro e mantém o caminho vetorial se a linha não estiver disponível,

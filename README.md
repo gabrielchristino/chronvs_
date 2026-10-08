@@ -2,7 +2,7 @@
 
 Bring-up em PlatformIO/ESP-IDF para a **Waveshare ESP32-S3-Touch-LCD-1.46**. A placa é uma ESP32-S3R8 com 16 MB de Flash e 8 MB de PSRAM OPI; portanto não é compatível com a definição genérica `esp32-s3-devkitc-1` N8.
 
-O firmware inicializa o barramento I2C, o expansor de GPIO, a tela redonda SPD2010 por QSPI e o touch. Em seguida, apresenta um mostrador orbital inspirado no Ressence Type 3. O PCF85063 fornece a hora de referência. A imagem atualiza ao acordar ou voltar ao mostrador; pressionar e segurar permite acompanhar as órbitas a cada segundo.
+O firmware inicializa o barramento I2C, o expansor de GPIO, a tela redonda SPD2010 por QSPI e o touch. Em seguida, apresenta um mostrador inspirado no Ressence Type 3, com submostradores fixos. O PCF85063 fornece a hora de referência. A imagem atualiza ao acordar ou voltar ao mostrador; pressionar e segurar permite acompanhar os ponteiros a cada segundo.
 
 O código é organizado como um runtime de aplicativos: o núcleo registra e troca
 apps, serviços isolam RTC e bateria, a camada de plataforma inicializa a placa e
@@ -34,7 +34,7 @@ registram o diagnóstico das listras e distinguem o heap de objetos dos buffers 
 - Configuração correta: ESP32-S3R8, 16 MB Flash e 8 MB OPI PSRAM.
 - I2C detectado: TCA9554 (`0x20`), PCF85063 RTC (`0x51`), touch SPD2010 (`0x53`) e QMI8658 (`0x6B`).
 - A tela recebe comandos QSPI e exibe o mostrador de relógio.
-- Interface vetorial LVGL validada no painel circular de 412 × 412 pixels, incluindo animação contínua, submostradores orbitais e contra-rotação da tipografia.
+- Interface vetorial LVGL validada no painel circular de 412 × 412 pixels na composição orbital anterior. A composição com submostradores fixos ainda requer validação visual no dispositivo.
 - Sincronização NTP validada em hardware: conexão WPA2, horário local UTC−3 gravado no PCF85063 e rádio Wi-Fi desligado em seguida.
 - Partição de aplicação ampliada de 1 MiB para 4 MiB.
 - O target padrão `pio run -t upload` grava as três imagens no mapa correto e reinicia a placa automaticamente; o conteúdo gravado foi confirmado por checksum.
@@ -94,18 +94,17 @@ pio device monitor -p COM3 -b 115200
 
 Se a COM3 desaparecer, desconecte e reconecte o USB. Para entrar no bootloader, mantenha **BOOT** pressionado enquanto conecta o cabo ou pressione **BOOT** e depois **RESET**. Confirme a nova porta em Gerenciador de Dispositivos e substitua `COM3` no comando.
 
-## Mostrador orbital
+## Mostrador com submostradores fixos
 
-O mostrador usa o LVGL 8.3.11 distribuído pela própria Waveshare e é renderizado por primitivas vetoriais em um único objeto de 412 × 412 pixels. Essa abordagem evita um framebuffer permanente e atualiza o desenho uma vez por segundo usando os buffers parciais da porta oficial.
+O mostrador usa o LVGL 8.3.11 distribuído pela própria Waveshare, com primitivas vetoriais e cache RLE dos anéis externos em um único objeto de 412 × 412 pixels. Usa os buffers parciais da porta oficial, sem framebuffer permanente. Atualiza ao acordar ou voltar; durante pressão prolongada, atualiza uma vez por segundo.
 
 A composição segue estas relações:
 
 - O aro externo de data gira independentemente para alinhar o dia atual ao triângulo fixo em 6 horas.
-- A escala `5, 15, 25, 35, 45, 55` permanece fixa no chassi.
-- O disco-mãe e seu ponteiro longo completam uma volta por hora e indicam os minutos.
-- O centro do mostrador de horas fica sempre a 180° do ponteiro de minutos.
-- Dia da semana, temperatura ambiente e runner de segundos ocupam posições fixas no referencial do disco-mãe e orbitam junto com ele.
-- As faces dos submostradores são desenhadas no referencial global. Isso equivale à contra-rotação de `-ângulo_minutos` e mantém textos e escalas sempre verticais.
+- A escala de minutos permanece fixa, com números de 5 em 5 e sem traços intermediários; a posição de 30 minutos é reservada ao triângulo de data.
+- O disco principal permanece fixo; seu ponteiro longo completa uma volta por hora e indica os minutos, passando atrás dos submostradores.
+- Horas, dia da semana e temperatura ambiente mantêm posições fixas na composição dos minutos em zero; somente seus ponteiros mudam de ângulo. O submostrador de segundos foi removido.
+- A geometria e a interação estão descritas em [`docs/interface.md`](docs/interface.md#mostrador-com-submostradores-fixos).
 - O mostrador semanal destaca o dia atual em vermelho e apresenta `AM` ou `PM`.
 - A temperatura ambiente usa uma escala provisória de −20 a 60 °C e pode ser atualizada por `chronvs_set_ambient_temperature()`.
 - Se o RTC não responder ou contiver valores inválidos, uma hora de demonstração mantém a interface animada e testável.
@@ -174,7 +173,7 @@ O procedimento de comparação de fluidez e os builds opcionais de diagnóstico
 estão em [`docs/performance.md`](docs/performance.md).
 
 - O driver Arduino-ESP32 distribuído com esta versão do PlatformIO não expõe o modo QSPI de quatro linhas necessário ao SPD2010. Por isso o projeto usa ESP-IDF e o driver oficial, que define `quad_mode = 1`.
-- O build padrão compila somente o LVGL com `-O2`, após validação de fluidez e funcionamento no relógio. Aplicação e drivers mantêm o modo debug, com `-Og` efetivo apesar do `-O0` declarado no INI. O histórico e os diagnósticos estão em [`docs/performance.md`](docs/performance.md).
+- O build padrão usa `release` e `-O2` na aplicação, drivers compilados e ESP-IDF, sem logs, console ou profiling. A ampliação de `-O2` para todo o firmware ainda requer validação funcional no relógio. O histórico e os diagnósticos estão em [`docs/performance.md`](docs/performance.md).
 - `CONFIG_SPIRAM_USE_MALLOC=y` mantém a política de PSRAM validada no relógio; buffers e pool LVGL continuam solicitando PSRAM explicitamente. Os defaults preservam 32 KiB de reserva interna e o limiar de 16 KiB do alocador.
 - A partição e o Flash são explicitamente configurados para 16 MB; a mensagem de “Expected 16MB, found 2MB” deixa de ocorrer com `sdkconfig.defaults` aplicado.
 - A fonte de referência da Waveshare está em `.vendor-reference/`, ignorada pelo Git. Não a remova enquanto quiser compilar localmente.

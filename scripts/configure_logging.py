@@ -3,7 +3,7 @@ from pathlib import Path
 import re
 
 # sdkconfig.defaults does not override an existing menuconfig. Apply only the
-# logging/console policy, preserving the local hardware and memory choices.
+# firmware policy, preserving the local hardware and memory choices.
 diagnostics = env.GetProjectOption("custom_serial_diagnostics", "no")
 if diagnostics not in ("yes", "no"):
     raise RuntimeError("custom_serial_diagnostics must be yes or no")
@@ -29,6 +29,24 @@ if source.exists():
     settings["ESP_CONSOLE_SECONDARY_NONE"] = None if enabled else "y"
     settings["ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG"] = "y" if enabled else None
 
+    # Select IDF's own optimization too: build_flags alone do not replace
+    # the -Og selected by an existing sdkconfig for framework components.
+    release = env.GetProjectOption("build_type", "release") == "release"
+    for choice in ("DEBUG", "SIZE", "PERF", "NONE"):
+        settings["COMPILER_OPTIMIZATION_" + choice] = (
+            "y" if choice == ("PERF" if release else "DEBUG") else None)
+    for choice in ("ENABLE", "DISABLE", "SILENT"):
+        settings["COMPILER_OPTIMIZATION_ASSERTIONS_" + choice] = (
+            "y" if choice == ("SILENT" if release else "ENABLE") else None)
+    settings["ESP_DEBUG_OCDAWARE"] = None if release else "y"
+    settings["FREERTOS_DEBUG_OCDAWARE"] = None if release else "y"
+    for choice in ("PRINT_REBOOT", "PRINT_HALT", "GDBSTUB", "SILENT_REBOOT"):
+        settings["ESP_SYSTEM_PANIC_" + choice] = (
+            "y" if choice == ("SILENT_REBOOT" if release else "PRINT_REBOOT") else None)
+    for choice in ("ALWAYS_ON", "ALWAYS_OFF", "ON_GPIO_HIGH", "ON_GPIO_LOW"):
+        settings["BOOT_ROM_LOG_" + choice] = (
+            "y" if choice == ("ALWAYS_OFF" if release else "ALWAYS_ON") else None)
+
     original = config.read_text(encoding="utf-8") if config.exists() else ""
     source_text = source.read_text(encoding="utf-8")
     lines = []
@@ -43,8 +61,9 @@ if source.exists():
                          "# CONFIG_" + key + " is not set")
         else:
             lines.append(line)
-    lines.extend("CONFIG_" + key + "=" + value for key, value in settings.items()
-                 if key not in seen and value is not None)
+    lines.extend("CONFIG_" + key + "=" + value if value is not None else
+                 "# CONFIG_" + key + " is not set"
+                 for key, value in settings.items() if key not in seen)
     updated = "\n".join(lines) + "\n"
     if updated != original:
         config.write_text(updated, encoding="utf-8")

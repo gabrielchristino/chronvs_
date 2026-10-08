@@ -68,6 +68,32 @@ Os movimentos visuais são limitados a uma atualização a cada 20 ms. Isso evit
 invalidar a árvore LVGL em cada amostra do touch e mantém o painel próximo ao
 dedo sem formar uma fila de quadros antigos.
 
+## Mostrador com submostradores fixos
+
+Os três submostradores mantêm a composição anterior dos minutos em zero,
+agora sem orbitar: horas abaixo do centro, dia da semana acima à esquerda,
+temperatura acima à direita. O submostrador de segundos foi removido por inteiro.
+Tamanhos, escalas,
+cores e orientação dos textos são preservados; somente os ponteiros dos
+instrumentos mudam de ângulo nas atualizações da imagem. Horas, dia da semana
+e temperatura não têm mais o círculo de contorno interno: cada instrumento
+mantém sua borda externa, escala e ponteiro.
+
+A escala de minutos mantém somente os números de 5 em 5, sem os 48 traços
+intermediários. O zero permanece no topo e a posição de 30 minutos continua
+reservada ao triângulo de data. Os segundos ainda participam do cálculo dos
+ângulos de minutos e horas, preservando a precisão dos ponteiros.
+
+O ponteiro de minutos mantém comprimento de 149 px e espessura de 8 px.
+É desenhado antes dos submostradores, passando atrás deles; sua ponta permanece
+visível junto à borda do disco principal. O aro externo de data continua
+alinhando o dia atual ao triângulo fixo em 6 horas, independentemente dos
+ponteiros. Gestos, atualização por pressão prolongada e política de energia
+mantêm o comportamento descrito neste documento. A composição fixa foi
+confirmada funcionando no dispositivo pelo usuário. A retirada dos contornos
+internos ainda requer avaliação visual no relógio; o ganho de fluidez não foi
+medido.
+
 ## Padrão dos controles
 
 Nas novas implementações, priorize gestos para navegação: subir avança na
@@ -217,7 +243,7 @@ apagada. O loop LVGL continua normal após cada despertar. O timeout máximo é
 prazo desse evento. Os binários das etapas testadas estão preservados em
 `.pio/diagnostics/`. Sessões Wi-Fi impedem o sono até que o rádio seja
 desligado. O primeiro toque apenas acorda o relógio; não aciona controles.
-O mostrador mantém uma imagem estática da hora, incluindo todas as órbitas.
+O mostrador mantém uma imagem estática da hora, incluindo os ponteiros.
 Atualiza ao receber a primeira hora válida no boot, ao acordar e ao voltar
 dos apps. Sem interação, não avança a cada segundo, inclusive em ON.
 Pressionar por 600 ms atualiza imediatamente e depois uma vez por segundo

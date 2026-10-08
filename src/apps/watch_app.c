@@ -65,7 +65,7 @@ static struct {
     uint8_t day;
     float cx, cy;
     lv_point_t dates[31];
-    lv_point_t minutes[60][2];
+    lv_point_t minutes[12];
 } chapter;
 
 static const char date_text[31][3] = {
@@ -184,14 +184,8 @@ static lv_point_t polar_point(float cx, float cy, float radius, float angle_deg)
 static void update_chapter_geometry(float cx, float cy, uint8_t day) {
     const bool moved = !chapter.valid || chapter.cx != cx || chapter.cy != cy;
     if (moved) {
-        for (int minute = 0; minute < 60; ++minute) {
-            const float angle = minute * 6.0f;
-            if (minute % 5 == 0) {
-                chapter.minutes[minute][0] = polar_point(cx, cy, 168, angle);
-            } else {
-                chapter.minutes[minute][0] = polar_point(cx, cy, 160, angle);
-                chapter.minutes[minute][1] = polar_point(cx, cy, 172, angle);
-            }
+        for (int marker = 0; marker < 12; ++marker) {
+            chapter.minutes[marker] = polar_point(cx, cy, 168, marker * 30.0f);
         }
     }
     if (moved || chapter.day != day) {
@@ -208,26 +202,6 @@ static void update_chapter_geometry(float cx, float cy, uint8_t day) {
     chapter.valid = true;
 }
 #endif
-
-static point_f_t rotate_offset(point_f_t p, float angle_deg) {
-    const float angle = radians(angle_deg);
-    const float cosine = cosf(angle);
-    const float sine = sinf(angle);
-    point_f_t result = {
-        .x = p.x * cosine - p.y * sine,
-        .y = p.x * sine + p.y * cosine,
-    };
-    return result;
-}
-
-static point_f_t polar_offset(float radius, float angle_deg) {
-    const float angle = radians(angle_deg);
-    point_f_t result = {
-        .x = sinf(angle) * radius,
-        .y = -cosf(angle) * radius,
-    };
-    return result;
-}
 
 static void draw_circle(lv_draw_ctx_t *ctx, float cx, float cy, float radius,
                         uint32_t fill, uint32_t border, int border_width) {
@@ -377,18 +351,12 @@ static void draw_case_dates(lv_draw_ctx_t *ctx) {
 /* Drawn after the mother disk so its type can never be erased by that disk. */
 static void draw_minute_chapter(lv_draw_ctx_t *ctx) {
 
-    for (int minute = 0; minute < 60; ++minute) {
+    for (int marker = 0; marker < 12; ++marker) {
         /* The 30-minute position is reserved for the fixed marker. */
-        if (minute == 30) continue;
-
-        if (minute % 5 == 0) {
-            lv_point_t p = chapter.minutes[minute][0];
-            draw_text(ctx, p.x, p.y, minute_text[minute / 5], &lv_font_montserrat_18,
-                      COLOR_INK, 34);
-        } else {
-            draw_line(ctx, chapter.minutes[minute][0], chapter.minutes[minute][1],
-                      COLOR_INK, 2, true);
-        }
+        if (marker == 6) continue;
+        lv_point_t p = chapter.minutes[marker];
+        draw_text(ctx, p.x, p.y, minute_text[marker], &lv_font_montserrat_18,
+                  COLOR_INK, 34);
     }
 }
 
@@ -426,7 +394,6 @@ static void draw_hour_dial(lv_draw_ctx_t *ctx, float cx, float cy,
         }
     }
 
-    draw_circle(ctx, cx, cy, 55, COLOR_FACE, COLOR_TRACK, 2);
 
     draw_hand(ctx, cx, cy, 0, 46, hour_angle, COLOR_INK, 8);
 }
@@ -436,7 +403,6 @@ static void draw_weekday_dial(lv_draw_ctx_t *ctx, float cx, float cy,
                               uint8_t hour) {
     if (!dial_visible(ctx, cx, cy, 48)) return;
     draw_circle(ctx, cx, cy, 48, COLOR_FACE, COLOR_TRACK, 2);
-    draw_circle(ctx, cx, cy, 33, COLOR_FACE, COLOR_TRACK, 2);
 
     for (int day = 0; day < 7; ++day) {
         const float center_angle = day * (360.0f / 7.0f);
@@ -448,24 +414,10 @@ static void draw_weekday_dial(lv_draw_ctx_t *ctx, float cx, float cy,
     draw_hand(ctx, cx, cy, 0, 28, weekday_angle, COLOR_INK, 4);
 }
 
-static void draw_seconds_dial(lv_draw_ctx_t *ctx, float cx, float cy,
-                              float second_angle) {
-    if (!dial_visible(ctx, cx, cy, 18)) return;
-    draw_circle(ctx, cx, cy, 18, COLOR_FACE, COLOR_TRACK, 2);
-    for (int marker = 0; marker < 12; ++marker) {
-        draw_radial_line(ctx, cx, cy, 20, 23, marker * 30.0f,
-                         marker == 6 ? COLOR_RED : COLOR_TRACK, 2);
-    }
-    draw_hand(ctx, cx, cy, 0, 15, second_angle, COLOR_INK, 3);
-    lv_point_t tip = polar_point(cx, cy, 10, second_angle - 180);
-    draw_circle(ctx, tip.x, tip.y, 1, COLOR_RED, COLOR_RED, 0);
-}
-
 static void draw_temperature_dial(lv_draw_ctx_t *ctx, float cx, float cy,
                                   float temperature_c) {
     if (!dial_visible(ctx, cx, cy, 48)) return;
     draw_circle(ctx, cx, cy, 48, COLOR_FACE, COLOR_TRACK, 2);
-    draw_circle(ctx, cx, cy, 33, COLOR_FACE, COLOR_TRACK, 2);
 
     for (int day = 0; day < 5; ++day) {
         const float center_angle = day * (360.0f / 5.0f);
@@ -542,7 +494,6 @@ static void clock_draw_event(lv_event_t *event) {
 
     const float minute_angle = fmodf(minutes * 6.0f, 360.0f);
     const float hour_angle = fmodf(hours * 30.0f, 360.0f);
-    const float second_angle = fmodf(seconds * 6.0f, 360.0f);
     const float weekday_angle = displayed_time.weekday * (360.0f / 7.0f) +
                                 hours * (360.0f / (7.0f * 24.0f));
 
@@ -556,37 +507,22 @@ static void clock_draw_event(lv_event_t *event) {
     draw_minute_chapter(ctx);
     CHRONVS_WATCH_PROFILE_MARK(MINUTES);
 
-    /*
-     * Local mother-disk coordinates are rotated for orbital translation.
-     * Faces remain upright globally: visually this is the exact -minute_angle
-     * counter-rotation that keeps their typography gyroscopically aligned.
-     */
-    /*
-     * Layout in the mother disk's reference frame:
-     * hours are exactly opposite the minute hand; the remaining instruments
-     * reproduce the top / lower-right / bottom composition of the reference.
-     */
-    const point_f_t hour_local = polar_offset(66.0f, 180.0f);
-    const point_f_t weekday_local = polar_offset(95.0f, 290.0f);
-    const point_f_t temperature_local = polar_offset(95.0f, 70.0f);
-    const point_f_t seconds_local = polar_offset(120.0f, 113.0f);
-
-    const point_f_t hour_orbit = rotate_offset(hour_local, minute_angle);
-    const point_f_t weekday_orbit = rotate_offset(weekday_local, minute_angle);
-    const point_f_t seconds_orbit = rotate_offset(seconds_local, minute_angle);
-    const point_f_t temperature_orbit = rotate_offset(temperature_local, minute_angle);
+    /* Fixed offsets preserve the former zero-minute composition without
+     * orbital trigonometry. Only instrument hands move. The long minute hand
+     * is drawn first so it passes behind these faces, leaving its tip visible. */
+    static const point_f_t hour_offset = {0.0f, 66.0f};
+    static const point_f_t weekday_offset = {-89.27080f, -32.49191f};
+    static const point_f_t temperature_offset = {89.27080f, -32.49191f};
     CHRONVS_WATCH_PROFILE_MARK(GEOMETRY);
 
-    draw_hour_dial(ctx, cx + hour_orbit.x, cy + hour_orbit.y, hour_angle);
+    draw_hour_dial(ctx, cx + hour_offset.x, cy + hour_offset.y, hour_angle);
     CHRONVS_WATCH_PROFILE_MARK(HOURS);
-    draw_weekday_dial(ctx, cx + weekday_orbit.x, cy + weekday_orbit.y,
+    draw_weekday_dial(ctx, cx + weekday_offset.x, cy + weekday_offset.y,
                       weekday_angle, displayed_time.weekday, displayed_time.hour);
     CHRONVS_WATCH_PROFILE_MARK(WEEKDAY);
-    draw_temperature_dial(ctx, cx + temperature_orbit.x, cy + temperature_orbit.y,
+    draw_temperature_dial(ctx, cx + temperature_offset.x, cy + temperature_offset.y,
                           ambient_temperature_c);
     CHRONVS_WATCH_PROFILE_MARK(TEMPERATURE);
-    draw_seconds_dial(ctx, cx + seconds_orbit.x, cy + seconds_orbit.y, second_angle);
-    CHRONVS_WATCH_PROFILE_MARK(SECONDS);
     draw_date_marker(ctx, cx, cy);
     CHRONVS_WATCH_PROFILE_MARK(MARKER);
     ctx->clip_area = original_clip;

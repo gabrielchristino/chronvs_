@@ -43,10 +43,12 @@ static void log_memory(const char *phase) {
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
 }
 
+#if CONFIG_LOG_DEFAULT_LEVEL > 0
 static esp_err_t http_event(esp_http_client_event_t *event) {
     if (event->event_id == HTTP_EVENT_ON_CONNECTED) log_memory("TLS connected");
     return ESP_OK;
 }
+#endif
 
 static void load_cache(void) {
     nvs_handle_t storage;
@@ -146,7 +148,9 @@ static const char *fetch(chronvs_weather_snapshot_t *snapshot) {
         error = "Sem Wi-Fi";
         esp_http_client_config_t config = {
             .url = URL, .crt_bundle_attach = esp_crt_bundle_attach,
+#if CONFIG_LOG_DEFAULT_LEVEL > 0
             .event_handler = http_event,
+#endif
             .timeout_ms = timeout, .disable_auto_redirect = true,
             .buffer_size = 1024, .buffer_size_tx = 1024,
         };

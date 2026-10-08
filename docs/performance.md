@@ -1,5 +1,37 @@
 # Diagnóstico de fluidez
 
+## Firmware padrão release (08/10/2026)
+
+Por pedido do usuário, o padrão passa de `debug` para `release`, com `-O2`
+na aplicação e nos drivers compilados, além de `CONFIG_COMPILER_OPTIMIZATION_PERF`
+para os componentes ESP-IDF. LVGL e watchface já usavam `-O2`; anteriormente
+o restante usava principalmente `-Og`. As bibliotecas binárias do fabricante
+mantêm a otimização com que foram distribuídas. Não foi habilitado fast-math.
+
+Logs da aplicação e bootloader, consoles e profiling ficam desativados.
+Também foram desligados os logs da ROM de boot e a integração de depuração
+OCD do sistema/FreeRTOS. As verificações de runtime permanecem com assertions
+silenciosas; uma falha fatal reinicia sem imprimir diagnóstico. Símbolos no
+ELF do computador não são execução de debug nem são gravados como código de
+diagnóstico no firmware. Os ambientes `display_profile*` mantêm modo debug
+e instrumentação exclusivamente quando selecionados explicitamente.
+
+`scripts/configure_logging.py` aplica essa política mesmo com sdkconfig
+existente, preservando as escolhas de hardware e memória. Buffers 1/20,
+PSRAM/TLSF, período de 20 ms, QSPI de 2 KiB e espera síncrona permanecem.
+O firmware anterior foi preservado em `.pio/diagnostics/before-release-o2/`.
+A redução do mostrador foi percebida como mais fluida pelo usuário; o ganho
+adicional do release e a regressão funcional ainda requerem teste físico,
+incluindo menus, AUTO/ECO, despertar, alarmes, Clima e Vox.
+
+Validação local: build release aprovado e três testes de política de
+configuração aprovados, incluindo alternância release/debug e preservação de
+memória/hardware. As flags geradas para a aplicação e QSPI são `-O2`, sem
+macro de profiling. A auditoria do ELF não encontrou instrumentação Chronvs,
+scanner I2C de diagnóstico ou callback de log do Clima. O firmware ficou com
+1.586.122 bytes de programa e 52.056 bytes estáticos, contra 1.687.676 e
+54.628 no build anterior. Esses números não medem RAM interna livre/DMA em uso.
+
 O ambiente padrão compila o LVGL com `-O2` e não instala callbacks de diagnóstico.
 O desenho orbital em `apps/watch_app.c` também usa `-O2`, por uma diretiva GCC
 local após os includes. Isso evita que o modo debug do PlatformIO o rebaixe

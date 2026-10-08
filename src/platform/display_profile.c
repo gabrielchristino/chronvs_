@@ -28,6 +28,53 @@ static uint64_t watch_us[CHRONVS_WATCH_SECTION_COUNT];
 static uint32_t watch_frames, watch_slices;
 static bool watch_in_refresh;
 
+#ifdef CHRONVS_PANEL_PROFILE
+/* One root per panel, bound once at creation. No allocations per draw. */
+typedef struct {
+    int64_t started_us;
+    uint64_t draw_us, root_us, clip_pixels;
+    uint32_t frames, slices, post_only;
+    bool started, in_refresh;
+} panel_profile_t;
+static panel_profile_t panels[CHRONVS_PANEL_COUNT];
+
+static void panel_draw_event(lv_event_t *event) {
+    if (lv_event_get_target(event) != lv_event_get_current_target(event)) return;
+    panel_profile_t *p = lv_event_get_user_data(event);
+    const lv_event_code_t code = lv_event_get_code(event);
+    if (code == LV_EVENT_DRAW_MAIN_BEGIN) {
+        p->started_us = esp_timer_get_time();
+        p->started = true;
+        const lv_draw_ctx_t *ctx = lv_event_get_draw_ctx(event);
+        p->clip_pixels += (uint64_t)lv_area_get_size(ctx->clip_area);
+        ++p->slices;
+    } else if (code == LV_EVENT_DRAW_MAIN_END && p->started) {
+        p->root_us += (uint64_t)(esp_timer_get_time() - p->started_us);
+    } else if (code == LV_EVENT_DRAW_POST_END) {
+        if (p->started) {
+            p->draw_us += (uint64_t)(esp_timer_get_time() - p->started_us);
+            p->started = false;
+            p->in_refresh = true;
+        } else {
+            /* LVGL can start at a covering child and only post-draw its parents. */
+            ++p->post_only;
+        }
+    }
+}
+
+void chronvs_display_profile_bind_panel(lv_obj_t *root, chronvs_panel_t panel) {
+    if (!root || (unsigned)panel >= CHRONVS_PANEL_COUNT) return;
+    lv_obj_add_event_cb(root, panel_draw_event, LV_EVENT_DRAW_MAIN_BEGIN, &panels[panel]);
+    lv_obj_add_event_cb(root, panel_draw_event, LV_EVENT_DRAW_MAIN_END, &panels[panel]);
+    lv_obj_add_event_cb(root, panel_draw_event, LV_EVENT_DRAW_POST_END, &panels[panel]);
+}
+#endif
+
+/* Nested timers must not increment watch_slices or watch_frames. */
+int64_t chronvs_display_profile_watch_detail_begin(void) {
+    return esp_timer_get_time();
+}
+
 int64_t chronvs_display_profile_watch_begin(void) {
     ++watch_slices;
     watch_in_refresh = true;
@@ -113,6 +160,12 @@ static void profile_monitor(lv_disp_drv_t *drv, uint32_t elapsed, uint32_t px) {
         pending_input_us = 0;
     }
     ++frames;
+#ifdef CHRONVS_PANEL_PROFILE
+    for (unsigned i = 0; i < CHRONVS_PANEL_COUNT; ++i) {
+        if (panels[i].in_refresh) ++panels[i].frames;
+        panels[i].in_refresh = false;
+    }
+#endif
     if (watch_in_refresh) ++watch_frames;
     watch_in_refresh = false;
     refresh_ms += elapsed;
@@ -169,9 +222,24 @@ void chronvs_display_profile_poll(bool display_off) {
                  " watch_hours_us=%" PRIu64 " watch_weekday_us=%" PRIu64
                  " watch_temperature_us=%" PRIu64 " watch_seconds_us=%" PRIu64
                  " watch_marker_us=%" PRIu64
+#ifdef CHRONVS_WATCH_DETAIL_PROFILE
+                 " watch_mother_face_us=%" PRIu64 " watch_mother_hand_us=%" PRIu64
+                 " watch_mother_center_us=%" PRIu64
+                 " watch_hours_face_us=%" PRIu64 " watch_hours_scale_us=%" PRIu64
+                 " watch_hours_inner_us=%" PRIu64 " watch_hours_hand_us=%" PRIu64
+#endif
                  " render_max_us=%" PRIu32 " render_idle_max_us=%" PRIu32
                  " motion_reads=%" PRIu32 " motion_frames=%" PRIu32
-                 " motion_age_max_us=%" PRIu32,
+                 " motion_age_max_us=%" PRIu32
+#ifdef CHRONVS_PANEL_PROFILE
+                 " quick_frames=%" PRIu32 " quick_slices=%" PRIu32
+                 " quick_clip_px=%" PRIu64 " quick_draw_us=%" PRIu64
+                 " quick_root_us=%" PRIu64 " quick_post_only=%" PRIu32
+                 " launcher_frames=%" PRIu32 " launcher_slices=%" PRIu32
+                 " launcher_clip_px=%" PRIu64 " launcher_draw_us=%" PRIu64
+                 " launcher_root_us=%" PRIu64 " launcher_post_only=%" PRIu32
+#endif
+                 ,
                  (now - window_start) / 1000, frames, refresh_ms / frames,
                  max_ms, slow_frames, flush_us / frames, pixels / frames,
                  (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT),
@@ -185,8 +253,22 @@ void chronvs_display_profile_poll(bool display_off) {
                  watch_us[CHRONVS_WATCH_MOTHER], watch_us[CHRONVS_WATCH_MINUTES],
                  watch_us[CHRONVS_WATCH_HOURS], watch_us[CHRONVS_WATCH_WEEKDAY],
                  watch_us[CHRONVS_WATCH_TEMPERATURE], watch_us[CHRONVS_WATCH_SECONDS],
-                 watch_us[CHRONVS_WATCH_MARKER], render_max_us, render_idle_max_us,
-                 motion_reads, motion_frames, motion_age_max_us);
+                 watch_us[CHRONVS_WATCH_MARKER],
+#ifdef CHRONVS_WATCH_DETAIL_PROFILE
+                 watch_us[CHRONVS_WATCH_MOTHER_FACE], watch_us[CHRONVS_WATCH_MOTHER_HAND],
+                 watch_us[CHRONVS_WATCH_MOTHER_CENTER],
+                 watch_us[CHRONVS_WATCH_HOURS_FACE], watch_us[CHRONVS_WATCH_HOURS_SCALE],
+                 watch_us[CHRONVS_WATCH_HOURS_INNER], watch_us[CHRONVS_WATCH_HOURS_HAND],
+#endif
+                 render_max_us, render_idle_max_us,
+                 motion_reads, motion_frames, motion_age_max_us
+#ifdef CHRONVS_PANEL_PROFILE
+                 , panels[0].frames, panels[0].slices, panels[0].clip_pixels,
+                 panels[0].draw_us, panels[0].root_us, panels[0].post_only,
+                 panels[1].frames, panels[1].slices, panels[1].clip_pixels,
+                 panels[1].draw_us, panels[1].root_us, panels[1].post_only
+#endif
+                 );
     }
     frames = slow_frames = max_ms = 0;
     flush_us = refresh_ms = pixels = 0;
@@ -200,6 +282,9 @@ void chronvs_display_profile_poll(bool display_off) {
     for (unsigned i = 0; i < CHRONVS_WATCH_SECTION_COUNT; ++i) watch_us[i] = 0;
     watch_frames = watch_slices = 0;
     watch_in_refresh = false;
+#ifdef CHRONVS_PANEL_PROFILE
+    for (unsigned i = 0; i < CHRONVS_PANEL_COUNT; ++i) panels[i] = (panel_profile_t){0};
+#endif
     if (discard) touching = false;
 }
 #endif

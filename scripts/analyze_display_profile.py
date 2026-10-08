@@ -20,7 +20,13 @@ WATCH_TIMES = tuple("watch_" + name + "_us" for name in (
     "weekday", "temperature", "seconds", "marker"))
 WATCH = ("watch_frames", "watch_slices") + WATCH_TIMES
 CASE_DETAIL = ("watch_rings_us", "watch_dates_us")
+PRIMITIVE_DETAIL = tuple("watch_" + name + "_us" for name in (
+    "mother_face", "mother_hand", "mother_center", "hours_face", "hours_scale",
+    "hours_inner", "hours_hand"))
 RENDER = ("render_max_us", "render_idle_max_us", "motion_reads", "motion_frames", "motion_age_max_us")
+PANEL_NAMES = ("quick", "launcher")
+PANEL_FIELDS = ("frames", "slices", "clip_px", "draw_us", "root_us", "post_only")
+PANELS = tuple(f"{name}_{field}" for name in PANEL_NAMES for field in PANEL_FIELDS)
 
 
 def parse(text):
@@ -51,6 +57,8 @@ def parse(text):
         has_watch = any(key in fields for key in WATCH)
         has_case_detail = any(key in fields for key in CASE_DETAIL)
         has_render = any(key in fields for key in RENDER)
+        has_primitives = any(key in fields for key in PRIMITIVE_DETAIL)
+        has_panels = any(key in fields for key in PANELS)
         if (not valid or not all(key in fields for key in REQUIRED)
                 or not fields.get("window_ms") or not fields.get("frames")
                 or fields.get("over20", 0) > fields.get("frames", 0)
@@ -63,6 +71,15 @@ def parse(text):
                 or (has_watch and not all(key in fields for key in WATCH))
                 or fields.get("watch_frames", 0) > fields.get("frames", 0)
                 or fields.get("watch_frames", 0) > fields.get("watch_slices", 0)
+                or (has_panels and (not all(key in fields for key in PANELS)
+                    or any(fields.get(f"{name}_frames", 0) > fields.get("frames", 0)
+                        or fields.get(f"{name}_frames", 0) > fields.get(f"{name}_slices", 0)
+                        or fields.get(f"{name}_root_us", 0) > fields.get(f"{name}_draw_us", 0)
+                        for name in PANEL_NAMES)))
+                or (has_primitives and (not has_watch
+                    or not all(key in fields for key in PRIMITIVE_DETAIL)
+                    or sum(fields.get(key, 0) for key in PRIMITIVE_DETAIL[:3]) > fields.get("watch_mother_us", 0)
+                    or sum(fields.get(key, 0) for key in PRIMITIVE_DETAIL[3:]) > fields.get("watch_hours_us", 0)))
                 or (has_case_detail and (not has_watch
                     or not all(key in fields for key in CASE_DETAIL)
                     or sum(fields.get(key, 0) for key in CASE_DETAIL) != fields.get("watch_case_us")))):
@@ -116,6 +133,25 @@ def summarize(windows):
         key: round(sum(row[key] for row in detail) / detail_frames, 3)
         if detail_frames else None for key in CASE_DETAIL
     }
+    primitives = [row for row in watch if PRIMITIVE_DETAIL[0] in row]
+    primitive_frames = sum(row["watch_frames"] for row in primitives)
+    result["watch_primitive_detail_windows"] = len(primitives)
+    result["watch_primitive_detail_frames"] = primitive_frames if primitives else None
+    result["watch_primitive_detail_avg_us"] = {
+        key: round(sum(row[key] for row in primitives) / primitive_frames, 3)
+        if primitive_frames else None for key in PRIMITIVE_DETAIL
+    }
+    panel_rows = [row for row in windows if "quick_frames" in row]
+    result["panel_windows"] = len(panel_rows)
+    result["panels"] = {}
+    for name in PANEL_NAMES:
+        totals = {key: sum(row[f"{name}_{key}"] for row in panel_rows) for key in PANEL_FIELDS}
+        count = totals["frames"]
+        result["panels"][name] = {
+            **{key: value if panel_rows else None for key, value in totals.items()},
+            **{key + "_per_frame": round(totals[key] / count, 3) if count else None
+               for key in ("clip_px", "draw_us", "root_us")},
+        }
     return result
 
 

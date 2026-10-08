@@ -54,6 +54,43 @@ class ProfileAnalysisTest(unittest.TestCase):
         groups, _ = MODULE["parse"](old)
         self.assertIsNone(MODULE["summarize"](groups["unknown"])["watch_case_detail_avg_us"]["watch_rings_us"])
 
+    def test_panel_coverage_denominator_and_nested_totals(self):
+        counters = {key: 0 for key in MODULE["PANELS"]}
+        counters.update(quick_frames=2,quick_slices=42,quick_clip_px=339488,
+                        quick_draw_us=1000,quick_root_us=300,launcher_post_only=3)
+        row = window(**counters)
+        groups, bad = MODULE["parse"](window()+"\n"+row)
+        result = MODULE["summarize"](groups["unknown"])
+        self.assertEqual(bad, 0)
+        self.assertEqual(result["panel_windows"], 1)
+        self.assertEqual(result["panels"]["quick"]["draw_us_per_frame"], 500)
+        self.assertEqual(result["panels"]["quick"]["root_us_per_frame"], 150)
+        self.assertIsNone(result["panels"]["launcher"]["draw_us_per_frame"])
+        self.assertEqual(result["panels"]["launcher"]["post_only"], 3)
+        for broken in (window(quick_frames=1), window(**{**counters,"quick_frames":3}),
+                       window(**{**counters,"quick_slices":1}),
+                       window(**{**counters,"quick_root_us":1001})):
+            self.assertEqual(MODULE["parse"](broken), ({},1))
+        groups,_ = MODULE["parse"](window())
+        self.assertIsNone(MODULE["summarize"](groups["unknown"])["panels"]["quick"]["frames"])
+
+    def test_primitive_breakdown_coverage_and_nested_totals(self):
+        old = window(watch_frames=2, watch_slices=42,
+                     **{key: 100 for key in MODULE["WATCH_TIMES"]})
+        details = "".join(f" {key}=20" for key in MODULE["PRIMITIVE_DETAIL"])
+        groups, bad = MODULE["parse"](old + "\n" + old + details)
+        result = MODULE["summarize"](groups["unknown"])
+        self.assertEqual(bad, 0)
+        self.assertEqual(result["watch_primitive_detail_frames"], 2)
+        self.assertEqual(result["watch_primitive_detail_windows"], 1)
+        self.assertTrue(all(value == 10 for value in result["watch_primitive_detail_avg_us"].values()))
+        for row in (old + details.rsplit(" ", 1)[0], window() + details,
+                    old + details.replace("mother_face_us=20", "mother_face_us=100"),
+                    old + details.replace("hours_face_us=20", "hours_face_us=100")):
+            self.assertEqual(MODULE["parse"](row), ({}, 1))
+        groups, _ = MODULE["parse"](old)
+        self.assertTrue(all(value is None for value in MODULE["summarize"](groups["unknown"])["watch_primitive_detail_avg_us"].values()))
+
     def test_watch_totals_use_watch_frames_not_all_frames_or_slices(self):
         counters = {key: 100 for key in MODULE["WATCH_TIMES"]}
         first = window(frames=10, watch_frames=2, watch_slices=40, **counters)

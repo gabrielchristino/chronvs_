@@ -3,12 +3,14 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <stdatomic.h>
 
 #include "driver/i2c.h"
 #include "driver/gpio.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "esp_sleep.h"
+#include "esp_system.h"
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -23,6 +25,8 @@ static const char *TAG = "board";
 #define PWR_KEY_Input_PIN   GPIO_NUM_6
 #define PWR_Control_PIN     GPIO_NUM_7
 #define TOUCH_INT_PIN       GPIO_NUM_4
+
+static atomic_bool power_menu_requested;
 
 #ifdef CHRONVS_DISPLAY_PROFILE
 static void scan_onboard_i2c(void) {
@@ -45,6 +49,7 @@ static void scan_onboard_i2c(void) {
 static void power_button_task(void *arg) {
     int press_counter = 0;
     bool button_released_after_boot = false;
+    bool press_handled = false;
 
     while (1) {
         int btn_state = gpio_get_level(PWR_KEY_Input_PIN); 
@@ -52,27 +57,36 @@ static void power_button_task(void *arg) {
         if (btn_state == 1) {
             button_released_after_boot = true;
             press_counter = 0;
+            press_handled = false;
         } 
-        else if (btn_state == 0 && button_released_after_boot) {
+        else if (btn_state == 0 && button_released_after_boot && !press_handled) {
             press_counter += 100;
             
             if (press_counter >= 2000) {
-                ESP_LOGI(TAG, "Desligando dispositivo...");
-                
-                // Corta a energia da bateria
-                gpio_set_level(PWR_Control_PIN, 0); 
-                
-                // Pequeno delay para permitir que o circuito de hardware caia
-                vTaskDelay(pdMS_TO_TICKS(100));
-                
-                // Fallback: Se estiver no cabo USB, a placa não vai perder energia. 
-                // Colocamos o ESP32 em Deep Sleep para não travar num while(1).
-                esp_deep_sleep_start(); 
+                press_handled = true;
+                atomic_store(&power_menu_requested, true);
             }
         }
         
         vTaskDelay(pdMS_TO_TICKS(100)); 
     }
+}
+
+bool chronvs_board_take_power_menu_request(void) {
+    return atomic_exchange(&power_menu_requested, false);
+}
+
+void chronvs_board_power_off(void) {
+    Set_Backlight(0);
+    gpio_set_level(PWR_Control_PIN, 0);
+    vTaskDelay(pdMS_TO_TICKS(100));
+    /* USB may keep the board powered: sleep until a reset in that case. */
+    ESP_ERROR_CHECK(esp_sleep_disable_wakeup_source(ESP_SLEEP_WAKEUP_ALL));
+    esp_deep_sleep_start();
+}
+
+void chronvs_board_restart(void) {
+    esp_restart();
 }
 
 void chronvs_board_init(void) {
@@ -130,7 +144,8 @@ void chronvs_board_init(void) {
 }
 
 bool chronvs_board_light_sleep(uint32_t timeout_ms) {
-    if (!timeout_ms || gpio_get_level(TOUCH_INT_PIN) == 0 ||
+    if (!timeout_ms || atomic_load(&power_menu_requested) ||
+        gpio_get_level(TOUCH_INT_PIN) == 0 ||
         gpio_get_level(PWR_KEY_Input_PIN) == 0) return false;
 
     // Battery power depends on GPIO7 staying high while the GPIO domain sleeps.

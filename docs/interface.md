@@ -19,7 +19,8 @@ lv_scr_act()
 
 lv_layer_top()
 ├── wake_guard                    consome o primeiro toque com tela apagada
-└── Relogio_alert             aviso opaco em tela cheia
+├── power_menu                    confirmação de desligamento/reinício
+└── Relogio_alert                 aviso opaco em tela cheia
 ```
 
 `content_layer` é administrada por `core/app_manager.c`. Cada app é criado
@@ -28,6 +29,56 @@ preguiçosamente na primeira abertura e depois apenas ocultado ou exibido. O
 disponível sobre o mostrador sem pertencer a um app.
 
 ## Navegação por gesto
+
+### Botão físico de energia
+
+Segurar o botão PWR por cerca de 2 segundos abre uma confirmação global
+opaca sobre a tela atual e acende o backlight, inclusive após light sleep.
+O menu Energia oferece três círculos de 90 × 90 px em triângulo invertido:
+Reiniciar no alto à esquerda, centro (153, 180); Desligar no alto à direita,
+centro (259, 180); Cancelar centralizado embaixo, centro (206, 272).
+Os dois botões superiores têm 16 px de separação.
+O tamanho ampliado, solicitado pelo usuário para facilitar o toque, é uma
+exceção local ao padrão de círculos de 70 px. Os ícones são
+seta circular (**Reiniciar**), energia (**Desligar**) e X
+(**Cancelar**), usando símbolos LVGL em Montserrat 48. Cancelar usa o estilo
+de contorno; os demais usam a superfície comum. Somente tocar no ícone de
+Desligar ou Reiniciar executa a ação.
+Continuar segurando o botão não desliga nem reabre a janela; é necessário
+soltar antes de uma nova pressão prolongada. O botão mantido no boot é ignorado
+até ser solto. Contatos de touch já iniciados são consumidos ao abrir o menu.
+
+Cancelar ou arrastar para a direita (>80 px e predominância horizontal de
+20 px), inclusive sobre os botões, fecha a janela e preserva a tela anterior.
+Toques e contatos prolongados reiniciam a inatividade; o menu segue AUTO/ECO
+e o primeiro toque com a tela apagada apenas a acorda. Avisos de timer/alarme
+podem aparecer sobre o menu e mantêm sua prioridade normal.
+Ao confirmar uma ação, o app atual recebe `on_hide` para salvar edições.
+Desligar corta a alimentação da bateria; com USB conectado, apaga o backlight
+e entra em deep sleep até reset. Reiniciar usa o reset por software do ESP32.
+Build e simulação não substituem a validação física deste fluxo no relógio.
+
+Validação: build padrão e teste integrado LVGL (`run_Relogio_ui.ps1 -System`)
+passaram, incluindo confirmação explícita, cancelamento por toque/gesto e
+primeiro toque reservado ao despertar. Em 06/11/2026, o firmware foi gravado
+pela COM3 após entrada manual em BOOT, com hashes de todas as imagens
+verificados e reset automático. A operação física do botão, do menu e das
+ações de energia foi confirmada pelo usuário. A troca posterior para círculos
+com ícones ainda requer avaliação visual e de interação no dispositivo.
+Essa versão com ícones também foi gravada em 06/11/2026 pela COM3, com todos
+os hashes verificados e reset automático, sem BOOT manual, após selecionar
+ON, desativar ECO e reconectar o USB. Isso é compatível com a limitação do
+USB durante light sleep descrita em `performance.md`; a causa das falhas
+anteriores de conexão não foi isolada por teste controlado.
+A ampliação posterior para 90 px e ícones Montserrat 48 passou no build e
+no teste integrado LVGL e foi gravada também sem BOOT manual, com hashes
+verificados. A disposição final em triângulo invertido também passou no build
+e no teste integrado LVGL e foi gravada sem BOOT manual, com hashes verificados.
+A avaliação visual dessa disposição na tela física permanece pendente.
+Na revisão para commit em 07/11/2026, o build padrão e a suíte integrada
+`run_Relogio_ui.ps1 -System` passaram novamente, incluindo ações explícitas,
+cancelamento, arraste e proteção do primeiro toque ao despertar. Não houve
+novo upload nem nova validação física nessa revisão.
 
 No Vox, o texto exibido e registrado na serial é a saída textual do MultiNet,
 sem conversão para a palavra portuguesa cadastrada. Tocar em **Limpar** apaga

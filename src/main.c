@@ -16,6 +16,7 @@
 #include "services/wifi_session_service.h"
 #include "services/voice_lab_service.h"
 #include "ui/system_ui.h"
+#include "ui/power_menu.h"
 #include "services/Relogio_service.h"
 #include "ui/Relogio_alert.h"
 
@@ -45,6 +46,7 @@ void app_main(void) {
     const TickType_t ui_delay = pdMS_TO_TICKS(5) > 0 ? pdMS_TO_TICKS(5) : 1;
 
     while (true) {
+        chronvs_power_menu_poll();
         chronvs_time_sync_poll();
         chronvs_time_t synchronized_time;
         if (chronvs_time_sync_take_update(&synchronized_time))

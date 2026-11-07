@@ -15,6 +15,7 @@
 #include "services/weather_service.h"
 #include "platform/lvgl_memory.h"
 #include "ui/Relogio_alert.h"
+#include "ui/power_menu.h"
 #include <stdlib.h>
 
 /* Exercise diagnostic wrappers with the real LVGL input and display drivers. */
@@ -34,6 +35,13 @@ int nvs_set_blob(nvs_handle_t h, const char *k, const void *in, size_t size) {
 }
 
 static lv_indev_state_t contact;
+static bool power_request;
+static unsigned power_off_calls, restart_calls;
+bool chronvs_board_take_power_menu_request(void) {
+    bool requested = power_request; power_request = false; return requested;
+}
+void chronvs_board_power_off(void) { ++power_off_calls; }
+void chronvs_board_restart(void) { ++restart_calls; }
 static bool reminder_ringing;
 void chronvs_sound_set_ringing(bool value) { reminder_ringing=value; }
 static unsigned weather_queries, weather_rtc_reads, weather_cache_reads, weather_result_reads;
@@ -125,6 +133,39 @@ int nvs_set_u8(nvs_handle_t h, const char *k, uint8_t v) {
     (void)h;
     if (!strcmp(k, "volume")) saved_volume = v;
     return 0;
+}
+
+static void test_power_menu(void) {
+    /* Opening over an existing contact must not confirm an action on release. */
+    touch(259,180,LV_INDEV_STATE_PR);
+    power_request = true; chronvs_power_menu_poll();
+    touch(259,180,LV_INDEV_STATE_REL); chronvs_power_menu_poll();
+    assert(find_label_text(lv_layer_top(), "Energia"));
+    assert(!power_off_calls && !restart_calls);
+    tap(206,272); chronvs_power_menu_poll();
+    assert(!find_label_text(lv_layer_top(), "Energia"));
+    power_request = true; chronvs_power_menu_poll();
+    touch(153,180,LV_INDEV_STATE_PR);
+    touch(253,180,LV_INDEV_STATE_PR);
+    touch(253,180,LV_INDEV_STATE_REL); chronvs_power_menu_poll();
+    assert(!find_label_text(lv_layer_top(), "Energia"));
+    assert(!power_off_calls && !restart_calls);
+    power_request = true; chronvs_power_menu_poll();
+    tap(153,180); chronvs_power_menu_poll();
+    assert(restart_calls == 1 && !power_off_calls);
+    power_request = true; chronvs_power_menu_poll();
+    tap(259,180); chronvs_power_menu_poll();
+    assert(power_off_calls == 1 && restart_calls == 1);
+    /* AUTO sleep keeps the modal; the first touch only wakes it. */
+    power_request = true; chronvs_power_menu_poll();
+    elapse(130000);
+    assert(chronvs_system_ui_display_is_off());
+    tap(259,180); chronvs_power_menu_poll();
+    assert(!chronvs_system_ui_display_is_off());
+    assert(power_off_calls == 1 && restart_calls == 1);
+    assert(find_label_text(lv_layer_top(), "Energia"));
+    tap(206,272); chronvs_power_menu_poll();
+    puts("Power menu: explicit actions, cancel, swipe and wake guard passed.");
 }
 
 static unsigned char pixels[412*412*3];
@@ -686,5 +727,6 @@ int main(void) {
         }
     }
 #endif
+    test_power_menu();
     return 0;
 }

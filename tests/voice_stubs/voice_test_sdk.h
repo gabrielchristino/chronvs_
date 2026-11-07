@@ -13,6 +13,7 @@ int xQueueSend(QueueHandle_t, const void *, unsigned);
 void xQueueReset(QueueHandle_t);
 int xTaskCreatePinnedToCore(void (*)(void *), const char *, unsigned, void *, unsigned, void *, int);
 void vTaskDelete(void *);
+void vTaskDelay(unsigned);
 typedef void *i2s_chan_handle_t;
 typedef struct { unsigned dma_desc_num, dma_frame_num; } i2s_chan_config_t;
 typedef struct {

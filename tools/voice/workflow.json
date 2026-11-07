@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "activity": {"status": "paused", "date": "2026-11-07", "reason": "Pausa solicitada pelo usuário para testes de GPS", "resume": "Aguardar solicitação explícita para retomar voz; consultar docs/voice-pause-20261107.md"},
+  "objective": "Reconhecimento pessoal em português, com inferência offline no ESP32-S3 e rascunhos de notas revisáveis",
+  "stages": [
+    {"id": "capture", "title": "Auditar e preservar as gravações", "next": "Conferir formato, hashes, duplicatas, plano e áudios pendentes."},
+    {"id": "reference", "title": "Validar uma referência de português no PC", "next": "Executar um reconhecedor já treinado localmente nos áudios existentes; revisar divergências sem trocar os rótulos automaticamente."},
+    {"id": "acoustic_base", "title": "Aprender uma base acústica com fala pública em português", "next": "Preparar um subconjunto versionado, preservar os splits oficiais e comparar um modelo compacto antes da adaptação pessoal."},
+    {"id": "personalize", "title": "Adaptar à voz e ao microfone do relógio", "next": "Usar as sessões de treino existentes, com alvos revisados; pedir gravações novas apenas para lacunas identificadas."},
+    {"id": "reject", "title": "Calibrar a recusa", "next": "Testar silêncio, ruído e fala fora do léxico; medir precisão entre aceitos, cobertura e falsas aceitações."},
+    {"id": "blind_test", "title": "Congelar e testar em uma sessão nova", "next": "Coletar o teste reservado depois de fixar o candidato; separar repetição de palavras de recombinação de sons."},
+    {"id": "device", "title": "Exportar e medir no relógio", "next": "Verificar paridade Python/C, quantização, memória interna/DMA, PSRAM, tempo de inferência e interface."},
+    {"id": "notes", "title": "Compor um rascunho de nota", "next": "Testar sequências e palavras repetidas; mostrar texto para revisão antes de salvar."}
+  ],
+  "proposed_pilot_targets": {
+    "status": "metas iniciais propostas, ainda não atingidas ou validadas",
+    "accepted_precision": 0.95,
+    "known_correct_coverage": 0.80,
+    "negative_false_accept_rate": 0.05,
+    "notes": "Relatar numeradores/denominadores e resultados por sessão. Os percentuais sozinhos não garantem confiabilidade; não compensar uma taxa ruim com recusa de tudo."
+  },
+  "public_data_candidate": {
+    "dataset": "google/fleurs",
+    "configuration": "pt_br",
+    "source": "https://huggingface.co/datasets/google/fleurs",
+    "declared_license": "CC-BY-4.0",
+    "status": "subconjunto inicial exportado e treinamento CTC por caracteres executado no PC; ainda sem candidato aprovado para o relógio"
+  }
+}

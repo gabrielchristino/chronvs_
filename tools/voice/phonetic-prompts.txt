@@ -1,0 +1,122 @@
+# Original candidate material. Read naturally; do not spell letter names.
+# Automatic IPA is provisional. These prompts have not been recorded yet.
+pá
+pé
+pó
+pipa
+pato
+bota
+bala
+boca
+teto
+tatu
+dedo
+dado
+dia
+tia
+faca
+fava
+vaca
+vida
+sapo
+saco
+zelo
+zero
+chá
+chave
+jato
+jogo
+mala
+mesa
+mula
+nada
+nove
+ninho
+unha
+palha
+filho
+olho
+ilha
+lata
+lua
+caro
+carro
+rosa
+rua
+rato
+arara
+prato
+preto
+trigo
+trave
+bravo
+bloco
+claro
+clube
+globo
+grilo
+fraco
+fruta
+flor
+pluma
+cravo
+creme
+gato
+gola
+guerra
+guia
+quilo
+queda
+queijo
+água
+égua
+quase
+qual
+pão
+pai
+pau
+mãe
+mão
+meia
+meio
+mel
+mal
+fim
+fã
+sim
+som
+sol
+sul
+um
+uva
+ovo
+avó
+avô
+poço
+posso
+sede
+cedo
+pena
+vento
+campo
+canto
+ponte
+ponto
+mundo
+tempo
+ontem
+hoje
+cedo
+# Short connected contexts, subject to the current two-second capture limit.
+pão quente
+café forte
+água fria
+leite quente
+fruta boa
+meu nome
+boa noite
+bom dia
+minha casa
+um minuto
+nova nota
+duas horas

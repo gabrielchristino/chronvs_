@@ -37,6 +37,14 @@ a escuta é encerrada; acordar não a reinicia automaticamente. Toque no
 microfone para iniciar outra sessão. O procedimento de teste está em
 [`vox-test.md`](vox-test.md).
 
+No firmware opcional `vox_capture`, o mesmo botão grava uma amostra de dois
+segundos. O status passa por preparação, gravação e envio do áudio ao PC;
+o microfone é liberado antes do envio. Não há reconhecimento nesse modo.
+O retorno por gesto e apagar a tela cancelam a operação. A coleta exige ON
+e ECO desativado para evitar interrupção por inatividade durante o envio;
+não conta timers nem transmissão como atividade de toque. O procedimento e
+os limites de validação estão em [`voice-training.md`](voice-training.md).
+
 | Tela atual | Gesto | Resultado |
 | --- | --- | --- |
 | Mostrador | Arrastar da borda superior para baixo | Abre os acessos rápidos sobre o mostrador, acompanhando o dedo com ganho visual 2×; menos de 120 px cancela a abertura. |

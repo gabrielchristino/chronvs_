@@ -16,6 +16,9 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "model_path.h"
+#ifdef CHRONVS_VOX_CAPTURE
+#include "esp_heap_caps.h"
+#endif
 
 #define DUPLICATE_GUARD_US 800000LL
 
@@ -271,6 +274,7 @@ static void fail(const char *message) {
     ESP_LOGE(TAG, "%s", message);
 }
 
+#ifndef CHRONVS_VOX_CAPTURE
 static bool configure_commands(const esp_mn_iface_t *multinet,
                                model_iface_data_t *model, bool *allocated) {
     if (esp_mn_commands_alloc(multinet, model) != ESP_OK) return false;
@@ -285,6 +289,7 @@ static bool configure_commands(const esp_mn_iface_t *multinet,
     }
     return esp_mn_commands_update() == NULL;
 }
+#endif
 
 static esp_err_t microphone_open(i2s_chan_handle_t *channel, unsigned frame_samples) {
     i2s_chan_config_t channel_config = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_1, I2S_ROLE_MASTER);
@@ -311,6 +316,93 @@ static esp_err_t microphone_open(i2s_chan_handle_t *channel, unsigned frame_samp
     return err;
 }
 
+#ifdef CHRONVS_VOX_CAPTURE
+/* Record first, transmit afterwards: console throughput must never pace I2S.
+ * No MultiNet/AFE allocations and no LVGL calls in this diagnostic worker. */
+static void voice_task(void *argument) {
+    (void)argument;
+    enum { SAMPLE_COUNT = 32000, FRAME_SAMPLES = 256 };
+    i2s_chan_handle_t microphone = NULL;
+    int16_t *pcm = NULL;
+    int32_t raw[FRAME_SAMPLES];
+    size_t count = 0, collected = 0;
+    if (atomic_load(&stop_requested)) goto cleanup;
+    pcm = heap_caps_malloc(SAMPLE_COUNT * sizeof(*pcm), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!pcm) { fail("Memória insuficiente para gravar"); goto cleanup; }
+    if (microphone_open(&microphone, FRAME_SAMPLES) != ESP_OK) {
+        fail("Microfone indisponível"); goto cleanup;
+    }
+    int expected = CHRONVS_VOICE_STARTING;
+    if (!atomic_compare_exchange_strong(&state, &expected, CHRONVS_VOICE_LISTENING))
+        goto cleanup;
+    const int64_t recording_deadline = esp_timer_get_time() + 5000000;
+    while (count < SAMPLE_COUNT && !atomic_load(&stop_requested)) {
+        if (esp_timer_get_time() >= recording_deadline) {
+            fail("Microfone não completou a gravação"); goto cleanup;
+        }
+        const size_t frame = SAMPLE_COUNT - count < FRAME_SAMPLES ?
+            SAMPLE_COUNT - count : FRAME_SAMPLES;
+        size_t read = 0;
+        esp_err_t err = i2s_channel_read(microphone, (uint8_t *)raw + collected,
+            frame * sizeof(*raw) - collected, &read, 100);
+        if ((err != ESP_OK && err != ESP_ERR_TIMEOUT) ||
+            read > frame * sizeof(*raw) - collected) {
+            fail("Falha ao gravar microfone"); goto cleanup;
+        }
+        collected += read;
+        if (collected != frame * sizeof(*raw)) continue;
+        for (size_t i = 0; i < frame; ++i) {
+            int32_t value = raw[i] >> 14;
+            if (value > INT16_MAX) value = INT16_MAX;
+            if (value < INT16_MIN) value = INT16_MIN;
+            pcm[count++] = (int16_t)value;
+        }
+        collected = 0;
+    }
+    i2s_channel_disable(microphone);
+    i2s_del_channel(microphone);
+    microphone = NULL;
+    if (atomic_load(&stop_requested)) goto cleanup;
+    atomic_store(&state, CHRONVS_VOICE_STOPPING);
+    /* Explicit little-endian bytes, sequence numbers and FNV-1a checksum.
+     * Prefix each complete line to coexist with diagnostic console logs. */
+    printf("\nVOXPCM BEGIN 1 16000 %u\n", SAMPLE_COUNT);
+    uint32_t hash = UINT32_C(2166136261);
+    for (size_t offset = 0; offset < SAMPLE_COUNT; offset += 128) {
+        if (atomic_load(&stop_requested)) goto cleanup;
+        char line[513];
+        static const char hex[] = "0123456789abcdef";
+        for (size_t i = 0; i < 128; ++i) {
+            uint16_t value = (uint16_t)pcm[offset + i];
+            for (unsigned b = 0; b < 2; ++b) {
+                uint8_t byte = (uint8_t)(value >> (8 * b));
+                size_t pos = i * 4 + b * 2;
+                line[pos] = hex[byte >> 4]; line[pos + 1] = hex[byte & 15];
+                hash = (hash ^ byte) * UINT32_C(16777619);
+            }
+        }
+        line[512] = '\0';
+        printf("VOXPCM DATA %u %s\n", (unsigned)offset, line);
+        /* Console writes can busy-wait; let idle service the task watchdog. */
+        vTaskDelay(1);
+    }
+    printf("VOXPCM END %08lx\n", (unsigned long)hash);
+    fflush(stdout);
+    chronvs_voice_result_t result = {.text = "Amostra enviada ao PC."};
+    xQueueSend(results, &result, 0);
+cleanup:
+    if (microphone) {
+        i2s_channel_disable(microphone);
+        i2s_del_channel(microphone);
+    }
+    free(pcm);
+    atomic_store(&stop_requested, false);
+    if (chronvs_voice_lab_state() != CHRONVS_VOICE_ERROR)
+        atomic_store(&state, CHRONVS_VOICE_IDLE);
+    atomic_store(&worker_active, false);
+    vTaskDelete(NULL);
+}
+#else
 static void voice_task(void *argument) {
     (void)argument;
     srmodel_list_t *models = NULL;
@@ -407,6 +499,7 @@ cleanup:
     atomic_store(&worker_active, false);
     vTaskDelete(NULL);
 }
+#endif
 
 bool chronvs_voice_lab_start(void) {
     if (atomic_exchange(&worker_active, true)) return false;

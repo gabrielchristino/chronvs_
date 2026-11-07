@@ -1,0 +1,6 @@
+# PC-only reference. Uses the existing CPU torch; no model runs on the watch.
+transformers==4.46.3
+huggingface-hub==0.36.2
+safetensors==0.5.3
+accelerate==0.34.2
+webrtcvad-wheels==2.0.14

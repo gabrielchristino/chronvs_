@@ -36,6 +36,12 @@ static void set_state(chronvs_voice_state_t state) {
     else if (state == CHRONVS_VOICE_LISTENING) caption = "Ouvindo... fale cadenciado";
     else if (state == CHRONVS_VOICE_STOPPING) caption = "Encerrando...";
     else if (state == CHRONVS_VOICE_ERROR) caption = chronvs_voice_lab_error();
+#ifdef CHRONVS_VOX_CAPTURE
+    if (state == CHRONVS_VOICE_IDLE) caption = "Tocar para gravar 2 segundos";
+    else if (state == CHRONVS_VOICE_STARTING) caption = "Preparando microfone...";
+    else if (state == CHRONVS_VOICE_LISTENING) caption = "Gravando... fale uma palavra";
+    else if (state == CHRONVS_VOICE_STOPPING) caption = "Enviando áudio ao PC...";
+#endif
     lv_label_set_text(status_label, caption);
     lv_label_set_text(mic_caption,
         state == CHRONVS_VOICE_LISTENING || state == CHRONVS_VOICE_STARTING ?
@@ -60,12 +66,16 @@ static void clear_event(lv_event_t *event) {
 }
 
 static void append_result(const chronvs_voice_result_t *result) {
+#ifdef CHRONVS_VOX_CAPTURE
+    lv_label_set_text(text_label, result->text);
+#else
     const size_t used = strlen(phrase);
     const size_t needed = strlen(result->text) + (used ? 1 : 0);
     if (needed >= sizeof(phrase) - used) return;
     if (used) strcat(phrase, " ");
     strcat(phrase, result->text);
     lv_label_set_text(text_label, phrase);
+#endif
 }
 
 static void poll(lv_timer_t *timer) {
@@ -102,7 +112,11 @@ static lv_obj_t *create(lv_obj_t *parent) {
     chronvs_Relogio_surface(root);
     lv_obj_t *title = centered_label(root, "VOX", 34, 160, &lv_font_montserrat_24);
     lv_obj_set_style_text_color(title, lv_color_hex(CHRONVS_UI_ACCENT), 0);
+#ifdef CHRONVS_VOX_CAPTURE
+    centered_label(root, "Coleta de voz • 2 segundos", 70, 280, &chronvs_Notas_font);
+#else
     centered_label(root, "Laboratório offline", 70, 230, &chronvs_Notas_font);
+#endif
 
     text_label = centered_label(root, "A saída do modelo aparece aqui.",
                                 112, 280, &chronvs_Notas_font);

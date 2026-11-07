@@ -1,5 +1,9 @@
 # Teste de palavras do Vox
 
+Para treinar um modelo pessoal com as 200 palavras em português, veja
+[`voice-training.md`](voice-training.md). O guia abaixo descreve o backend
+MultiNet original; o firmware opcional `vox_capture` faz coleta de áudio.
+
 O Vox reconhece palavras isoladas com o MultiNet6 em inglês. Cada palavra
 portuguesa tem uma grafia inglesa aproximada em
 `src/services/voice_lab_service.c`. O visor e a linha `VOX:` da serial mostram

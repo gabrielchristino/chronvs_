@@ -109,6 +109,18 @@ Essa saída serial, assim como os logs de apps e memória, só fica habilitada
 nos builds de diagnóstico. O firmware padrão mantém o texto do Vox na tela,
 com logs e consoles desativados; veja [`performance.md`](performance.md).
 
+O ambiente opcional `vox_capture` substitui somente o worker do Vox por coleta
+PCM16/16 kHz de dois segundos, sem criar MultiNet. Reserva 64.000 bytes em
+PSRAM por amostra, fecha I2S e envia linhas `VOXPCM` pela console; depois
+libera o buffer. Preserva a mesma propriedade exclusiva da tarefa, fila de
+resultados e cancelamento ao sair/apagar a tela. Não acessa LVGL no worker.
+Esse ambiente mantém stdout ativo com logs e profiling desativados, evitando
+texto intercalado nos pacotes. O envio cede um tick por pacote para atender
+o watchdog; a captura I2S continua sendo concluída antes da transmissão.
+O fluxo de coleta pessoal, treinamento em CPU e avaliação reservada está em
+[`voice-training.md`](voice-training.md). O candidato exportado ainda não é
+carregado pelo firmware padrão e não é um modelo ESP-SR.
+
 `services/weather_service.c` mantém cache NVS e uma caixa de resultado sob mutex.
 `services/weather_data.c` valida JSON, horário civil e códigos WMO sem acessar
 hardware. `services/wifi_session_service.c` centraliza rádio, credenciais e

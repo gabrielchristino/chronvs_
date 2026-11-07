@@ -26,6 +26,18 @@ o funcionamento, a correção de memória e os cenários funcionais validados no
 As [dificuldades e regras de prevenção](docs/weather.md#dificuldades-soluções-e-prevenção)
 registram o diagnóstico das listras e distinguem o heap de objetos dos buffers de pixels.
 
+Vox tem um [processo de coleta e treinamento pessoal em português](docs/voice-training.md)
+para as 200 palavras cadastradas, com firmware opcional de captura e avaliação
+separada. As primeiras gravações e validações já foram feitas; o candidato
+próprio ainda não está pronto para inferência no relógio. O firmware padrão
+conserva o MultiNet atual.
+Há também um [estudo por unidades fonéticas](docs/voice-phonetic.md), visando
+ampliar o vocabulário sem uma classe neural por palavra; ainda experimental no PC.
+O [fluxo de evolução da voz](docs/voice-workflow.md) define a próxima etapa:
+base acústica em português, adaptação pessoal e validação antes de embarcar.
+A frente de voz está [pausada para testes de GPS](docs/voice-pause-20261107.md),
+com resultados e ponto de retomada documentados.
+
 ## Estado validado
 
 - Firmware padrão release compilado e gravado no relógio em 08/10/2026, com hashes de gravação verificados. A proteção do arco de brilho passou no teste integrado LVGL; a interação corrigida ainda aguarda confirmação no dispositivo.

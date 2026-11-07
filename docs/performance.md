@@ -46,7 +46,8 @@ e instrumentação exclusivamente quando selecionados explicitamente.
 `scripts/configure_logging.py` aplica essa política mesmo com sdkconfig
 existente, preservando as escolhas de hardware e memória. Buffers 1/20,
 PSRAM/TLSF, período de 20 ms, QSPI de 2 KiB e espera síncrona permanecem.
-O firmware anterior foi preservado em `.pio/diagnostics/before-release-o2/`.
+Uma cópia verificada do firmware padrão foi preservada em 08/10/2026 em
+`logs/firmware-references/`, permitindo descartar os backups antigos.
 A redução do mostrador foi percebida como mais fluida pelo usuário; o ganho
 adicional do release e a regressão funcional ainda requerem teste físico,
 incluindo menus, AUTO/ECO, despertar, alarmes, Clima e Vox.
@@ -474,22 +475,20 @@ antialiasing são alocados no pool TLSF existente em PSRAM e liberados pelo
 LVGL ao terminar o refresh. Não há cache de framebuffer. A comparação com
 quatro entradas está em `tests/run_watch_render_tests.ps1`: verifica SHA-256
 dos pixels, recálculos de máscaras e memória amostrada durante o desenho.
-O ganho de tempo no dispositivo ainda aguarda medição; veja a
-[análise do cache](performance-audit.md#cache-de-máscaras-circulares).
+O ganho de tempo no dispositivo ainda aguarda medição.
 
 O recorte experimental do interior coberto dos círculos foi retirado após
 a captura física mostrar aumento de custo. Permanecem as duas primitivas
 originais com o cache de oito raios. A comparação de pixels continua nos
-testes; o [histórico do experimento](performance-audit.md#recorte-do-interior-coberto-dos-círculos)
-registra por que reduzir preenchimento não garantiu menor tempo de desenho.
+testes. Reduzir preenchimento não garantiu menor tempo de desenho.
 Após a retirada, o usuário confirmou a fluidez e os logs mostraram retorno
-dos círculos a cerca de 57 ms e refresh de 227–230 ms em repouso. Veja a
-[confirmação física](performance-audit.md#recuperação-confirmada-após-retirar-o-recorte).
+dos círculos a cerca de 57 ms e refresh de 227–230 ms em repouso na composição
+anterior; esses tempos não representam o mostrador atual.
 
 O launcher interrompe o desenho dos nomes com opacidade zero,
 preservando as linhas no layout, os ícones e o fade original quando visíveis.
-A implementação e os limites da validação estão na
-[análise do launcher](performance-audit.md#launcher-interromper-desenho-de-nomes-totalmente-transparentes).
+A suíte integrada verifica layout e pixels; o ganho isolado ainda não foi
+quantificado no dispositivo.
 
 ## Comparação no dispositivo
 
@@ -784,15 +783,14 @@ correções da espera do loop, contagem do cronômetro durante suspensão,
 redraws em pausa e ciclo de vida/captura do Vox. Os defaults também foram
 alinhados à configuração local validada. Essa revisão é a nova base física,
 sem mudança nos parâmetros críticos do display e sem medição quantitativa
-de desempenho. A análise, os testes automatizados e a pendência de memória
-no teste integrado do host estão em [`performance-audit.md`](performance-audit.md).
+de desempenho. A pendência de memória no teste integrado do host foi resolvida
+na revisão seguinte, descrita abaixo.
 
 Na revisão seguinte, estilos compartilhados e callbacks restritos a alvos
 clicáveis resolveram a falha de memória da suíte integrada, mantendo o pool
 de 128 KiB. Build e suítes de interface passaram. O usuário confirmou no
 relógio: "tudo perfeito nos meus testes aqui". Essa é a nova base validada;
-os números de memória do host estão na análise e não representam uma medição
-equivalente no ESP32.
+os números de memória do host não representam uma medição equivalente no ESP32.
 
 Também foram validadas no relógio a espera do áudio por notificações, em
 vez de polling ocioso, e a consulta da agenda civil uma vez por segundo.

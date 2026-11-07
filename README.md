@@ -201,3 +201,19 @@ estão em [`docs/performance.md`](docs/performance.md).
 Os arquivos de modelo e projeto de impressão ficam em [`body/`](body/README.md).
 O inventário distingue o STL atual, o projeto 3MF e o arquivo de referência;
 encaixe, impressão e montagem ainda precisam de validação física.
+
+## Organização e arquivos gerados
+
+O repositório mantém firmware, configuração da placa, documentação de uso,
+modelos da carcaça, scripts de build/upload e testes de regressão. Os geradores
+de fonte e caches também são necessários para atualizar os recursos atuais.
+
+Capturas, executáveis de testes, logs e backups de experimentos são locais,
+em `.pio/` e `logs/`, e não entram no Git. As pendências foram consolidadas
+em `docs/performance-plan.md`; resíduos antigos podem ser descartados após
+preservar uma referência restaurável do firmware.
+As referências históricas a capturas nos documentos registram testes anteriores;
+os arquivos gerados podem ter sido removidos. A auditoria extensa permanece
+no histórico do Git. Uma cópia verificada do firmware padrão foi mantida em
+`logs/firmware-references/`; preserve uma nova referência antes de experimentar,
+conforme [o procedimento de recuperação](docs/performance.md#recuperação-e-diagnóstico-de-primitivas).

@@ -18,6 +18,12 @@ void chronvs_system_ui_init(lv_obj_t *surface, lv_timer_t *timer) {
 }
 bool chronvs_Relogio_time(chronvs_time_t *time) { (void)time; return false; }
 void chronvs_apps_add(const chronvs_app_t *app) { (void)app; }
+#ifdef CHRONVS_WATCH_SCENE_CACHE
+void *heap_caps_malloc(size_t size, unsigned caps) {
+    assert(size == SCENE_CACHE_BYTES && caps == (MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT));
+    return malloc(size);
+}
+#endif
 
 static unsigned misses, large_misses;
 static uint32_t checksum = 2166136261u;
@@ -150,14 +156,26 @@ int main(int argc, char **argv) {
         lv_obj_set_y(clock_face, i < 30 ? 0 : -(int)(i - 29) * 5);
         lv_obj_invalidate(clock_face);
         lv_refr_now(display);
+#ifdef CHRONVS_TEST_SCENE_CACHE
+        /* An incidental redraw must replay exactly the frozen face. */
+        lv_obj_invalidate(clock_face); lv_refr_now(display);
+#endif
     }
-#ifdef CHRONVS_TEST_MOTHER_CACHE
+#if defined(CHRONVS_TEST_MOTHER_CACHE) || defined(CHRONVS_TEST_SCENE_CACHE)
     lv_obj_set_pos(clock_face, 0, 0);
     for (unsigned i=0;i<60;++i) {
         chronvs_time_t time = {.valid=true,.year=26,.month=10,.day=1+i%31,
             .weekday=i%7,.hour=i%24,.minute=i,.second=59-i};
         chronvs_watch_app_set_time(&time);
         lv_obj_invalidate(clock_face); lv_refr_now(display);
+#ifdef CHRONVS_TEST_SCENE_CACHE
+        chronvs_watch_app_set_ambient_temperature(-20.0f + i % 21 * 4.0f);
+        lv_obj_invalidate(clock_face); lv_refr_now(display);
+        lv_obj_invalidate(clock_face); lv_refr_now(display);
+#ifdef CHRONVS_WATCH_SCENE_CACHE
+        assert(scene_cache.valid && !scene_cache.blocked);
+#endif
+#endif
     }
     lv_obj_t *panel = lv_obj_create(lv_scr_act());
     lv_obj_remove_style_all(panel);

@@ -5,6 +5,19 @@
 #undef main
 #undef nvs_set_blob
 #include "lvgl.h"
+#ifdef CHRONVS_BRIGHTNESS_ARC_REFERENCE
+#define paint_brightness_get(obj) lv_arc_get_value(obj)
+#define paint_brightness_set(obj,value) lv_arc_set_value(obj,value)
+#elif defined(CHRONVS_BRIGHTNESS_SLIDER_REFERENCE)
+#define paint_brightness_get(obj) lv_slider_get_value(obj)
+#define paint_brightness_set(obj,value) lv_slider_set_value(obj,value,LV_ANIM_OFF)
+#endif
+#if defined(CHRONVS_BRIGHTNESS_ARC_REFERENCE) || defined(CHRONVS_BRIGHTNESS_SLIDER_REFERENCE)
+#define TEST_CONTINUOUS_LIGHT
+#define TEST_NORMAL_BRIGHTNESS 70
+#else
+#define TEST_NORMAL_BRIGHTNESS 50
+#endif
 #include "apps/app_catalog.h"
 #include "apps/watch_app.h"
 #include "ui/system_ui.h"
@@ -17,6 +30,8 @@
 #include "services/agnss_service.h"
 #include "services/run_service.h"
 #include "platform/lvgl_memory.h"
+#include "platform/display_bench.h"
+#include "platform/panel_autotest.h"
 #include "ui/Relogio_alert.h"
 #include "ui/power_menu.h"
 #include <stdlib.h>
@@ -101,7 +116,7 @@ static void read_touch(lv_indev_drv_t *driver, lv_indev_data_t *data) {
 static void elapse(unsigned ms) {
     while(ms) {
         unsigned step=ms>35?35:ms;
-        lv_tick_inc(step); lv_timer_handler(); ms-=step;
+        lv_tick_inc(step); lv_timer_handler(); chronvs_panel_autotest_poll(); ms-=step;
     }
 }
 static void touch(int x, int y, lv_indev_state_t state) {
@@ -137,6 +152,12 @@ void *heap_caps_calloc(size_t count, size_t size, unsigned caps) {
 }
 static unsigned lvgl_pool_allocations;
 void *heap_caps_malloc(size_t size, unsigned caps) {
+#ifdef CHRONVS_WATCH_SCENE_CACHE
+    if (size == 96U*1024U) {
+        assert(caps == (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        return malloc(size);
+    }
+#endif
     assert(size==LV_MEM_SIZE && caps==(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     ++lvgl_pool_allocations;
     return malloc(size);
@@ -147,6 +168,7 @@ void Set_Backlight(uint8_t brightness) { LCD_Backlight=brightness; }
 int nvs_flash_init(void) { return 0; }
 int nvs_flash_erase(void) { return 0; }
 static uint8_t sound_volume = 1, saved_volume = 4;
+static int saved_light_mode = -1;
 static unsigned previews;
 static uint8_t preview_volume;
 void chronvs_sound_preview(void) { ++previews; preview_volume = sound_volume; }
@@ -155,11 +177,20 @@ void chronvs_sound_set_volume(uint8_t level) { assert(level <= 5); sound_volume 
 int nvs_get_u8(nvs_handle_t h, const char *k, uint8_t *v) {
     (void)h;
     if (!strcmp(k, "volume")) { *v = saved_volume; return 0; }
+    if (!strcmp(k, "light_mode")) {
+        const char *mode=getenv("CHRONVS_TEST_LIGHT_MODE");
+        if (saved_light_mode<0 && mode && *mode) saved_light_mode=atoi(mode);
+        if (saved_light_mode>=0) { *v=(uint8_t)saved_light_mode; return 0; }
+    }
+    const char *legacy=!strcmp(k,"brightness") ? getenv("CHRONVS_TEST_LEGACY_BRIGHTNESS") :
+                       !strcmp(k,"eco") ? getenv("CHRONVS_TEST_LEGACY_ECO") : NULL;
+    if (legacy) { *v=(uint8_t)atoi(legacy); return 0; }
     return -1;
 }
 int nvs_set_u8(nvs_handle_t h, const char *k, uint8_t v) {
     (void)h;
     if (!strcmp(k, "volume")) saved_volume = v;
+    if (!strcmp(k,"light_mode")) saved_light_mode=v;
     return 0;
 }
 
@@ -214,8 +245,7 @@ static void flush(lv_disp_drv_t *driver, const lv_area_t *area, lv_color_t *colo
     }
     lv_disp_flush_ready(driver);
 }
-static void capture(const char *name) {
-    lv_obj_update_layout(lv_scr_act()); lv_tick_inc(100);lv_timer_handler();lv_refr_now(NULL);
+static void save_current_pixels(const char *name) {
     char path[160];snprintf(path,sizeof(path),".pio/host-tests/%s.bmp",name);
     FILE *f=fopen(path,"wb");assert(f);
     unsigned char h[54]={'B','M'};
@@ -223,6 +253,10 @@ static void capture(const char *name) {
     memcpy(h+2,&size,4);memcpy(h+10,&offset,4);memcpy(h+14,&dib,4);
     memcpy(h+18,&dim,4);memcpy(h+22,&dim,4);memcpy(h+26,&planes,2);memcpy(h+28,&bits,2);
     fwrite(h,1,54,f);fwrite(pixels,1,sizeof(pixels),f);fclose(f);
+}
+static void capture(const char *name) {
+    lv_obj_update_layout(lv_scr_act()); lv_tick_inc(100);lv_timer_handler();lv_refr_now(NULL);
+    save_current_pixels(name);
 }
 static unsigned refresh_count;
 static unsigned transparent_label_draws;
@@ -252,7 +286,31 @@ int main(void) {
     input.type=LV_INDEV_TYPE_POINTER;input.read_cb=read_touch;lv_indev_drv_register(&input);
     chronvs_display_profile_init(); chronvs_display_profile_init();
     chronvs_app_manager_init(lv_scr_act());assert(chronvs_apps_register_all());
-    assert(chronvs_app_open("watch"));capture("12-watch");
+    assert(chronvs_app_open("watch"));
+#ifndef TEST_CONTINUOUS_LIGHT
+    const char *boot_test=getenv("CHRONVS_TEST_LIGHT_BOOT");
+    if (boot_test) {
+        const int expected=atoi(boot_test);
+        const char *mode_env=getenv("CHRONVS_TEST_LIGHT_MODE");
+        int mode=mode_env && *mode_env ? atoi(mode_env) :
+                 expected==35 ? 0 : expected==50 ? 1 : expected==75 ? 3 : 2;
+        const int levels[]={35,50,100,75,35};
+        const char *labels[]={"35","50","100","75","35"};
+        const int next[]={1,3,4,2,1};
+        assert(LCD_Backlight==expected && find_label_text(lv_scr_act(),labels[mode]));
+        lv_obj_t *boot_panel=lv_obj_get_child(lv_scr_act(),1);
+        lv_obj_clear_flag(boot_panel,LV_OBJ_FLAG_HIDDEN); lv_obj_set_y(boot_panel,0); elapse(100);
+        assert((find_label_text(boot_panel,"ECO")!=NULL)==(mode==0));
+        for (unsigned i=0;i<4;++i) {
+            tap(163,278); mode=next[mode];
+            assert(LCD_Backlight==levels[mode] && saved_light_mode==mode);
+            assert(find_label_text(boot_panel,labels[mode]));
+        }
+        printf("Lighting boot and saved cycle passed: %d%%.\n",expected);
+        return 0;
+    }
+#endif
+    capture("12-watch");
     unsigned char *frozen_pixels=malloc(sizeof(pixels)); assert(frozen_pixels);
     memcpy(frozen_pixels,pixels,sizeof(pixels));
     refresh_count=0;
@@ -294,7 +352,49 @@ int main(void) {
     lv_obj_clear_flag(panel,LV_OBJ_FLAG_HIDDEN);lv_obj_set_y(panel,0);
     chronvs_system_ui_set_battery(72,3.9f);capture("13-quick-settings");
     assert(lv_obj_get_style_radius(panel,0)==LV_RADIUS_CIRCLE);
+#ifdef CHRONVS_PANEL_SELECTIVE_CLIP
+    assert(!lv_obj_get_style_clip_corner(panel,0));
+#else
     assert(lv_obj_get_style_clip_corner(panel,0));
+#endif
+#ifdef TEST_CONTINUOUS_LIGHT
+    /* Compare every brightness angle, with the circle clipped by screen edges.
+     * Setters exercise paint only; the saved preference stays unchanged. */
+    lv_obj_t *paint_arc=lv_obj_get_child(panel,0);
+    const int paint_value=paint_brightness_get(paint_arc);
+    const int paint_positions[]={-210,-100,0};
+    for (int value=10;value<=100;value+=5) {
+        paint_brightness_set(paint_arc,value);
+        for (unsigned i=0;i<3;++i) {
+            lv_obj_set_y(panel,paint_positions[i]);
+            char name[72]; snprintf(name,sizeof(name),"arc-brightness-%03d-y%03d",value,-paint_positions[i]);
+            capture(name);
+        }
+    }
+    paint_brightness_set(paint_arc,paint_value);
+#else
+    lv_obj_t *lighting=lv_obj_get_child(panel,0);
+    assert(lv_obj_check_type(lighting,&lv_btn_class));
+    assert(lv_obj_get_width(lighting)==70 && lv_obj_get_height(lighting)==70);
+    assert(lv_obj_get_x(lighting)==128 && lv_obj_get_y(lighting)==243);
+    assert(find_label_text(lighting,"50"));
+    tap(163,267); assert(LCD_Backlight==75 && saved_light_mode==3); /* Sun tap. */
+    assert(find_label_text(lighting,"75")); capture("lighting-75");
+    tap(163,278); assert(LCD_Backlight==100 && saved_light_mode==2);
+    assert(find_label_text(lighting,"100")); capture("lighting-100");
+    tap(163,278); assert(LCD_Backlight==35 && saved_light_mode==4);
+    assert(find_label_text(lighting,"35") && !find_label_text(panel,"ECO"));
+    elapse(6000); assert(LCD_Backlight==35); /* Selecting 35% does not enable ECO. */
+    tap(249,123); assert(LCD_Backlight==35 && saved_light_mode==0); /* Battery symbol tap. */
+    assert(find_label_text(lighting,"35") && find_label_text(panel,"ECO")); capture("lighting-eco");
+    tap(249,134); assert(LCD_Backlight==35 && saved_light_mode==4);
+    assert(!find_label_text(panel,"ECO")); capture("lighting-35-normal");
+    elapse(6000); assert(LCD_Backlight==35); /* ECO timing no longer applies. */
+    tap(249,134); assert(LCD_Backlight==35 && saved_light_mode==0);
+    tap(163,278); assert(LCD_Backlight==50 && saved_light_mode==1);
+    assert(!find_label_text(panel,"ECO"));
+    capture("lighting-50");
+#endif
     lv_obj_set_y(panel,-160); capture("quick-settings-circle-transition");
     rect_draws=0;
     for (int y=-400;y<=0;y+=40) {
@@ -371,13 +471,17 @@ int main(void) {
     cache_reads_before=weather_cache_reads;
     elapse(1000); assert(weather_cache_reads==cache_reads_before);
     tap(292,206); assert(weather_queries==0 && !strcmp(chronvs_app_active_id(),"watch"));
-    assert(sound_volume == 4 && LCD_Backlight == 70); /* Wake without opening Clima. */
+    assert(sound_volume == 4 && LCD_Backlight == TEST_NORMAL_BRIGHTNESS); /* Wake without opening Clima. */
     assert(previews == 6);
     lv_obj_add_flag(panel,LV_OBJ_FLAG_HIDDEN);
     assert(chronvs_app_open("apps"));capture("14-app-list");
     lv_obj_t *launcher = lv_obj_get_child(chronvs_app_content_layer(), -1);
     assert(lv_obj_get_style_radius(launcher,0)==LV_RADIUS_CIRCLE);
+#ifdef CHRONVS_PANEL_SELECTIVE_CLIP
+    assert(!lv_obj_get_style_clip_corner(launcher,0));
+#else
     assert(lv_obj_get_style_clip_corner(launcher,0));
+#endif
     assert(chronvs_app_open("watch"));
     assert(chronvs_app_preview_y("apps",160));
     capture("launcher-circle-transition");
@@ -405,6 +509,19 @@ int main(void) {
         lv_obj_scroll_to_y(app_list, 164, LV_ANIM_OFF); elapse(70);
         assert(!lv_obj_has_flag(vector_icon, LV_OBJ_FLAG_HIDDEN));
         assert(lv_obj_has_flag(cached_image, LV_OBJ_FLAG_HIDDEN));
+#ifdef CHRONVS_LAUNCHER_ICON_OPAQUE
+        unsigned opaque_icons=0;
+        for (unsigned i=0;i<lv_obj_get_child_cnt(app_list);++i) {
+            lv_obj_t *badge=lv_obj_get_child(lv_obj_get_child(app_list,i),0);
+            const lv_img_dsc_t *image=lv_img_get_src(lv_obj_get_child(badge,1));
+            if (image->header.cf==LV_IMG_CF_TRUE_COLOR) {
+                assert(image->header.w==40 && image->header.h==40);
+                ++opaque_icons;
+            }
+        }
+        assert(opaque_icons>0);
+        printf("Opaque icon fast path: %u of %u icons.\n",opaque_icons,(unsigned)lv_obj_get_child_cnt(app_list));
+#endif
     } else {
         assert(lv_obj_get_child_cnt(lv_obj_get_child(first_row, 0)) == 1);
     }
@@ -446,6 +563,12 @@ int main(void) {
         lv_obj_scroll_to_y(app_list,opacity_offsets[i],LV_ANIM_OFF); elapse(70);
         char name[64]; snprintf(name,sizeof(name),"launcher-opacity-%03d",opacity_offsets[i]);
         capture(name);
+        /* A row's pressed surface must also respect the moving circle,
+         * including at the fading edges. These states do not send clicks. */
+        lv_obj_add_state(middle_row, LV_STATE_PRESSED);
+        snprintf(name,sizeof(name),"launcher-pressed-%03d",opacity_offsets[i]);
+        capture(name);
+        lv_obj_clear_state(middle_row, LV_STATE_PRESSED);
     }
     lv_obj_scroll_to_y(app_list,180,LV_ANIM_OFF); elapse(70);
     assert(lv_obj_get_style_opa(first_row,0)==LV_OPA_TRANSP);
@@ -468,6 +591,153 @@ int main(void) {
     assert(!strcmp(chronvs_app_active_id(), "apps"));
     assert(lv_obj_get_scroll_y(app_list) > 82);
     capture("20-launcher-scrolled");
+    /* Filter both signs of input, then inspect every frame after release:
+     * native rows must remain visible and attached to the list's scroll. */
+    for (unsigned direction_index=0; direction_index<2; ++direction_index) {
+        const int direction=direction_index ? 1 : -1;
+        lv_obj_scroll_to_y(app_list,246,LV_ANIM_OFF); elapse(600);
+        touch(210,206,LV_INDEV_STATE_PR);
+        touch(210,206+direction*40,LV_INDEV_STATE_PR);
+        int displacement=lv_obj_get_scroll_y(app_list)-246;
+        assert(direction<0 ? displacement>0 && displacement<40 : displacement<0 && displacement > -40);
+        touch(210,206+direction*80,LV_INDEV_STATE_PR);
+        touch(210,206+direction*80,LV_INDEV_STATE_REL);
+        for (unsigned frame=0; frame<30; ++frame) {
+            elapse(35); lv_obj_update_layout(app_list);
+            const int scroll=lv_obj_get_scroll_y(app_list);
+            assert(scroll>=0 && lv_obj_get_scroll_bottom(app_list)>=0);
+            assert(lv_obj_get_y(launcher)==0 && !strcmp(chronvs_app_active_id(),"apps"));
+            lv_area_t list_bounds; lv_obj_get_coords(app_list,&list_bounds);
+            unsigned visible=0;
+            for (unsigned row_index=0; row_index<lv_obj_get_child_cnt(app_list); ++row_index) {
+                lv_obj_t *row=lv_obj_get_child(app_list,row_index);
+                lv_area_t bounds; lv_obj_get_coords(row,&bounds);
+                assert(!lv_obj_has_flag(row,LV_OBJ_FLAG_FLOATING));
+                assert(bounds.y1-list_bounds.y1+scroll==174+(int)row_index*82);
+                if (bounds.y2>100 && bounds.y1<312 && lv_obj_get_style_opa(row,0)>0) ++visible;
+            }
+            assert(visible>0);
+        }
+        char sample_name[48]; snprintf(sample_name,sizeof(sample_name),"launcher-input-release-%u",direction_index);
+        capture(sample_name);
+        unsigned char *settled_pixels=malloc(sizeof(pixels)); assert(settled_pixels);
+        memcpy(settled_pixels,pixels,sizeof(pixels));
+        lv_obj_invalidate(lv_scr_act()); lv_refr_now(NULL);
+        assert(!memcmp(settled_pixels,pixels,sizeof(pixels)));
+        free(settled_pixels);
+    }
+    /* A fast finish near an edge must not fling through the remaining list. */
+    const int fling_paths[2][5]={{340,280,200,100,65},{80,140,220,320,350}};
+    for (unsigned direction_index=0; direction_index<2; ++direction_index) {
+        int maximum=lv_obj_get_scroll_top(app_list)+lv_obj_get_scroll_bottom(app_list);
+        lv_obj_scroll_to_y(app_list,direction_index ? maximum : 0,LV_ANIM_OFF); elapse(600);
+        for (unsigned sample=0; sample<5; ++sample)
+            touch(210,fling_paths[direction_index][sample],LV_INDEV_STATE_PR);
+        const int release_scroll=lv_obj_get_scroll_y(app_list);
+        touch(210,fling_paths[direction_index][4],LV_INDEV_STATE_REL);
+        elapse(1200);
+        int coast=lv_obj_get_scroll_y(app_list)-release_scroll;
+        assert(coast==0);
+        assert(!strcmp(chronvs_app_active_id(),"apps") && lv_obj_get_y(launcher)==0);
+        printf("Launcher fast release %s: %d px coast.\n",direction_index ? "down" : "up",coast);
+    }
+    /* Pulling beyond a boundary and relaxing the finger a few pixels must
+     * not launch the list back in the opposite direction. */
+    for (unsigned boundary=0; boundary<2; ++boundary) {
+        int maximum=lv_obj_get_scroll_top(app_list)+lv_obj_get_scroll_bottom(app_list);
+        const int edge=boundary ? maximum : 0;
+        const int start=boundary ? 340 : 80;
+        const int outward=boundary ? -1 : 1;
+        lv_obj_scroll_to_y(app_list,boundary ? edge-30 : edge+30,LV_ANIM_OFF); elapse(600);
+        touch(210,start,LV_INDEV_STATE_PR);
+        touch(210,start+outward*80,LV_INDEV_STATE_PR);
+        touch(210,start+outward*160,LV_INDEV_STATE_PR);
+        elapse(250);
+        touch(210,start+outward*152,LV_INDEV_STATE_PR);
+        touch(210,start+outward*152,LV_INDEV_STATE_REL);
+        elapse(1000);
+        assert(lv_obj_get_scroll_y(app_list)==edge);
+        assert(!strcmp(chronvs_app_active_id(),"apps") && lv_obj_get_y(launcher)==0);
+        /* A deliberate reversal must still leave the edge during that contact. */
+        touch(210,start,LV_INDEV_STATE_PR);
+        touch(210,start+outward*80,LV_INDEV_STATE_PR);
+        touch(210,start+outward*160,LV_INDEV_STATE_PR);
+        touch(210,start+outward*120,LV_INDEV_STATE_PR); elapse(250);
+        assert(boundary ? lv_obj_get_scroll_y(app_list)<edge : lv_obj_get_scroll_y(app_list)>edge);
+        touch(210,start+outward*120,LV_INDEV_STATE_REL); elapse(600);
+        assert(!strcmp(chronvs_app_active_id(),"apps"));
+        printf("Launcher boundary %s: no rebound, deliberate reverse passed.\n",boundary ? "bottom" : "top");
+    }
+    /* A slide beginning in a gap must not become a new tap on a row. */
+    lv_obj_scroll_to_y(app_list,0,LV_ANIM_OFF); elapse(600);
+    touch(210,170,LV_INDEV_STATE_PR);
+    touch(210,190,LV_INDEV_STATE_PR);
+    touch(210,190,LV_INDEV_STATE_REL); elapse(150);
+    assert(!strcmp(chronvs_app_active_id(),"apps"));
+    /* Horizontal movement is still a slide, although the list is vertical. */
+    touch(150,206,LV_INDEV_STATE_PR);
+    touch(190,206,LV_INDEV_STATE_PR);
+    touch(190,206,LV_INDEV_STATE_REL); elapse(150);
+    assert(!strcmp(chronvs_app_active_id(),"apps"));
+    /* Returning to the starting point must not turn a slide back into a tap. */
+    touch(150,206,LV_INDEV_STATE_PR);
+    touch(159,206,LV_INDEV_STATE_PR);
+    touch(150,206,LV_INDEV_STATE_PR);
+    touch(150,206,LV_INDEV_STATE_REL); elapse(150);
+    assert(!strcmp(chronvs_app_active_id(),"apps"));
+    /* Retouching immediately after a slide must not select the row. */
+    lv_obj_scroll_to_y(app_list,82,LV_ANIM_OFF); elapse(600);
+    touch(210,206,LV_INDEV_STATE_PR);
+    touch(210,160,LV_INDEV_STATE_PR);
+    touch(210,110,LV_INDEV_STATE_PR);
+    touch(210,110,LV_INDEV_STATE_REL);
+    assert(!lv_obj_is_scrolling(app_list));
+    lv_obj_update_layout(app_list);
+    int stop_y=206;
+    for (unsigned row_index=0; row_index<lv_obj_get_child_cnt(app_list); ++row_index) {
+        lv_area_t row_bounds;
+        lv_obj_get_coords(lv_obj_get_child(app_list,row_index),&row_bounds);
+        int center=(row_bounds.y1+row_bounds.y2)/2;
+        if (center>=150 && center<=260) { stop_y=center; break; }
+    }
+    tap(210,stop_y);
+    assert(!strcmp(chronvs_app_active_id(),"apps"));
+    elapse(600);
+    /* Retouch a partially clipped row: focusing it must not animate the list
+     * underneath a stationary finger before the next scroll gesture. */
+    lv_obj_scroll_to_y(app_list,60,LV_ANIM_OFF); elapse(600);
+    const int retouch_scroll=lv_obj_get_scroll_y(app_list);
+    touch(210,390,LV_INDEV_STATE_PR);
+    for (unsigned sample=0; sample<12; ++sample) {
+        elapse(35);
+        assert(lv_obj_get_y(launcher)==0);
+        assert(lv_obj_get_scroll_y(app_list)==retouch_scroll);
+    }
+    touch(210,350,LV_INDEV_STATE_PR);
+    touch(210,310,LV_INDEV_STATE_PR);
+    touch(210,310,LV_INDEV_STATE_REL); elapse(600);
+    assert(!strcmp(chronvs_app_active_id(),"apps"));
+    /* Repeated flings and retouches must stop momentum while held, then
+     * follow each new direction without moving the launcher itself. */
+    for (unsigned pass=0; pass<12; ++pass) {
+        const int direction=pass%2 ? 1 : -1;
+        touch(210,206,LV_INDEV_STATE_PR);
+        int previous=lv_obj_get_scroll_y(app_list);
+        for (unsigned sample=0; sample<4; ++sample) {
+            elapse(35);
+            assert(lv_obj_get_scroll_y(app_list)==previous);
+        }
+        for (unsigned sample=1; sample<=3; ++sample) {
+            touch(210,206+direction*(int)sample*30,LV_INDEV_STATE_PR);
+            int current=lv_obj_get_scroll_y(app_list);
+            assert(direction<0 ? current>=previous : current<=previous);
+            assert(lv_obj_get_y(launcher)==0);
+            previous=current;
+        }
+        touch(210,206+direction*90,LV_INDEV_STATE_REL); elapse(70);
+        assert(!strcmp(chronvs_app_active_id(),"apps"));
+    }
+    elapse(600);
     lv_obj_scroll_to_y(app_list, 0, LV_ANIM_OFF); elapse(100);
     const char *first_id = NULL;
     for (size_t i = 0; i < chronvs_app_count(); ++i) {
@@ -480,24 +750,41 @@ int main(void) {
     assert(chronvs_app_open("apps")); elapse(70);
     touch(206,30,LV_INDEV_STATE_PR); touch(206,80,LV_INDEV_STATE_PR);
     touch(206,80,LV_INDEV_STATE_REL); elapse(70);
+    assert(chronvs_app_is_settling() && lv_obj_get_y(launcher)>0 && lv_obj_get_y(launcher)<50);
+    assert(!strcmp(chronvs_app_active_id(), "apps"));
+    tap(40,206); /* A new contact during settling cannot launch an app. */
+    assert(!strcmp(chronvs_app_active_id(), "apps"));
+    elapse(250);
     assert(!strcmp(chronvs_app_active_id(), "apps") && lv_obj_get_y(launcher) == 0);
     touch(206,30,LV_INDEV_STATE_PR); touch(206,90,LV_INDEV_STATE_PR);
     touch(206,170,LV_INDEV_STATE_PR); touch(206,170,LV_INDEV_STATE_REL); elapse(70);
+    assert(chronvs_app_is_settling() && lv_obj_get_y(launcher)>140 && lv_obj_get_y(launcher)<412);
+    assert(!strcmp(chronvs_app_active_id(), "apps"));
+    elapse(250);
     assert(!strcmp(chronvs_app_active_id(), "watch"));
+    assert(chronvs_app_preview_y("apps",200));
+    assert(chronvs_app_settle_y("apps",0,"apps",220,lv_anim_path_ease_out));
+    elapse(70);
+    assert(chronvs_app_is_settling() && !strcmp(chronvs_app_active_id(),"watch"));
+    assert(lv_obj_get_y(launcher)>0 && lv_obj_get_y(launcher)<200);
+    assert(chronvs_app_open(first_id)); /* Other navigation cancels a pending commit. */
+    elapse(300);
+    assert(!chronvs_app_is_settling() && !strcmp(chronvs_app_active_id(),first_id));
+    assert(lv_obj_has_flag(launcher,LV_OBJ_FLAG_HIDDEN));
     assert(chronvs_app_open("Relogio"));
     assert(chronvs_app_open("Notas"));capture("15-Notas-integrated");
     tap(206,341); /* Nova nota. */
     lv_obj_t *text=find_textarea(chronvs_app_content_layer()); assert(text);
     /* Real power timer: continuous typing exceeds both AUTO deadlines. */
     for(unsigned i=0;i<50;++i) {
-        tap(76,226); elapse(1000); assert(LCD_Backlight==70);
+        tap(76,226); elapse(1000); assert(LCD_Backlight==TEST_NORMAL_BRIGHTNESS);
     }
     assert(Notas_text_length(lv_textarea_get_text(text))==50);
     elapse(16000); assert(LCD_Backlight==12);
-    tap(150,178); assert(LCD_Backlight==70);
+    tap(150,178); assert(LCD_Backlight==TEST_NORMAL_BRIGHTNESS);
     elapse(46000); assert(chronvs_system_ui_display_is_off() && LCD_Backlight==0);
     unsigned length=Notas_text_length(lv_textarea_get_text(text));
-    tap(150,178); assert(LCD_Backlight==70);
+    tap(150,178); assert(LCD_Backlight==TEST_NORMAL_BRIGHTNESS);
     assert(Notas_text_length(lv_textarea_get_text(text))==length); /* Wake only. */
     tap(76,226); assert(Notas_text_length(lv_textarea_get_text(text))==length+1);
     /* Toggle the actual ECO control, then hold a key past its 15 s deadline. */
@@ -506,7 +793,13 @@ int main(void) {
         lv_obj_t *obj=lv_obj_get_child(panel,i);
         if(lv_obj_check_type(obj,&lv_btn_class) && lv_obj_get_x(obj)==214 && lv_obj_get_y(obj)==99) eco=obj;
     }
-    assert(eco); lv_event_send(eco,LV_EVENT_CLICKED,NULL); assert(LCD_Backlight==35);
+    assert(eco);
+#ifdef TEST_CONTINUOUS_LIGHT
+    lv_event_send(eco,LV_EVENT_CLICKED,NULL);
+#else
+    lv_event_send(eco,LV_EVENT_CLICKED,NULL);
+#endif
+    assert(LCD_Backlight==35);
     touch(76,226,LV_INDEV_STATE_PR);
     for(unsigned i=0;i<20;++i) { elapse(1000); assert(LCD_Backlight==35); }
     touch(76,226,LV_INDEV_STATE_REL);
@@ -557,9 +850,10 @@ int main(void) {
     assert(chronvs_app_open("Relogio"));
     assert(chronvs_app_open("Notas"));
     lv_mem_monitor(&memory); assert(memory.free_biggest_size > 16384);
-    /* Brightness owns arc contacts, including upward motion and leaving its contour. */
+    /* Brightness owns its contact even after moving upward and leaving it. */
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_HIDDEN); lv_obj_set_y(panel, 0);
     lv_obj_t *brightness = lv_obj_get_child(panel, 0);
+#ifdef CHRONVS_BRIGHTNESS_ARC_REFERENCE
     assert(lv_obj_check_type(brightness, &lv_arc_class));
     const int brightness_before = lv_arc_get_value(brightness);
     touch(20,206,LV_INDEV_STATE_PR);
@@ -569,6 +863,58 @@ int main(void) {
     touch(80,75,LV_INDEV_STATE_PR);
     touch(120,70,LV_INDEV_STATE_PR); /* Move into the panel interior before release. */
     touch(120,70,LV_INDEV_STATE_REL); elapse(300);
+#elif defined(CHRONVS_BRIGHTNESS_SLIDER_REFERENCE)
+    assert(lv_obj_check_type(brightness, &lv_slider_class));
+    assert(lv_obj_get_width(brightness)==170 && lv_obj_get_height(brightness)==6);
+    assert(lv_obj_get_y(brightness)==70);
+    const int wake_brightness=lv_slider_get_value(brightness);
+    elapse(16000); assert(chronvs_system_ui_display_is_off());
+    tap(120,73);
+    assert(!chronvs_system_ui_display_is_off() && lv_slider_get_value(brightness)==wake_brightness);
+    touch(120,73,LV_INDEV_STATE_PR);
+    touch(80,73,LV_INDEV_STATE_PR);
+    assert(lv_slider_get_value(brightness)==10 && LCD_Backlight==10);
+    assert(lv_obj_get_y(panel)==0);
+    touch(300,73,LV_INDEV_STATE_PR);
+    assert(lv_slider_get_value(brightness)==35 && LCD_Backlight==35); /* ECO cap. */
+    touch(300,30,LV_INDEV_STATE_PR);
+    touch(310,180,LV_INDEV_STATE_PR); /* The contact remains locked to brightness. */
+    touch(310,180,LV_INDEV_STATE_REL); elapse(300);
+    capture("quick-settings-brightness-slider");
+#else
+    assert(lv_obj_check_type(brightness,&lv_btn_class));
+    assert(find_label_text(brightness,"35") && find_label_text(panel,"ECO"));
+    elapse(16000); assert(chronvs_system_ui_display_is_off());
+    tap(249,134); assert(LCD_Backlight==35 && saved_light_mode==0); /* Battery wakes only. */
+    touch(249,134,LV_INDEV_STATE_PR);
+    elapse(16000); assert(LCD_Backlight==35 && saved_light_mode==0); /* No repeat during hold. */
+    touch(249,134,LV_INDEV_STATE_REL);
+    assert(LCD_Backlight==35 && saved_light_mode==4 && !find_label_text(panel,"ECO"));
+    tap(249,134); assert(LCD_Backlight==35 && saved_light_mode==0);
+    elapse(16000); assert(chronvs_system_ui_display_is_off());
+    tap(163,278); assert(LCD_Backlight==35 && saved_light_mode==0); /* Wake only. */
+    touch(163,278,LV_INDEV_STATE_PR);
+    elapse(16000); assert(LCD_Backlight==35 && saved_light_mode==0); /* No repeat; real hold is activity. */
+    touch(163,278,LV_INDEV_STATE_REL);
+    assert(LCD_Backlight==50 && saved_light_mode==1);
+    tap(163,278); assert(LCD_Backlight==75 && saved_light_mode==3);
+    tap(163,278); assert(LCD_Backlight==100 && saved_light_mode==2);
+    tap(249,134); assert(LCD_Backlight==35 && saved_light_mode==0);
+    touch(163,278,LV_INDEV_STATE_PR);
+    touch(163,243,LV_INDEV_STATE_PR);
+    touch(163,243,LV_INDEV_STATE_REL); elapse(300);
+    assert(lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN) && saved_light_mode==0);
+    assert(chronvs_app_open("watch"));
+    touch(206,20,LV_INDEV_STATE_PR); touch(206,230,LV_INDEV_STATE_PR);
+    touch(206,230,LV_INDEV_STATE_REL); elapse(300);
+    capture("quick-settings-lighting-mode");
+    touch(249,134,LV_INDEV_STATE_PR); touch(249,99,LV_INDEV_STATE_PR);
+    touch(249,99,LV_INDEV_STATE_REL); elapse(300);
+    assert(lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN) && saved_light_mode==0);
+    assert(chronvs_app_open("watch"));
+    touch(206,20,LV_INDEV_STATE_PR); touch(206,230,LV_INDEV_STATE_PR);
+    touch(206,230,LV_INDEV_STATE_REL); elapse(300);
+#endif
     assert(!lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN) && lv_obj_get_y(panel)==0);
     /* Closing from the volume button must not change its level on release. */
     lv_obj_clear_flag(panel, LV_OBJ_FLAG_HIDDEN); lv_obj_set_y(panel, 0);
@@ -770,10 +1116,19 @@ int main(void) {
             assert(!lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN));
             before_close = flushed_pixels;
             if (scenario==2) {
+#ifdef CHRONVS_BRIGHTNESS_ARC_REFERENCE
                 touch(20,206,LV_INDEV_STATE_PR);
                 touch(40,130,LV_INDEV_STATE_PR);
                 touch(80,75,LV_INDEV_STATE_PR);
                 touch(80,75,LV_INDEV_STATE_REL); elapse(300);
+#elif defined(CHRONVS_BRIGHTNESS_SLIDER_REFERENCE)
+                touch(120,73,LV_INDEV_STATE_PR);
+                touch(230,73,LV_INDEV_STATE_PR);
+                touch(230,30,LV_INDEV_STATE_PR);
+                touch(230,30,LV_INDEV_STATE_REL); elapse(300);
+#else
+                tap(163,278); elapse(100); /* Cycle mode without moving the panel. */
+#endif
                 assert(!lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN) && lv_obj_get_y(panel)==0);
             }
             const int x = 120; /* Close outside the arc, also after brightness adjustment. */
@@ -869,5 +1224,73 @@ int main(void) {
     }
 #endif
     test_power_menu();
+#ifdef CHRONVS_PANEL_AUTOTEST
+    assert(chronvs_app_open("watch"));
+    chronvs_panel_autotest_init();
+    bool quick_moving=false, quick_open=false, launcher_moving=false, launcher_open=false;
+    for(unsigned ms=0;ms<110000 && chronvs_panel_autotest_status().running;ms+=35) {
+        elapse(35);
+        chronvs_panel_test_status_t test=chronvs_panel_autotest_status();
+        chronvs_ui_panel_probe_t probe=chronvs_system_ui_panel_probe();
+        if (!quick_moving && test.completed==0 && !probe.hidden && probe.y>-260 && probe.y<-160) {
+            save_current_pixels("panel-auto-quick-moving"); quick_moving=true;
+        }
+        if (!quick_open && test.completed==1) { save_current_pixels("panel-auto-quick-open"); quick_open=true; }
+        if (test.completed==3) for(unsigned i=0;i<lv_obj_get_child_cnt(chronvs_app_content_layer());++i) {
+            lv_obj_t *root=lv_obj_get_child(chronvs_app_content_layer(),i);
+            if (!launcher_moving && !lv_obj_has_flag(root,LV_OBJ_FLAG_HIDDEN) &&
+                lv_obj_get_style_radius(root,0)==LV_RADIUS_CIRCLE && lv_obj_get_y(root)>160 && lv_obj_get_y(root)<260) {
+                save_current_pixels("panel-auto-launcher-moving"); launcher_moving=true;
+            }
+        }
+        if (!launcher_open && test.completed==4) { save_current_pixels("panel-auto-launcher-open"); launcher_open=true; }
+    }
+    chronvs_panel_test_status_t test=chronvs_panel_autotest_status();
+    printf("Panel automation: completed=%u total=%u failed=%u\n",test.completed,test.total,test.failed);
+    assert(!test.running && test.completed==42 && !test.failed);
+    assert(quick_moving && quick_open && launcher_moving && launcher_open);
+    assert(!strcmp(chronvs_app_active_id(),"watch"));
+#endif
+#ifdef CHRONVS_DISPLAY_BENCH
+    assert(chronvs_app_open("watch"));
+    unsigned bench_children = lv_obj_get_child_cnt(lv_scr_act());
+    chronvs_display_bench_init(); chronvs_display_bench_init();
+    assert(lv_obj_get_child_cnt(lv_scr_act()) == bench_children + 1);
+    lv_obj_t *bench = lv_obj_get_child(lv_scr_act(), -1);
+    assert(lv_obj_get_style_bg_opa(bench, 0) == LV_OPA_COVER);
+    capture("display-bench-flat");
+    tap(206,180);
+    assert(lv_obj_get_style_bg_opa(bench, 0) == LV_OPA_COVER);
+    elapse(8100);
+    assert(lv_obj_get_style_bg_opa(bench, 0) == LV_OPA_TRANSP);
+    capture("display-bench-watch");
+#ifdef CHRONVS_DISPLAY_BENCH_AUTORUN
+    touch(100,180,LV_INDEV_STATE_PR); touch(200,180,LV_INDEV_STATE_PR);
+    touch(200,180,LV_INDEV_STATE_REL); elapse(70);
+    assert(lv_obj_get_child_cnt(lv_scr_act()) == bench_children + 1);
+    /* Real held contact keeps AUTO awake without allowing navigation. */
+    touch(206,180,LV_INDEV_STATE_PR);
+    elapse(33000);
+    touch(206,180,LV_INDEV_STATE_REL);
+    assert(lv_obj_get_child_cnt(lv_scr_act()) == bench_children);
+    assert(!strcmp(chronvs_app_active_id(), "apps"));
+    puts("Display bench autorun: touch does not navigate; the bounded test exits automatically.");
+#else
+    /* Animation must not count as interaction or render while off. */
+    elapse(130000);
+    assert(chronvs_system_ui_display_is_off());
+    unsigned bench_off_refreshes = refresh_count;
+    elapse(1000); assert(refresh_count == bench_off_refreshes);
+    const lv_opa_t bench_before_wake = lv_obj_get_style_bg_opa(bench, 0);
+    tap(206,180);
+    assert(!chronvs_system_ui_display_is_off());
+    assert(lv_obj_get_style_bg_opa(bench, 0) == bench_before_wake);
+    touch(100,180,LV_INDEV_STATE_PR); touch(200,180,LV_INDEV_STATE_PR);
+    touch(200,180,LV_INDEV_STATE_REL); elapse(70);
+    assert(lv_obj_get_child_cnt(lv_scr_act()) == bench_children);
+    assert(!strcmp(chronvs_app_active_id(), "apps"));
+    puts("Display bench: background switch, inactivity, off-screen pause, wake-only tap and consumed exit swipe passed.");
+#endif
+#endif
     return 0;
 }

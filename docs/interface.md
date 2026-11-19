@@ -1,5 +1,46 @@
 # Interface, gestos e renderização
 
+O perfil isolado `panel_autotest` de 19/11/2026 abre, fecha e cancela as
+bandejas reais por 42 gestos programados, passando pelo driver de entrada e
+handlers normais do LVGL. Reserva temporariamente a entrada física e a
+restaura ao terminar; não muda a interface padrão nem suas preferências.
+Trajetórias, medidas e limites em [`panel-autotest.md`](panel-autotest.md).
+As variantes de recorte, cache e otimização conservam esses mesmos gestos.
+Somente `panel_autotest_icache32_weather` estende a reserva de entrada após
+os 42 casos para uma consulta real do Clima, retornando ao mostrador ao terminar.
+É uma exceção de diagnóstico para verificar o orçamento de memória durante TLS.
+
+Ensaio isolado de gelatina/TE de 19/11/2026: os ambientes `display_scan` e
+`display_scan_te` acrescentam uma bancada temporária sobre o mostrador.
+A cena alterna fundo liso/mostrador a cada oito segundos e direita sai para o
+launcher; enquanto a bancada está aberta, intercepta os gestos de abertura dos painéis. AUTO/ECO,
+atividade real e primeiro toque de despertar são preservados. O candidato
+aguarda TE somente antes da primeira faixa, com timeout e fallback. Não altera
+o firmware padrão nem os parâmetros validados. Procedimento e limites em
+[`display-scan.md`](display-scan.md).
+O perfil de continuação `display_scan_detail` reserva os primeiros 40 segundos
+de tela ativa para a bancada automática, sem navegação por toque nesse intervalo;
+depois remove a bancada e abre o launcher. O menu Energia continua disponível.
+Essa exceção é exclusiva do teste, após uma saída antecipada sem confirmação
+visual no primeiro ensaio. O candidato TE isolado não melhorou perceptivelmente
+a gelatina, conforme retorno do usuário.
+
+O padrão adotado após confirmação de melhora em 19/11/2026 conserva o desenho e os gestos normais, com
+cache comprimido do mostrador congelado e 16 máscaras de círculo. Não abre
+bancada nem habilita espera TE. Hora exibida e temperatura invalidam o cache;
+redesenhos incidentais reutilizam os pixels já compostos. A construção inicial
+continua vetorial, sem redraw extra. Os buffers LVGL permanecem duplos de
+`1/20`, com pool de 128 KiB, refresh de 20 ms e QSPI síncrono de 2 KiB. O cache
+reserva 96 KiB de dados RLE em PSRAM, separadamente do pool e dos buffers.
+O usuário confirmou melhora clara da gelatina na versão silenciosa
+`display_scene_quiet`; isso não afirma ausência total do efeito. Medidas e
+testes de equivalência de pixels estão registrados em `display-scan.md`.
+Após medir as bandejas reais e repetir o fluxo HTTPS do Clima, o padrão usa
+também cache de instruções de 32 KiB, conservando dados de 32 KiB/linha de
+32 bytes. Isso reduz os tempos sem mudar desenho, gestos ou cadência; os picos
+medidos ainda ficam acima dos 20 ms. Troca de RAM e resultados em
+[`panel-autotest.md`](panel-autotest.md).
+
 Este documento descreve o comportamento observável da interface e os limites
 que devem ser preservados no display SPD2010 de 412 × 412 pixels.
 
@@ -103,7 +144,7 @@ os limites de validação estão em [`voice-training.md`](voice-training.md).
 | Mostrador | Arrastar da borda superior para baixo | Abre os acessos rápidos sobre o mostrador, acompanhando o dedo com ganho visual 2×; menos de 120 px cancela a abertura. |
 | Mostrador | Arrastar para cima | Revela a lista de apps sobre o mostrador, acompanhando o dedo desde a borda inferior. |
 | Mostrador | Pressionar e segurar por 600 ms | Atualiza a hora imediatamente e a cada segundo enquanto mantém o contato. Soltar ou deslocar mais de 12 px em qualquer eixo encerra a atualização. |
-| Acessos rápidos | Arrastar para cima fora do arco de brilho | Fecha o painel. O limiar é 5 px; contatos iniciados no arco ficam reservados ao brilho até soltar. |
+| Acessos rápidos | Arrastar para cima, inclusive nos controles | Fecha o painel depois de 5 px e consome o clique. O gesto sobre o círculo de brilho não troca o modo. |
 | Lista de apps | Tocar uma linha | Abre o app selecionado. |
 | Lista de apps | Arrastar para baixo a partir do topo | Fecha a lista acompanhando o dedo; o gesto precisa avançar 120 px. |
 | Relogio | Arrastar 80 px para a direita | Volta à lista de apps. |
@@ -120,6 +161,40 @@ os limites de validação estão em [`voice-training.md`](voice-training.md).
 | Corrida: registros / confirmação | Arrastar para a direita | Retorna aos dados / cancela a finalização. Nos registros, descer também retorna. |
 | Calendario: mês / detalhe | Arrastar para a direita | Volta ao launcher / ao mês consultado, inclusive sobre grade e controles. |
 | Calendario: mês | Arrastar para cima / para baixo | Avança / retorna um mês, inclusive sobre a grade e Hoje. |
+
+Na lista de apps, tocar novamente durante a inércia interrompe a rolagem;
+esse contato não abre app. Um contato iniciado a menos de 150 ms da última
+rolagem por touch também é reservado para controle da lista. Para abrir,
+o toque precisa começar na própria linha visível e não ultrapassar 8 px em
+nenhum eixo, mesmo que volte ao ponto inicial. Deslizes horizontais e gestos
+no limite da rolagem não contam como clique. O alvo fica preso até soltar,
+inclusive ao começar num espaço entre linhas, sem trocar de botão no trajeto.
+Um novo toque parado deve interromper o movimento da lista. O foco de uma linha
+parcialmente visível não inicia animação para enquadrá-la. O arraste seguinte
+controla somente a rolagem do conteúdo, salvo o gesto de fechar iniciado nos
+60 px superiores, que mantém os mesmos limites. A disposição em arco permanece.
+Na configuração adotada, a inércia fica desligada só na lista: soltar para o conteúdo.
+
+O primeiro teste, com posições visuais separadas, foi retirado após falha física:
+os itens desapareciam ao soltar e voltavam ao reabrir a bandeja. A segunda
+versão de teste filtra somente o deslocamento vertical usado pela rolagem,
+com constante nominal de 50 ms e atraso máximo de 48 px. Posições dos itens,
+limites, renderização e inércia continuam sob LVGL, sem acomodação visual
+separada após soltar. O filtro é reiniciado por contato e não atua no gesto
+iniciado nos 60 px superiores, nas bandejas ou em outros apps. Pontos reais
+continuam sendo usados para detectar deslizes e rejeitar cliques acidentais.
+Após relato de oscilação residual, a configuração adotada desativa SCROLL_MOMENTUM
+apenas na lista, preservando a suavização do arraste. Não deve haver deslocamento
+extra após soltar. A proteção contra seleção logo após um deslize continua.
+O limite anterior de velocidade permanece no código para comparação, mas não
+produz inércia enquanto essa opção está desligada.
+O usuário confirmou no relógio a melhora com essa versão em 19/11/2026.
+Ao alcançar qualquer extremo, o filtro e a velocidade acumulada são zerados.
+Continuar puxando além do limite não armazena impulso. Uma inversão de até
+12 px é ignorada só nessa borda, para que relaxar o dedo ao soltar não cause
+retorno; mais de 12 px libera a rolagem de volta no mesmo contato. No meio
+da lista não há essa zona adicional. Os limites do gesto de fechar não mudam.
+Histórico e limites da validação em `panel-motion-icons.md`.
 
 Todo novo app deve adotar o retorno da esquerda para a direita do Relogio, sem
 botão Voltar no topo. O gesto confirma com deslocamento horizontal maior que
@@ -223,7 +298,7 @@ perfis normais e ECO continuam reduzindo e apagando a iluminação. Animação d
 cursor e salvamento automático não prolongam o prazo. Novos apps devem manter
 esse contrato usando o tratamento compartilhado de `ui/app_input.h`.
 
-Arcos de brilho, hora e minuto usam a mesma espessura de 14 px, trilha
+Arcos de hora e minuto usam a mesma espessura de 14 px, trilha
 cinza-esverdeada, indicador amarelo e alça clara. Seus raios e limites variam
 conforme a função. No launcher, tocar no ícone ou no nome aciona a mesma linha.
 
@@ -241,16 +316,46 @@ o mesmo par de pílulas do aviso de alarme. Não há labels de próxima página.
 
 ### Acessos rápidos
 
-O contorno interativo e a alça do arco de brilho recebem o arraste exclusivamente
-para ajustar o brilho. Um contato iniciado no arco não move nem fecha o painel,
-mesmo se o dedo sair do contorno antes de soltar. Os eventos propagados pelo
-arco registram atividade real, mas são ignorados pelo gesto de fechamento.
-Arrastes iniciados no restante do painel, inclusive nos atalhos, continuam
-fechando para cima com o limiar de 5 px. O teste integrado cobre ajuste pelo
-arco sem fechamento, fechamento fora dele e cancelamento de abertura;
-a alteração ainda requer confirmação física no relógio. Em 08/10/2026,
-o build padrão foi gravado pela COM3, com hashes verificados e reset automático.
-Upload concluído não comprova o comportamento do gesto no dispositivo.
+Por escolha do usuário, acessos rápidos e launcher compartilham a conclusão
+de movimento: **220 ms nominais, com desaceleração `ease_out`**, inclusive
+quando um arraste é cancelado. O launcher acompanha o dedo e termina o restante
+do percurso animado, em vez de saltar à posição final ao soltar. Os limiares
+e o acompanhamento do dedo foram preservados: a abertura dos acessos usa a
+posição y absoluta; o launcher usa deslocamento relativo. A confirmação de
+retorno do launcher continua exigindo 120 px a partir dos 60 px superiores;
+o fechamento dos acessos continua reconhecido depois de 5 px para cima.
+Novo contato na bandeja durante a conclusão é consumido até soltar, sem disparar atalho.
+A cadência efetiva depende do custo de cada quadro, portanto o mesmo tempo
+nominal não implica a mesma quantidade de quadros nas duas bandejas.
+Comparações e validação estão em [`panel-motion-icons.md`](panel-motion-icons.md).
+
+Brilho usa o círculo inferior esquerdo de **70 × 70 px**, centralizado em
+x=163, y=278. Cada toque alterna **35% → 50% → 75% → 100% → 35%** e desativa ECO.
+O círculo superior direito mostra a porcentagem da bateria e alterna ECO.
+Ativar ECO coloca o brilho em 35%, reduz após 5 s e apaga após 15 s.
+Desativar ECO mantém 35% e retoma o perfil normal de inatividade, sem restaurar
+o brilho anterior. A partir de 35%, o próximo toque no brilho seleciona 50%.
+O brilho mostra um sol vetorial de 24 × 24 px acima do nível selecionado,
+**sem `%`**: `35`, `50`, `75` ou `100`. A bateria mostra seu símbolo vetorial
+de 24 × 24 px acima da porcentagem. Normalmente, os símbolos ficam 11 px acima
+do centro e os valores 13 px abaixo, como no volume. Em ECO, a bateria fica
+amarela: símbolo 18 px acima, porcentagem 2 px abaixo e `ECO` 21 px abaixo.
+Assim, a porcentagem permanece visível e exclusiva da bateria. Os símbolos
+são estáticos, sem bitmap, timer ou animação; tocar neles aciona o controle.
+O estilo vem de `ui/control_style.h`, com
+texto Montserrat 18. Os sete círculos e sua disposição 2–3–2 mantêm posições;
+não há controle adicional no topo.
+
+O círculo responde ao clique ao soltar. Arrastar para cima a partir dele fecha
+o painel, com o mesmo limiar de 5 px dos outros atalhos, sem trocar o modo.
+Contatos prolongados contam como atividade e não repetem a troca. Com a tela
+apagada, o primeiro contato somente desperta. Essas proteções também valem
+para o controle ECO na bateria: arrastar fecha sem alternar e segurar não repete.
+
+O teste integrado cobre o ciclo completo, persistência, ECO na bateria,
+contato prolongado, arraste sem clique acidental e despertar. As referências
+históricas com arco e barra permanecem somente nos diagnósticos. Não há mais
+seleção contínua de brilho no padrão.
 
 O painel usa fundo circular opaco de 412 × 412 px em `#26302B`, botões `#748173`, texto claro e
 acento amarelo `#F2B84B`, a mesma linguagem visual da lista de apps.
@@ -261,9 +366,9 @@ O build experimental `display_profile_flat` substitui o mostrador ao fundo
 por uma cor lisa para isolar custo de renderização durante arrastes; não é
 o visual padrão. Procedimento em [`performance.md`](performance.md#isolamento-do-fundo-durante-arrastes-circulares).
 
-- O arco externo seleciona brilho de 10% a 100%.
+- O círculo inferior esquerdo alterna brilho 35%, 50%, 75% e 100%, desativando ECO.
 - O botão superior esquerdo alterna os perfis `15s`, `30s` e `ON`.
-- O botão superior direito mostra a bateria e alterna o modo `ECO`.
+- O círculo superior direito mostra a porcentagem da bateria e alterna ECO.
 - O botão central abre a lista de apps.
 - O círculo à esquerda do centro controla o volume: cada toque avança por
   `0 → 1 → 2 → 3 → 4 → 5 → 0`. São cinco níveis audíveis mais o modo mudo.
@@ -289,11 +394,19 @@ o visual padrão. Procedimento em [`performance.md`](performance.md#isolamento-d
   visível com tela acesa, usando o timer global existente. Só mudanças de
   temperatura ou condição alteram objetos; não há leitura de RTC nem consumo
   da caixa de resultados do app.
-- Os dois círculos restantes são espaços reservados para futuros atalhos; não recebem
-  toque.
+- O círculo inferior direito permanece reservado para um futuro atalho e não
+  recebe toque.
 
-Brilho, perfil de tempo e modo econômico são gravados na NVS. Quando o modo
-ECO limita o brilho a 35%, o valor do arco também reflete esse teto.
+O estado de iluminação e o perfil de tempo são gravados na NVS. A preferência
+`light_mode` codifica brilho e ECO juntos, embora os controles sejam separados,
+evitando gravações parciais de duas chaves. Na primeira carga sem essa chave, ECO antigo vira ECO 35%;
+fora do ECO, o brilho antigo vai para o preset mais próximo entre 50% e 100%
+(valores abaixo de 75% viram 50%). Valores inválidos usam essa mesma migração.
+A migração em memória não grava no boot; a primeira troca salva o modo novo.
+Os IDs existentes foram preservados: 0=ECO 35%, 1=50%, 2=100%, 3=75%.
+O ID 4 representa 35% sem ECO, permitindo reiniciar após desativar a economia
+sem mudar o brilho. Não há cópia do brilho anterior. A migração das chaves
+anteriores continua a mesma por compatibilidade.
 
 ## Política de energia
 
@@ -598,8 +711,8 @@ driver não podem ser copiados diretamente.
   ganho de fluidez e a ausência de rastros ainda precisam ser medidos no painel.
 
 Para validar no dispositivo, abra e feche os acessos rápidos lentamente e
-rapidamente fora do arco; deslize no arco de brilho e confirme que o painel
-permanece aberto, inclusive ao sair do contorno. Revele a lista, cancele o
+rapidamente; confira o ciclo 35/50/75/100, ECO pela bateria e saída de ECO mantendo 35%.
+Arraste para cima a partir dela e confirme que fecha sem trocar o modo. Revele a lista, cancele o
 gesto e retorne ao relógio. Observe especialmente a borda móvel e os submostradores que
 reaparecem. Repita após apagar e acordar a tela, verificando que o primeiro
 toque apenas acorda e que a hora é atualizada.

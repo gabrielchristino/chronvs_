@@ -17,3 +17,9 @@ void chronvs_system_ui_notify_activity(void);
 
 /* Updates the battery percentage shown in the quick-settings panel. */
 void chronvs_system_ui_set_battery(uint8_t percent, float voltage);
+
+#ifdef CHRONVS_PANEL_AUTOTEST
+/* Read-only state for the isolated scripted-gesture test. */
+typedef struct { int16_t y; bool hidden, eco; uint8_t brightness, profile; } chronvs_ui_panel_probe_t;
+chronvs_ui_panel_probe_t chronvs_system_ui_panel_probe(void);
+#endif

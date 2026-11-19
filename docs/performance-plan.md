@@ -1,10 +1,38 @@
 # Próximas melhorias de desempenho
 
+Investigação de 19/11/2026: [`display-scan.md`](display-scan.md) registra a
+análise do caminho LVGL/QSPI, o controle com observação de TE e o candidato
+com espera antes da primeira faixa. A bancada compara áreas completas iguais
+com fundo liso/mostrador e permite sair para medir os menus reais. Essa etapa
+não promove alterações ao padrão nem considera TE uma causa comprovada.
+Retorno físico posterior: TE isolado manteve gelatina parecida; bancada não
+foi vista pelo usuário. `display_scan_detail` prepara uma medição automática
+limitada, sem espera TE, com profiling das primitivas atuais em release/O2.
+O ensaio foi concluído; o candidato de cache RLE reduziu render de cerca de
+117 para 27 ms na recomposição completa. A prioridade passa a avaliar
+`display_scene_quiet` nos menus reais, despertar e pressão prolongada antes
+de promover o cache. Histórico e limites continuam em `display-scan.md`.
+Com a cobertura opaca corrigida, o ensaio final ficou em aproximadamente 23 ms
+de render e 38 ms por refresh. São números da bancada, não dos gestos dos menus.
+Após avaliação silenciosa, o usuário confirmou **“Melhorou bastante”**; cache
+RLE, cobertura opaca e 16 máscaras passam ao padrão, com TE desligado. A fila
+histórica abaixo deve ser lida à luz dessa adoção: eventual efeito residual
+exige medir os painéis reais, sem repetir o diagnóstico inicial de TE isolado.
+
 Atualizado em 08/10/2026. O firmware de referência é o padrão release/O2,
 com submostradores fixos e proteção do arco de brilho. Procedimentos de build,
 diagnóstico, geração dos caches e recuperação estão em [performance.md](performance.md).
 
 ## Situação atual
+
+- A medição das bandejas reais adotou cache de instruções de 32 KiB, mantendo
+  dados de 32 KiB/linha de 32 bytes. Os tempos caíram cerca de um terço e o
+  Clima/HTTPS passou no relógio. A troca posterior do arco por barra reduziu
+  abrir/fechar acessos em aproximadamente 15–17%, com pico de abertura de
+  70 ms; o launcher ainda tem picos próximos de 99 ms. A prioridade
+  restante é reduzir o trabalho de composição durante o movimento; os números
+  da bancada de barras não substituem os 42 gestos. Comparações e custo de RAM
+  em [`panel-autotest.md`](panel-autotest.md).
 
 - O padrão usa LVGL e aplicação em O2, sem logs, consoles ou profiling.
 - O mostrador permanece estático em repouso; atualiza ao acordar/voltar e,

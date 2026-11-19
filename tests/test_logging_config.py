@@ -6,14 +6,23 @@ SCRIPT = (pathlib.Path(__file__).resolve().parents[1] / "scripts/configure_loggi
 
 
 class LoggingConfigTests(unittest.TestCase):
-    def configure(self, mode):
+    def configure(self, mode, cache_line="reference", instruction_cache="reference"):
         with tempfile.TemporaryDirectory() as folder:
             root = pathlib.Path(folder)
-            (root / "sdkconfig.test").write_text("CONFIG_ESP_CONSOLE_UART_DEFAULT=y\n")
+            (root / "sdkconfig.test").write_text(
+                "CONFIG_ESP_CONSOLE_UART_DEFAULT=y\n"
+                "CONFIG_ESP32S3_DATA_CACHE_32KB=y\n"
+                "CONFIG_ESP32S3_DATA_CACHE_LINE_32B=y\n"
+                "CONFIG_ESP32S3_DATA_CACHE_LINE_SIZE=32\n"
+                "CONFIG_ESP32S3_INSTRUCTION_CACHE_16KB=y\n"
+                "CONFIG_ESP32S3_INSTRUCTION_CACHE_SIZE=0x4000\n"
+                "CONFIG_SPIRAM_SPEED_80M=y\n")
 
             class Env(dict):
                 def GetProjectOption(self, name, default=""):
-                    return {"custom_serial_diagnostics": mode, "build_type": "release"}.get(name, default)
+                    return {"custom_serial_diagnostics": mode, "build_type": "release",
+                            "custom_data_cache_line": cache_line,
+                            "custom_instruction_cache": instruction_cache}.get(name, default)
 
                 def subst(self, value):
                     return value.replace("$PIOENV", "test")
@@ -38,6 +47,36 @@ class LoggingConfigTests(unittest.TestCase):
             config = self.configure(mode)
             self.assertIn("CONFIG_ESP_CONSOLE_UART_DEFAULT=y\n", config)
             self.assertIn("CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y\n", config)
+
+    def test_cache_line_experiment_preserves_capacity_and_clock(self):
+        reference = self.configure("usb")
+        self.assertIn("CONFIG_ESP32S3_DATA_CACHE_LINE_32B=y\n", reference)
+        self.assertNotIn("CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y\n", reference)
+        candidate = self.configure("usb", "64")
+        self.assertIn("# CONFIG_ESP32S3_DATA_CACHE_LINE_32B is not set\n", candidate)
+        self.assertIn("CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y\n", candidate)
+        self.assertIn("CONFIG_ESP32S3_DATA_CACHE_LINE_SIZE=64\n", candidate)
+        self.assertIn("CONFIG_ESP32S3_DATA_CACHE_32KB=y\n", candidate)
+        self.assertIn("CONFIG_SPIRAM_SPEED_80M=y\n", candidate)
+
+    def test_invalid_cache_line_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "custom_data_cache_line"):
+            self.configure("usb", "128")
+
+    def test_instruction_experiment_keeps_data_cache_and_clock(self):
+        reference = self.configure("usb")
+        self.assertIn("CONFIG_ESP32S3_INSTRUCTION_CACHE_16KB=y\n", reference)
+        candidate = self.configure("usb", instruction_cache="32")
+        self.assertIn("# CONFIG_ESP32S3_INSTRUCTION_CACHE_16KB is not set\n", candidate)
+        self.assertIn("CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB=y\n", candidate)
+        self.assertIn("CONFIG_ESP32S3_INSTRUCTION_CACHE_SIZE=0x8000\n", candidate)
+        self.assertIn("CONFIG_ESP32S3_DATA_CACHE_32KB=y\n", candidate)
+        self.assertIn("CONFIG_ESP32S3_DATA_CACHE_LINE_32B=y\n", candidate)
+        self.assertIn("CONFIG_SPIRAM_SPEED_80M=y\n", candidate)
+
+    def test_invalid_instruction_cache_is_rejected(self):
+        with self.assertRaisesRegex(RuntimeError, "custom_instruction_cache"):
+            self.configure("usb", instruction_cache="64")
 
 
 if __name__ == "__main__":

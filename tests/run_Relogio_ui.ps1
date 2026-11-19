@@ -1,6 +1,18 @@
-param([switch]$System, [switch]$FlatWatch, [switch]$MotherCache, [switch]$Panels, [switch]$KeepCloseRedraw, [switch]$PanelCodeO2, [switch]$PanelNoContent, [switch]$PanelNoIcons, [switch]$LauncherIconCache, [switch]$GPSStandby)
+param([switch]$System, [switch]$FlatWatch, [switch]$MotherCache, [switch]$Panels, [switch]$KeepCloseRedraw, [switch]$PanelCodeO2, [switch]$PanelNoContent, [switch]$PanelNoIcons, [switch]$LauncherIconCache, [switch]$GPSStandby, [switch]$DisplayBench, [switch]$BenchAuto, [switch]$CircleCache16, [switch]$SceneCache, [switch]$WatchReference, [switch]$PanelAutoTest, [switch]$SelectiveClip, [switch]$ArcClip, [switch]$ArcReference, [switch]$OpaqueIconCache, [switch]$SliderReference)
 $ErrorActionPreference = 'Stop'
+if ($OpaqueIconCache) { $LauncherIconCache = $true }
 if ($GPSStandby -and -not $System) { throw 'GPSStandby requires System' }
+if ($ArcClip -and -not $System) { throw 'ArcClip requires System' }
+if ($SelectiveClip -and -not $System) { throw 'SelectiveClip requires System' }
+if ($PanelAutoTest -and (-not $System -or $DisplayBench)) { throw 'PanelAutoTest requires System without DisplayBench' }
+if ($DisplayBench -and -not $System) { throw 'DisplayBench requires System' }
+if ($BenchAuto -and -not $DisplayBench) { throw 'BenchAuto requires DisplayBench' }
+if ($SceneCache -and (-not $System -or $FlatWatch)) { throw 'SceneCache requires System and the real watch' }
+if ($CircleCache16 -and -not $System) { throw 'CircleCache16 requires System' }
+if ($WatchReference -and (-not $System -or $SceneCache)) { throw 'WatchReference requires System without SceneCache' }
+# The normal System suite follows the adopted firmware. Historical display
+# experiments retain their own controls; WatchReference explicitly selects it.
+$standardWatch = $System -and -not ($WatchReference -or $FlatWatch -or $MotherCache -or $Panels -or $KeepCloseRedraw -or $PanelCodeO2 -or $PanelNoContent -or $PanelNoIcons -or $LauncherIconCache -or $DisplayBench -or $CircleCache16)
 if ($LauncherIconCache -and (-not $System -or $PanelNoContent -or $PanelNoIcons)) { throw 'LauncherIconCache requires System with full icons' }
 if ($MotherCache -and (-not $System -or $FlatWatch)) { throw 'MotherCache requires System with the orbital watch' }
 if (($Panels -or $KeepCloseRedraw) -and -not $System) { throw 'Panel diagnostics require System' }
@@ -17,8 +29,19 @@ try {
         'tests/Relogio_ui_test.c', 'src/services/Relogio_service.c', 'src/core/calendar.c', 'src/core/Notas_text.c', 'src/ui/Notas_font.c', 'src/ui/Relogio_widgets.c', 'src/ui/control_style.c') + $sources + @('-o', '.pio/host-tests/Relogio_ui_test.exe')
     $executable = '.pio/host-tests/Relogio_ui_test.exe'
     if ($System) {
+        $arguments += 'src/ui/arc_clip.c'
+        if ($ArcClip) { $arguments += '-DCHRONVS_ARC_INNER_CLIP' }
+        if ($ArcReference -or $ArcClip) { $arguments += '-DCHRONVS_BRIGHTNESS_ARC_REFERENCE' }
+        if ($SliderReference) { $arguments += '-DCHRONVS_BRIGHTNESS_SLIDER_REFERENCE' }
+        if ($SelectiveClip) { $arguments += @('-DCHRONVS_PANEL_SELECTIVE_CLIP','src/ui/circle_clip.c') }
+        if ($PanelAutoTest) { $arguments += @('-DCHRONVS_PANEL_AUTOTEST','src/platform/panel_autotest.c') }
+        if ($DisplayBench) { $arguments += @('-DCHRONVS_DISPLAY_BENCH','src/platform/display_bench.c') }
+        if ($BenchAuto) { $arguments += '-DCHRONVS_DISPLAY_BENCH_AUTORUN' }
+        if ($CircleCache16 -or $standardWatch) { $arguments += '-DLV_CIRCLE_CACHE_SIZE=16' }
+        if ($SceneCache -or $standardWatch) { $arguments += @('-DCHRONVS_WATCH_SCENE_CACHE','src/ui/row_cache.c') }
         if ($GPSStandby) { $arguments += '-DCHRONVS_GPS_STANDBY_TEST' }
         if ($LauncherIconCache) { $arguments += '-DCHRONVS_LAUNCHER_ICON_CACHE' }
+        if ($OpaqueIconCache) { $arguments += '-DCHRONVS_LAUNCHER_ICON_OPAQUE' }
         if ($PanelCodeO2) { $arguments += '-DCHRONVS_PANEL_CODE_O2' }
         if ($PanelNoContent) { $arguments += '-DCHRONVS_PANEL_NO_CONTENT' }
         if ($PanelNoIcons) { $arguments += '-DCHRONVS_PANEL_NO_ICONS' }

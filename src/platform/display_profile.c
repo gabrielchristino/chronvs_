@@ -38,6 +38,93 @@ typedef struct {
 } panel_profile_t;
 static panel_profile_t panels[CHRONVS_PANEL_COUNT];
 
+#ifdef CHRONVS_PANEL_PART_PROFILE
+typedef struct {
+    int64_t began;
+    uint64_t total_us, main_us;
+    uint32_t calls;
+    int16_t parent;
+    uint8_t panel;
+    const char *kind;
+    bool started;
+} panel_part_t;
+static panel_part_t *parts;
+static unsigned part_count;
+enum { MAX_PARTS = 64 };
+
+static void part_event(lv_event_t *event) {
+    if (lv_event_get_target(event) != lv_event_get_current_target(event)) return;
+    panel_part_t *part = lv_event_get_user_data(event);
+    switch (lv_event_get_code(event)) {
+        case LV_EVENT_DRAW_MAIN_BEGIN:
+            part->began = esp_timer_get_time();
+            part->started = true;
+            ++part->calls;
+            break;
+        case LV_EVENT_DRAW_MAIN_END:
+            if (part->started) part->main_us += esp_timer_get_time() - part->began;
+            break;
+        case LV_EVENT_DRAW_POST_END:
+            if (part->started) part->total_us += esp_timer_get_time() - part->began;
+            part->started = false;
+            break;
+        default: break;
+    }
+}
+
+static int bind_part(lv_obj_t *object, chronvs_panel_t panel, int parent) {
+    if (!parts || part_count == MAX_PARTS) return -1;
+    const unsigned index = part_count++;
+    panel_part_t *part = &parts[index];
+    part->parent = parent;
+    part->panel = panel;
+    part->kind = lv_obj_check_type(object, &lv_label_class) ? "label" :
+        lv_obj_check_type(object, &lv_arc_class) ? "arc" :
+        lv_obj_check_type(object, &lv_slider_class) ? "slider" :
+        lv_obj_check_type(object, &lv_btn_class) ? "button" : "object";
+    lv_obj_add_event_cb(object, part_event, LV_EVENT_DRAW_MAIN_BEGIN, part);
+    lv_obj_add_event_cb(object, part_event, LV_EVENT_DRAW_MAIN_END, part);
+    lv_obj_add_event_cb(object, part_event, LV_EVENT_DRAW_POST_END, part);
+    return (int)index;
+}
+
+static void bind_panel_parts(lv_obj_t *root, chronvs_panel_t panel) {
+    if (!parts) parts = heap_caps_calloc(MAX_PARTS, sizeof(*parts), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (panel == CHRONVS_PANEL_QUICK) {
+        for (unsigned i = 0; i < lv_obj_get_child_cnt(root); ++i) {
+            lv_obj_t *child = lv_obj_get_child(root, i);
+            const int parent = bind_part(child, panel, -1);
+            for (unsigned j = 0; j < lv_obj_get_child_cnt(child); ++j)
+                bind_part(lv_obj_get_child(child, j), panel, parent);
+        }
+    } else {
+        lv_obj_t *list = lv_obj_get_child(root, 0);
+        for (unsigned i = 0; i < lv_obj_get_child_cnt(list); ++i) {
+            lv_obj_t *row = lv_obj_get_child(list, i);
+            const int parent = bind_part(row, panel, -1);
+            for (unsigned j = 0; j < lv_obj_get_child_cnt(row); ++j) {
+                lv_obj_t *child = lv_obj_get_child(row, j);
+                const int child_id = bind_part(child, panel, parent);
+                if (j == 0) {
+                    for (unsigned k = 0; k < lv_obj_get_child_cnt(child); ++k)
+                        bind_part(lv_obj_get_child(child, k), panel, child_id);
+                }
+            }
+        }
+    }
+}
+
+void chronvs_display_profile_dump_panel_parts(void) {
+    for (unsigned i = 0; i < part_count; ++i) {
+        const panel_part_t *part = &parts[i];
+        ESP_LOGI("panel_part", "node=%u parent=%d panel=%s kind=%s calls=%" PRIu32
+                 " main_us=%" PRIu64 " total_us=%" PRIu64,
+                 i,part->parent,part->panel == CHRONVS_PANEL_QUICK ? "quick" : "launcher",
+                 part->kind,part->calls,part->main_us,part->total_us);
+    }
+}
+#endif
+
 static void panel_draw_event(lv_event_t *event) {
     if (lv_event_get_target(event) != lv_event_get_current_target(event)) return;
     panel_profile_t *p = lv_event_get_user_data(event);
@@ -64,6 +151,9 @@ static void panel_draw_event(lv_event_t *event) {
 
 void chronvs_display_profile_bind_panel(lv_obj_t *root, chronvs_panel_t panel) {
     if (!root || (unsigned)panel >= CHRONVS_PANEL_COUNT) return;
+#ifdef CHRONVS_PANEL_PART_PROFILE
+    bind_panel_parts(root, panel);
+#endif
     lv_obj_add_event_cb(root, panel_draw_event, LV_EVENT_DRAW_MAIN_BEGIN, &panels[panel]);
     lv_obj_add_event_cb(root, panel_draw_event, LV_EVENT_DRAW_MAIN_END, &panels[panel]);
     lv_obj_add_event_cb(root, panel_draw_event, LV_EVENT_DRAW_POST_END, &panels[panel]);

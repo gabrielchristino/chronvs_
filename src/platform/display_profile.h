@@ -13,6 +13,11 @@ typedef enum {
 } chronvs_watch_section_t;
 
 typedef enum { CHRONVS_PANEL_QUICK, CHRONVS_PANEL_LAUNCHER, CHRONVS_PANEL_COUNT } chronvs_panel_t;
+#ifdef CHRONVS_PANEL_PART_PROFILE
+void chronvs_display_profile_dump_panel_parts(void);
+#else
+static inline void chronvs_display_profile_dump_panel_parts(void) {}
+#endif
 #if defined(CHRONVS_DISPLAY_PROFILE) && defined(CHRONVS_PANEL_PROFILE)
 #include "lvgl.h"
 void chronvs_display_profile_bind_panel(lv_obj_t *root, chronvs_panel_t panel);

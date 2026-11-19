@@ -4,6 +4,20 @@ const lv_point_t chronvs_ui_hex_offsets[7] = {
     {-43, 0}, {43, 0}, {-86, 72}, {0, 72}, {86, 72}, {-43, 144}, {43, 144},
 };
 
+void chronvs_ui_style_slider(lv_obj_t *slider) {
+    lv_obj_remove_style_all(slider);
+    lv_obj_set_style_bg_color(slider, lv_color_hex(CHRONVS_UI_SURFACE), LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(slider, LV_OPA_COVER, LV_PART_MAIN);
+    lv_obj_set_style_radius(slider, 3, LV_PART_MAIN);
+    lv_obj_set_style_bg_color(slider, lv_color_hex(CHRONVS_UI_ACCENT), LV_PART_INDICATOR);
+    lv_obj_set_style_bg_opa(slider, LV_OPA_COVER, LV_PART_INDICATOR);
+    lv_obj_set_style_radius(slider, 3, LV_PART_INDICATOR);
+    lv_obj_set_style_bg_color(slider, lv_color_hex(CHRONVS_UI_TEXT), LV_PART_KNOB);
+    lv_obj_set_style_bg_opa(slider, LV_OPA_COVER, LV_PART_KNOB);
+    lv_obj_set_style_radius(slider, LV_RADIUS_CIRCLE, LV_PART_KNOB);
+    lv_obj_set_style_pad_all(slider, 5, LV_PART_KNOB);
+}
+
 void chronvs_ui_style_arc(lv_obj_t *arc) {
     lv_obj_set_style_arc_color(arc, lv_color_hex(CHRONVS_UI_SURFACE), LV_PART_MAIN);
     lv_obj_set_style_arc_width(arc, 14, LV_PART_MAIN);

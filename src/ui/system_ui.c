@@ -1,4 +1,7 @@
 #include "ui/system_ui.h"
+#include "ui/circle_clip.h"
+#include "ui/arc_clip.h"
+#include "ui/panel_motion.h"
 
 #include <stdbool.h>
 #include <stddef.h>
@@ -19,6 +22,10 @@
 #include "services/sound_service.h"
 #include "services/weather_service.h"
 #include "ui/weather_icon.h"
+
+#if defined(CHRONVS_BRIGHTNESS_ARC_REFERENCE) || defined(CHRONVS_BRIGHTNESS_SLIDER_REFERENCE)
+#define CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
+#endif
 
 /* PlatformIO debug flags otherwise leave this translation unit at -Og. */
 #if defined(__GNUC__) && defined(CHRONVS_PANEL_CODE_O2)
@@ -44,7 +51,6 @@
 #define MENU_EDGE_START_Y 90
 #define MENU_DRAG_SLOP 5
 #define MENU_DRAG_FRAME_MS 20
-#define MENU_ANIMATION_MS 220
 #define MENU_OPEN_COMMIT_DISTANCE 120
 #define MENU_OPEN_FOLLOW_GAIN 2
 #define APP_SWIPE_COMMIT_DISTANCE 120
@@ -75,7 +81,11 @@ static lv_obj_t *clock_surface;
 static lv_obj_t *settings_panel;
 static lv_obj_t *brightness_label;
 static lv_obj_t *profile_label;
-static lv_obj_t *brightness_arc;
+static lv_obj_t *brightness_control;
+#ifdef CHRONVS_PANEL_SELECTIVE_CLIP
+static chronvs_circle_clip_t quick_circle_clip;
+static chronvs_circle_clip_node_t quick_circle_nodes[9];
+#endif
 static lv_obj_t *profile_button;
 static lv_obj_t *battery_button;
 static lv_obj_t *app_launcher_button;
@@ -87,12 +97,87 @@ static lv_obj_t *weather_button;
 static lv_obj_t *weather_symbol;
 static chronvs_weather_snapshot_t weather_snapshot;
 static lv_obj_t *battery_label;
+static uint8_t battery_percent = 100;
 static lv_obj_t *battery_eco_label;
+#ifndef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
+static lv_obj_t *brightness_symbol;
+static lv_obj_t *battery_symbol;
+
+/* Small static symbols: no bitmap, animation or charge-level redraw. */
+static void quick_symbol_draw(lv_event_t *event) {
+    lv_obj_t *symbol = lv_event_get_target(event);
+    lv_area_t bounds;
+    lv_obj_get_coords(symbol, &bounds);
+    lv_draw_ctx_t *ctx = lv_event_get_draw_ctx(event);
+    const lv_color_t color = lv_obj_get_style_text_color(symbol, LV_PART_MAIN);
+    lv_draw_rect_dsc_t rect;
+    lv_draw_rect_dsc_init(&rect);
+    rect.bg_color = rect.border_color = color;
+    if (lv_event_get_user_data(event)) {
+        rect.bg_opa = LV_OPA_TRANSP;
+        rect.border_width = 2;
+        rect.radius = 2;
+        lv_area_t body = {bounds.x1+1,bounds.y1+6,bounds.x1+20,bounds.y1+17};
+        lv_draw_rect(ctx, &rect, &body);
+        rect.bg_opa = LV_OPA_COVER;
+        rect.border_width = 0;
+        rect.radius = 1;
+        lv_area_t tip = {bounds.x1+21,bounds.y1+9,bounds.x1+23,bounds.y1+14};
+        lv_draw_rect(ctx, &rect, &tip);
+    } else {
+        rect.radius = LV_RADIUS_CIRCLE;
+        lv_area_t center = {bounds.x1+7,bounds.y1+7,bounds.x1+16,bounds.y1+16};
+        lv_draw_rect(ctx, &rect, &center);
+        static const int8_t rays[8][4] = {
+            {11,1,11,4},{11,19,11,22},{1,11,4,11},{19,11,22,11},
+            {4,4,6,6},{17,17,19,19},{4,19,6,17},{17,6,19,4},
+        };
+        lv_draw_line_dsc_t line;
+        lv_draw_line_dsc_init(&line);
+        line.color = color;
+        line.width = 2;
+        line.round_start = line.round_end = true;
+        for (unsigned i=0; i<8; ++i) {
+            lv_point_t a = {bounds.x1+rays[i][0],bounds.y1+rays[i][1]};
+            lv_point_t b = {bounds.x1+rays[i][2],bounds.y1+rays[i][3]};
+            lv_draw_line(ctx, &line, &a, &b);
+        }
+    }
+}
+
+static lv_obj_t *create_quick_symbol(lv_obj_t *parent, bool battery) {
+    lv_obj_t *symbol = lv_obj_create(parent);
+    lv_obj_remove_style_all(symbol);
+    lv_obj_set_size(symbol, 24, 24);
+    lv_obj_align(symbol, LV_ALIGN_CENTER, 0, -11);
+    lv_obj_clear_flag(symbol, LV_OBJ_FLAG_CLICKABLE | LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(symbol, quick_symbol_draw, LV_EVENT_DRAW_MAIN,
+                       battery ? (void *)1 : NULL);
+    return symbol;
+}
+#endif
 static lv_timer_t *clock_animation_timer;
 static nvs_handle_t settings_storage;
 static uint8_t selected_brightness = DEFAULT_BRIGHTNESS;
 static uint8_t selected_profile;
 static bool eco_enabled;
+#ifndef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
+/* Keep persisted IDs: 100% was already stored as 2. */
+enum { LIGHT_ECO, LIGHT_50, LIGHT_100, LIGHT_75, LIGHT_35, LIGHT_MODE_COUNT };
+static const uint8_t lighting_next_mode[LIGHT_MODE_COUNT] = {
+    [LIGHT_ECO] = LIGHT_50, [LIGHT_50] = LIGHT_75,
+    [LIGHT_75] = LIGHT_100, [LIGHT_100] = LIGHT_35, [LIGHT_35] = LIGHT_50,
+};
+static uint8_t lighting_mode = LIGHT_50;
+static bool lighting_mode_saved;
+
+static void select_lighting_mode(uint8_t mode) {
+    lighting_mode = mode;
+    eco_enabled = mode == LIGHT_ECO;
+    selected_brightness = (eco_enabled || mode == LIGHT_35) ? ECO_MAX_BRIGHTNESS :
+                          mode == LIGHT_50 ? 50 : mode == LIGHT_75 ? 75 : 100;
+}
+#endif
 static uint8_t output_brightness = UINT8_MAX;
 static display_state_t display_state = DISPLAY_ACTIVE;
 static uint32_t last_activity_tick;
@@ -212,6 +297,12 @@ static void load_settings(void) {
     if (nvs_get_u8(settings_storage, "eco", &value) == ESP_OK) {
         eco_enabled = value != 0;
     }
+#ifndef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
+    if (nvs_get_u8(settings_storage, "light_mode", &value) == ESP_OK && value < LIGHT_MODE_COUNT) {
+        lighting_mode = value;
+        lighting_mode_saved = true;
+    }
+#endif
     if (nvs_get_u8(settings_storage, "volume", &value) == ESP_OK &&
         value <= CHRONVS_SOUND_MAX_VOLUME) chronvs_sound_set_volume(value);
 }
@@ -264,26 +355,52 @@ static void volume_event(lv_event_t *event) {
 
 static void update_brightness_label(void) {
     if (brightness_label == NULL) return;
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
     lv_label_set_text_fmt(brightness_label, "BRILHO  %u%%",
                           active_output_brightness());
+#else
+    lv_label_set_text_fmt(brightness_label, "%u", selected_brightness);
+#endif
 }
 
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
+static int brightness_value(void) {
+#ifdef CHRONVS_BRIGHTNESS_ARC_REFERENCE
+    return lv_arc_get_value(brightness_control);
+#else
+    return lv_slider_get_value(brightness_control);
+#endif
+}
+
+static void brightness_set_value(int value) {
+#ifdef CHRONVS_BRIGHTNESS_ARC_REFERENCE
+    lv_arc_set_value(brightness_control, value);
+#else
+    lv_slider_set_value(brightness_control, value, LV_ANIM_OFF);
+#endif
+}
+#endif
+
 static void update_brightness_control(void) {
-    if (brightness_arc == NULL) return;
-    lv_arc_set_range(brightness_arc, 10, 100);
-    lv_arc_set_value(brightness_arc, active_output_brightness());
+    if (brightness_control == NULL) return;
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
+    brightness_set_value(active_output_brightness());
+#endif
     update_brightness_label();
 }
+
+static void update_battery_eco_button(void);
 
 static void brightness_event(lv_event_t *event) {
     const lv_event_code_t code = lv_event_get_code(event);
 
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
     if (code == LV_EVENT_VALUE_CHANGED) {
-        selected_brightness = (uint8_t)lv_arc_get_value(brightness_arc);
+        selected_brightness = (uint8_t)brightness_value();
         display_state = DISPLAY_ACTIVE;
         set_output_brightness(active_output_brightness());
         if (eco_enabled && selected_brightness > ECO_MAX_BRIGHTNESS) {
-            lv_arc_set_value(brightness_arc, ECO_MAX_BRIGHTNESS);
+            brightness_set_value(ECO_MAX_BRIGHTNESS);
         }
         update_brightness_label();
         mark_activity();
@@ -291,25 +408,56 @@ static void brightness_event(lv_event_t *event) {
     else if (code == LV_EVENT_RELEASED) {
         store_u8("brightness", selected_brightness);
     }
+#else
+    if (code == LV_EVENT_PRESSED || code == LV_EVENT_PRESSING) {
+        mark_activity();
+    } else if (code == LV_EVENT_CLICKED && !menu_suppress_click && !wake_only_contact &&
+               display_state == DISPLAY_ACTIVE) {
+        select_lighting_mode(lighting_next_mode[lighting_mode]);
+        set_output_brightness(active_output_brightness());
+        update_brightness_control();
+        update_battery_eco_button();
+        store_u8("light_mode", lighting_mode);
+        mark_activity();
+    }
+#endif
 }
 
 static void update_battery_eco_button(void) {
     if (battery_button == NULL || battery_eco_label == NULL) return;
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
     lv_obj_set_style_bg_color(battery_button,
         lv_color_hex(eco_enabled ? COLOR_PANEL_EDGE : COLOR_PANEL), 0);
     lv_obj_set_style_border_color(battery_button,
         lv_color_hex(eco_enabled ? COLOR_ACCENT : COLOR_PANEL_EDGE), 0);
+#else
+    if (eco_enabled) lv_obj_add_state(battery_button, LV_STATE_CHECKED);
+    else lv_obj_clear_state(battery_button, LV_STATE_CHECKED);
+    lv_obj_align(battery_symbol, LV_ALIGN_CENTER, 0, eco_enabled ? -18 : -11);
+    lv_obj_align(battery_label, LV_ALIGN_CENTER, 0, eco_enabled ? 2 : 13);
+    lv_obj_set_style_text_color(battery_label, lv_color_hex(eco_enabled ? COLOR_PANEL :
+        battery_percent <= 15 ? 0xE47470 : battery_percent <= 35 ? COLOR_ACCENT : COLOR_TEXT), 0);
+#endif
     lv_label_set_text(battery_eco_label, eco_enabled ? "ECO" : "");
 }
 
 static void eco_event(lv_event_t *event) {
-    if (lv_event_get_code(event) != LV_EVENT_CLICKED || menu_suppress_click) return;
+    if (lv_event_get_code(event) != LV_EVENT_CLICKED || menu_suppress_click ||
+        wake_only_contact || display_state != DISPLAY_ACTIVE) return;
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
     eco_enabled = !eco_enabled;
+#else
+    select_lighting_mode(eco_enabled ? LIGHT_35 : LIGHT_ECO);
+#endif
     display_state = DISPLAY_ACTIVE;
     update_brightness_control();
     set_output_brightness(active_output_brightness());
     update_battery_eco_button();
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
     store_u8("eco", eco_enabled ? 1 : 0);
+#else
+    store_u8("light_mode", lighting_mode);
+#endif
     mark_activity();
     ESP_LOGI(TAG, "Economy mode %s", eco_enabled ? "enabled" : "disabled");
 }
@@ -383,7 +531,9 @@ static void menu_animation_ready(lv_anim_t *animation) {
 
 static void set_menu_interactive(bool interactive) {
     lv_obj_t *objects[] = {
-        settings_panel, brightness_arc, profile_button, battery_button, app_launcher_button,
+        settings_panel, brightness_control, profile_button,
+        battery_button,
+        app_launcher_button,
         volume_button, weather_button,
     };
     for (size_t index = 0; index < sizeof(objects) / sizeof(objects[0]); ++index) {
@@ -405,13 +555,14 @@ static void animate_menu(bool open) {
     set_menu_interactive(open);
 
     lv_anim_del(settings_panel, NULL);
+    lv_obj_update_layout(settings_panel);
     lv_anim_t animation;
     lv_anim_init(&animation);
     lv_anim_set_var(&animation, settings_panel);
     lv_anim_set_exec_cb(&animation, menu_set_y);
     lv_anim_set_values(&animation, lv_obj_get_y(settings_panel), target_y);
-    lv_anim_set_time(&animation, MENU_ANIMATION_MS);
-    lv_anim_set_path_cb(&animation, lv_anim_path_ease_out);
+    lv_anim_set_time(&animation, CHRONVS_UI_PANEL_SETTLE_MS);
+    lv_anim_set_path_cb(&animation, CHRONVS_UI_PANEL_SETTLE_PATH);
     lv_anim_set_ready_cb(&animation, menu_animation_ready);
     lv_anim_start(&animation);
     mark_activity();
@@ -449,15 +600,25 @@ static void place_app_preview_above(lv_coord_t y) {
 static void menu_touch_event(lv_event_t *event) {
     const lv_event_code_t code = lv_event_get_code(event);
     lv_point_t point;
+    if (code == LV_EVENT_PRESSED || code == LV_EVENT_PRESSING) mark_activity();
 
-    /* LVGL retains the pressed target until release: arc drags own the contact. */
-    if (lv_event_get_target(event) == brightness_arc) {
+    if (code == LV_EVENT_PRESSED && lv_anim_get(settings_panel, menu_set_y)) {
+        mark_activity();
+        lv_indev_t *input = lv_indev_get_act();
+        if (input) lv_indev_wait_release(input);
+        return;
+    }
+
+    /* LVGL retains the pressed target until release: brightness owns the contact. */
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
+    if (lv_event_get_target(event) == brightness_control) {
         if (code == LV_EVENT_PRESSED || code == LV_EVENT_PRESSING ||
             code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
             mark_activity();
         }
         return;
     }
+#endif
 
     if (code == LV_EVENT_PRESSED) {
         lv_indev_get_point(lv_indev_get_act(), &point);
@@ -512,21 +673,50 @@ static void create_quick_settings(void) {
     lv_obj_set_style_pad_all(settings_panel, 0, 0);
     lv_obj_add_event_cb(settings_panel, menu_touch_event, LV_EVENT_ALL, NULL);
 
-    brightness_arc = lv_arc_create(settings_panel);
-    lv_obj_set_size(brightness_arc, width - 24, height - 24);
-    lv_obj_center(brightness_arc);
-    lv_obj_add_flag(brightness_arc, LV_OBJ_FLAG_ADV_HITTEST | LV_OBJ_FLAG_EVENT_BUBBLE);
-    
-    lv_arc_set_range(brightness_arc, 10, 100);
-    lv_arc_set_bg_angles(brightness_arc, 135, 45);
-    lv_arc_set_value(brightness_arc, selected_brightness);
-    chronvs_ui_style_arc(brightness_arc);
-    lv_obj_add_event_cb(brightness_arc, brightness_event, LV_EVENT_ALL, NULL);
+#ifdef CHRONVS_BRIGHTNESS_ARC_REFERENCE
+    brightness_control = lv_arc_create(settings_panel);
+    lv_obj_set_size(brightness_control, width - 24, height - 24);
+    lv_obj_center(brightness_control);
+    lv_obj_add_flag(brightness_control, LV_OBJ_FLAG_ADV_HITTEST | LV_OBJ_FLAG_EVENT_BUBBLE);
+    lv_arc_set_range(brightness_control, 10, 100);
+    lv_arc_set_bg_angles(brightness_control, 135, 45);
+    chronvs_ui_style_arc(brightness_control);
+    chronvs_ui_arc_clip_bind(brightness_control);
+#elif defined(CHRONVS_BRIGHTNESS_SLIDER_REFERENCE)
+    brightness_control = lv_slider_create(settings_panel);
+    chronvs_ui_style_slider(brightness_control);
+    lv_obj_set_size(brightness_control, 170, 6);
+    lv_obj_align(brightness_control, LV_ALIGN_TOP_MID, 0, 70);
+    lv_obj_set_ext_click_area(brightness_control, 17);
+    lv_obj_add_flag(brightness_control, LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_PRESS_LOCK);
+    lv_obj_clear_flag(brightness_control, LV_OBJ_FLAG_SCROLLABLE);
+    lv_slider_set_range(brightness_control, 10, 100);
+#else
+    brightness_control = create_round_slot(settings_panel, chronvs_ui_hex_offsets[5].x,
+                                            chronvs_ui_hex_offsets[5].y - 72, true);
+    lv_obj_clear_flag(brightness_control, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_flag(brightness_control, LV_OBJ_FLAG_EVENT_BUBBLE);
+#endif
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
+    brightness_set_value(selected_brightness);
+#endif
+    lv_obj_add_event_cb(brightness_control, brightness_event, LV_EVENT_ALL, NULL);
 
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
     brightness_label = lv_label_create(settings_panel);
+#ifdef CHRONVS_BRIGHTNESS_ARC_REFERENCE
     lv_obj_set_style_text_font(brightness_label, &lv_font_montserrat_18, 0);
-    lv_obj_set_style_text_color(brightness_label, lv_color_hex(COLOR_ACCENT), 0);
     lv_obj_align(brightness_label, LV_ALIGN_TOP_MID, 0, 48);
+#else
+    lv_obj_set_style_text_font(brightness_label, &lv_font_montserrat_12, 0);
+    lv_obj_align(brightness_label, LV_ALIGN_TOP_MID, 0, 36);
+#endif
+    lv_obj_set_style_text_color(brightness_label, lv_color_hex(COLOR_ACCENT), 0);
+#else
+    brightness_symbol = create_quick_symbol(brightness_control, false);
+    brightness_label = lv_label_create(brightness_control);
+    lv_obj_align(brightness_label, LV_ALIGN_CENTER, 0, 13);
+#endif
     update_brightness_label();
 
     profile_button = create_round_slot(settings_panel, chronvs_ui_hex_offsets[0].x,
@@ -545,16 +735,28 @@ static void create_quick_settings(void) {
     lv_obj_add_flag(battery_button, LV_OBJ_FLAG_EVENT_BUBBLE);
     lv_obj_add_event_cb(battery_button, eco_event, LV_EVENT_CLICKED, NULL);
 
+#ifndef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
+    battery_symbol = create_quick_symbol(battery_button, true);
+#endif
     battery_label = lv_label_create(battery_button);
     lv_label_set_text(battery_label, "--%");
     lv_obj_set_style_text_font(battery_label, &lv_font_montserrat_18, 0);
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
     lv_obj_set_style_text_color(battery_label, lv_color_hex(COLOR_TEXT), 0);
     lv_obj_align(battery_label, LV_ALIGN_CENTER, 0, -8);
+#endif
 
     battery_eco_label = lv_label_create(battery_button);
     lv_obj_set_style_text_font(battery_eco_label, &lv_font_montserrat_12, 0);
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
     lv_obj_set_style_text_color(battery_eco_label, lv_color_hex(COLOR_ACCENT), 0);
-    lv_obj_align(battery_eco_label, LV_ALIGN_CENTER, 0, 16);
+#endif
+    lv_obj_align(battery_eco_label, LV_ALIGN_CENTER, 0,
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
+                 16);
+#else
+                 21);
+#endif
     update_battery_eco_button();
     update_brightness_control();
 
@@ -597,7 +799,12 @@ static void create_quick_settings(void) {
     lv_obj_set_style_text_color(weather_label,lv_color_hex(COLOR_TEXT),0);
     lv_obj_center(weather_label);
 
-    static const uint8_t placeholder_indices[] = {5, 6};
+    static const uint8_t placeholder_indices[] = {
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
+        5,
+#endif
+        6,
+    };
     for (size_t index = 0;
          index < sizeof(placeholder_indices) / sizeof(placeholder_indices[0]);
          ++index) {
@@ -614,6 +821,17 @@ static void create_quick_settings(void) {
 #endif
 #ifdef CHRONVS_PANEL_NO_ICONS
     lv_obj_set_style_opa_layered(volume_icon, LV_OPA_TRANSP, 0);
+#ifndef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
+    lv_obj_add_flag(brightness_symbol, LV_OBJ_FLAG_HIDDEN);
+    lv_obj_add_flag(battery_symbol, LV_OBJ_FLAG_HIDDEN);
+#endif
+#endif
+#ifdef CHRONVS_PANEL_SELECTIVE_CLIP
+    chronvs_circle_clip_init(&quick_circle_clip, settings_panel);
+    LV_ASSERT(lv_obj_get_child_cnt(settings_panel) <= 9);
+    for (uint32_t i = 0; i < lv_obj_get_child_cnt(settings_panel); ++i)
+        chronvs_circle_clip_bind(&quick_circle_clip, lv_obj_get_child(settings_panel, i),
+                                &quick_circle_nodes[i], false);
 #endif
     CHRONVS_PANEL_PROFILE_BIND(settings_panel, QUICK);
     lv_obj_add_flag(settings_panel, LV_OBJ_FLAG_HIDDEN);
@@ -645,6 +863,12 @@ static void clock_touch_event(lv_event_t *event) {
     }
 
     if (code == LV_EVENT_PRESSED) {
+        if (chronvs_app_is_settling()) {
+            mark_activity();
+            lv_indev_t *input = lv_indev_get_act();
+            if (input) lv_indev_wait_release(input);
+            return;
+        }
         if (touch_contact_active) return;
         touch_contact_active = true;
         wake_only_contact = display_state != DISPLAY_ACTIVE;
@@ -707,10 +931,12 @@ static void clock_touch_event(lv_event_t *event) {
         if (app_swipe_dragging) {
             lv_indev_get_point(lv_indev_get_act(), &point);
             if (gesture_start_y - point.y >= APP_SWIPE_COMMIT_DISTANCE) {
-                chronvs_app_open("apps");
+                chronvs_app_settle_y("apps", 0, "apps", CHRONVS_UI_PANEL_SETTLE_MS,
+                                     CHRONVS_UI_PANEL_SETTLE_PATH);
             }
             else {
-                chronvs_app_cancel_preview();
+                chronvs_app_settle_y("apps", lv_disp_get_ver_res(NULL), "watch",
+                                     CHRONVS_UI_PANEL_SETTLE_MS, CHRONVS_UI_PANEL_SETTLE_PATH);
             }
             app_swipe_dragging = false;
         }
@@ -757,6 +983,11 @@ void chronvs_system_ui_init(lv_obj_t *touch_surface,
     clock_surface = touch_surface;
     clock_animation_timer = animation_timer;
     load_settings();
+#ifndef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
+    if (!lighting_mode_saved)
+        lighting_mode = eco_enabled ? LIGHT_ECO : selected_brightness < 75 ? LIGHT_50 : LIGHT_100;
+    select_lighting_mode(lighting_mode);
+#endif
     last_activity_tick = lv_tick_get();
     create_quick_settings();
 
@@ -773,6 +1004,14 @@ bool chronvs_system_ui_display_is_off(void) {
     return display_state == DISPLAY_OFF;
 }
 
+#ifdef CHRONVS_PANEL_AUTOTEST
+chronvs_ui_panel_probe_t chronvs_system_ui_panel_probe(void) {
+    return (chronvs_ui_panel_probe_t){.y=lv_obj_get_y(settings_panel),
+        .hidden=lv_obj_has_flag(settings_panel,LV_OBJ_FLAG_HIDDEN),.eco=eco_enabled,
+        .brightness=selected_brightness,.profile=selected_profile};
+}
+#endif
+
 void chronvs_system_ui_notify_activity(void) {
     mark_activity();
     if (display_state != DISPLAY_ACTIVE) set_display_state(DISPLAY_ACTIVE);
@@ -781,9 +1020,14 @@ void chronvs_system_ui_notify_activity(void) {
 void chronvs_system_ui_set_battery(uint8_t percent, float voltage) {
     if (battery_label == NULL) return;
     if (percent > 100) percent = 100;
+    battery_percent = percent;
     lv_label_set_text_fmt(battery_label, "%u%%", percent);
+#ifdef CHRONVS_BRIGHTNESS_CONTINUOUS_REFERENCE
     lv_obj_set_style_text_color(battery_label,
         lv_color_hex(percent <= 15 ? 0xE47470 :
                      percent <= 35 ? COLOR_ACCENT : COLOR_TEXT), 0);
+#else
+    update_battery_eco_button();
+#endif
     ESP_LOGI(TAG, "Battery %.2f V (%u%%)", voltage, percent);
 }

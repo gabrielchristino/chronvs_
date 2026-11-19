@@ -15,3 +15,4 @@ extern const lv_point_t chronvs_ui_hex_offsets[7];
 /* Apply to a new control BEFORE setting geometry; removes the theme defaults. */
 void chronvs_ui_style_control(lv_obj_t *button, bool outline);
 void chronvs_ui_style_arc(lv_obj_t *arc);
+void chronvs_ui_style_slider(lv_obj_t *slider);

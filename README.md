@@ -63,9 +63,24 @@ com resultados e ponto de retomada documentados.
 
 - Firmware padrão release compilado e gravado no relógio em 08/10/2026, com hashes de gravação verificados. A proteção do arco de brilho passou no teste integrado LVGL; a interação corrigida ainda aguarda confirmação no dispositivo.
 
-- LVGL em `-O2` e logs/consoles desativados melhoraram a fluidez do padrão. O teste silencioso P6 confirmou menus rápidos e responsivos, mas ainda há faixas do menu em posições diferentes durante o movimento (efeito gelatina). A otimização isolada do código dos painéis é experimental. Histórico, limites e builds em [`docs/performance.md`](docs/performance.md).
+- O padrão usa release/O2, logs/consoles desativados e cache RLE do mostrador congelado. Em 19/11/2026, o usuário confirmou melhora clara da gelatina na versão silenciosa; a configuração foi incorporada ao padrão, com TE desligado. Histórico, limites e builds em [`docs/performance.md`](docs/performance.md).
 - Melhorias restantes do mostrador e dos painéis circulares, com prioridades
   e critérios de teste: [`docs/performance-plan.md`](docs/performance-plan.md).
+- Investigação de gelatina e otimização do redraw do mostrador, com medidas
+  físicas, testes de pixels e restauração: [`docs/display-scan.md`](docs/display-scan.md).
+- Teste automático de abrir, fechar e cancelar as bandejas reais, com 42 gestos
+  no relógio e tempos por operação: [`docs/panel-autotest.md`](docs/panel-autotest.md).
+- A comparação das bandejas adotou cache de instruções de 32 KiB: tempos
+  cerca de um terço menores, com validação adicional do HTTPS do Clima.
+  A troca de RAM, os candidatos descartados e os limites estão no mesmo documento.
+- Brilho alterna 35%, 50%, 75% e 100% no círculo inferior esquerdo. A bateria alterna
+  ECO, fixando 35% ao entrar e mantendo 35% ao sair. Contrato de toque e
+  geometria em [`docs/interface.md`](docs/interface.md#acessos-rápidos).
+  Um sol identifica o brilho, com nível sem `%`; o símbolo da bateria acompanha
+  sua porcentagem. Ambos usam símbolo acima e valor abaixo, como no volume.
+- As bandejas concluem o movimento com a mesma animação de 220 ms, mantendo
+  limiares e ícones originais. Comparações de desenho e validação em
+  [`docs/panel-motion-icons.md`](docs/panel-motion-icons.md).
 
 - Compilação com PlatformIO `espressif32 @ 6.9.0` e ESP-IDF 5.3.1.
 - Configuração correta: ESP32-S3R8, 16 MB Flash e 8 MB OPI PSRAM.
@@ -133,7 +148,7 @@ Se a COM3 desaparecer, desconecte e reconecte o USB. Para entrar no bootloader, 
 
 ## Mostrador com submostradores fixos
 
-O mostrador usa o LVGL 8.3.11 distribuído pela própria Waveshare, com primitivas vetoriais e cache RLE dos anéis externos em um único objeto de 412 × 412 pixels. Usa os buffers parciais da porta oficial, sem framebuffer permanente. Atualiza ao acordar ou voltar; durante pressão prolongada, atualiza uma vez por segundo.
+O mostrador usa o LVGL 8.3.11 distribuído pela própria Waveshare, com primitivas vetoriais e cache RLE dos anéis externos em um único objeto de 412 × 412 pixels. Um cache comprimido da face congelada acelera redesenhos durante a navegação, preservando os buffers parciais da porta oficial. Atualiza ao acordar ou voltar; durante pressão prolongada, atualiza uma vez por segundo. Funcionamento e limites em [`docs/display-scan.md`](docs/display-scan.md).
 
 A composição segue estas relações:
 
@@ -178,15 +193,15 @@ O resumo abaixo descreve os controles persistentes.
 O mostrador inteiro funciona como superfície de toque:
 
 - Arrastar a partir da borda superior para baixo revela um painel circular de acessos rápidos sobre o mostrador. O painel acompanha o dedo e completa ou cancela a abertura conforme a distância percorrida.
-- O arco externo do painel controla continuamente o brilho entre 10% e 100%. Arrastes iniciados nele ficam reservados ao ajuste até soltar; para fechar o painel, arraste para cima fora do arco.
-- Os atalhos ocupam uma grade 2–3–2. O primeiro botão mostra `15s`, `30s` ou `ON` e alterna entre `AUTO 15s / 45s`, `AUTO 30s / 2min` e `SEMPRE LIGADA`. O segundo reúne bateria e economia. O círculo central abre os apps; à esquerda, o volume percorre `0 → 1 → 2 → 3 → 4 → 5 → 0`. Zero silencia os avisos e cinco é o máximo. À direita, o indicador Clima mostra ícone e temperatura apenas do cache salvo, sem ligar Wi-Fi; sem cache, mostra somente `CLIMA`. Dois slots continuam reservados.
-- O modo `ECO`, indicado pela borda amarela e pelo texto no botão da bateria, preserva a preferência normal, mas limita temporariamente o brilho e o indicador do arco a 35%, reduz para 5% após 5 segundos e apaga a iluminação após 15 segundos — inclusive quando o perfil normal está em `ON`.
+- O círculo inferior esquerdo alterna `35% → 50% → 75% → 100%`, desativando ECO. A bateria liga e desliga ECO; ao entrar, fixa 35%; ao sair, mantém 35%. Tocar no brilho a partir de 35% seleciona 50%. O estado fica salvo.
+- Os atalhos ocupam uma grade 2–3–2. O primeiro botão mostra `15s`, `30s` ou `ON` e alterna entre `AUTO 15s / 45s`, `AUTO 30s / 2min` e `SEMPRE LIGADA`. O segundo mostra a porcentagem da bateria e controla ECO. O círculo central abre os apps; à esquerda, o volume percorre `0 → 1 → 2 → 3 → 4 → 5 → 0`. Zero silencia os avisos e cinco é o máximo. À direita, o indicador Clima mostra ícone e temperatura apenas do cache salvo, sem ligar Wi-Fi; sem cache, mostra somente `CLIMA`. O círculo inferior direito continua reservado.
+- No modo `ECO`, a bateria fica amarela com a indicação ECO, o brilho é 35%, reduz para 5% após 5 segundos e apaga após 15 segundos — inclusive quando o perfil normal está em `ON`. Fora do ECO, vale o perfil normal de inatividade.
 - Tocar no atalho Clima abre o app e fecha o painel; a abertura do app solicita a atualização dos dados.
 - Arrastar o painel para cima acompanha o dedo e fecha os acessos rápidos,
-  inclusive quando o gesto começa sobre o arco de brilho.
+  inclusive quando o gesto começa sobre o círculo de brilho, sem trocar o modo.
 - Toques curtos e longos sobre o mostrador não alteram configurações.
 - Um toque com a tela reduzida ou apagada apenas reativa o mostrador, evitando também alterar o brilho por acidente.
-- Brilho, perfil e estado do modo econômico são salvos na NVS e restaurados após reiniciar o relógio.
+- Modo de iluminação e perfil são salvos na NVS e restaurados após reiniciar o relógio.
 
 A tensão da bateria é lida pelo ADC1 no GPIO 8, usando o divisor 3:1 da placa e a calibração do ESP-IDF. O firmware tira oito amostras, calcula uma estimativa por curva de descarga de uma célula Li-ion e atualiza o percentual uma vez por minuto ou imediatamente ao reativar a tela. A leitura fica suspensa enquanto a tela está apagada e o valor aparece somente no botão superior direito do painel.
 

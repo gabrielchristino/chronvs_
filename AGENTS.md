@@ -55,11 +55,16 @@ Preserve estes contratos, salvo pedido explícito do usuário:
 
 - Mostrador: arrastar da borda superior para baixo abre acessos rápidos;
   arrastar para cima abre a lista de apps.
-- Painel rápido: arrastar para cima fora do arco de brilho fecha. Contatos
-  iniciados no contorno interativo ou na alça do arco ajustam somente o brilho
-  até soltar, inclusive se o dedo sair do contorno.
+- Painel rápido: arrastar para cima fecha, inclusive a partir dos controles,
+  consumindo o clique ao reconhecer o gesto. O círculo inferior esquerdo alterna
+  `35% → 50% → 75% → 100%`, desativando ECO. A bateria alterna ECO: entrar fixa 35%;
+  sair mantém 35%, sem restaurar o brilho anterior.
 - Lista de apps: tocar abre um item; arrastar para baixo a partir dos 60 px
   superiores volta ao relógio após 120 px de movimento.
+- As duas bandejas concluem abertura, fechamento e cancelamento em 220 ms
+  com `ease_out`, via `ui/panel_motion.h`. Preserve os limiares próprios dos
+  gestos; o launcher distingue rolagem de fechamento. Durante a conclusão,
+  novos contatos na bandeja são consumidos até soltar para evitar ativação dupla.
 - Todo novo app deve voltar por arraste da esquerda para a direita, como o
   Relogio: mais de 80 px, com deslocamento horizontal maior que o vertical
   absoluto mais 20 px. Na tela inicial, volta ao launcher; em subetapas,

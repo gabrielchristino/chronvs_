@@ -9,4 +9,4 @@ if lvgl_env is not None:
         if key != "CHRONVS_LVGL_ENV"
     })
     lvgl_env.ProcessUnFlags("-O0 -Os -O1 -O2 -O3 -Og -Ofast")
-    lvgl_env.Append(CCFLAGS=["-O2"])
+    lvgl_env.Append(CCFLAGS=[env.GetProjectOption("custom_lvgl_optimization", "-O2")])

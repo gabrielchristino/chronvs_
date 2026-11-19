@@ -1,5 +1,91 @@
 # Diagnóstico de fluidez
 
+A barra de brilho foi posteriormente movida para o topo dos acessos rápidos,
+por pedido do usuário. Build, testes de interação e captura visual passaram;
+as medições históricas da barra no rodapé não foram repetidas para essa posição.
+Geometria atual em `interface.md` e registro em `panel-motion-icons.md`.
+
+O usuário confirmou **“melhorou muito a fluidez”** no padrão com a barra de
+brilho. A continuação preserva os ícones e padroniza, a pedido dele, somente
+a animação ao soltar as bandejas: 220 ms com `ease_out`, mantendo limiares.
+Dois caches de ícones preservaram 160 capturas, mas não compensaram no relógio;
+continuam experimentais. A padronização do movimento não deve ser apresentada
+como redução comprovada de custo por quadro. Detalhes em `panel-autotest.md`.
+O estudo desta continuação, incluindo diferenças dos gestos, os dois caches
+descartados e a validação da animação comum, está em
+[`panel-motion-icons.md`](panel-motion-icons.md).
+
+## Barra de brilho no lugar do arco — 19/11/2026
+
+A pedido do usuário, o controle grande de brilho foi substituído por uma
+barra horizontal de 170 × 6 px no rodapé, com alça de 16 px, percentual e área
+de toque ampliada. Os sete atalhos mantêm posições e tamanho. Os contratos
+de contato exclusivo, persistência, ECO e primeiro toque de despertar foram
+mantidos e passaram na suíte integrada.
+
+A comparação física com a mesma configuração de instruções de 32 KiB passou
+42/42 em ambos os controles. Abrir acessos lentamente caiu de **47,14 para
+39,26 ms** por refresh; fechar, de **48,12 para 40,93 ms**. O pico de abertura
+caiu de 91,54 para 70,23 ms. O acumulado do controle ficou 87,73% menor, mas
+o ganho do painel inteiro é aproximadamente 15–17% nesses gestos. O launcher
+não ganhou desempenho com essa troca e ainda chegou perto de 99 ms ao fechar.
+O pool e os buffers permanecem iguais, sem cache novo de pixels ou tarefa.
+
+O recorte do centro transparente do arco passou na equivalência de 159
+capturas, porém não ajudou no relógio e não foi adotado. O teste de rotinas de
+memória teve build e host aprovados, mas foi suspenso antes da execução física
+para priorizar a mudança solicitada. Histórico e dados em
+[`panel-autotest.md`](panel-autotest.md#substituição-solicitada-barra-de-brilho-no-rodapé).
+
+## Otimização medida nas bandejas — 19/11/2026
+
+O padrão passa a usar cache de instruções de **32 KiB**, com dados de
+32 KiB/linha de 32 bytes e aplicação/LVGL/IDF em O2. A comparação física dos
+42 gestos reduziu abrir acessos de 70,8 para 47,5 ms e abrir launcher de 58,3
+para 38,6 ms (desenho + envio médios por refresh, trajetórias lentas). Fechar
+ficou em 48,0 e 57,7 ms, respectivamente. Os picos dos gestos passaram de
+141,1 para cerca de 97 ms; o intervalo máximo de leitura passou de 160 para
+100–110 ms nas duas execuções. Ainda há quadros acima dos 20 ms configurados.
+
+A escolha consome mais 16 KiB de RAM interna. Foi repetida com 42/42 e consulta
+HTTPS real do Clima aprovada, observando mínimo de 79.923 bytes internos livres
+e maior bloco DMA de 31.744 bytes durante essa consulta. Esses valores não
+validam qualquer combinação futura de serviços. Recorte seletivo não ajudou;
+linhas de dados de 64 bytes e LVGL em -Os deram ganhos pequenos e permanecem
+experimentais. Desenho/gestos, pool de 128 KiB em PSRAM, buffers `1/20`, refresh
+de 20 ms e QSPI síncrono de 2 KiB foram preservados. Procedimento, trocas,
+comparações e limites ópticos em [`panel-autotest.md`](panel-autotest.md).
+
+## Teste das bandejas reais — 19/11/2026
+
+Após o pedido de testar abertura e fechamento, o perfil `panel_autotest`
+executou 42 gestos programados no relógio, pelo caminho normal do LVGL:
+abrir, fechar e cancelar, em duas velocidades e três repetições. Todos
+passaram, com preferências preservadas e leitura física restaurada. O teste
+funcional não elimina o gargalo de animação: houve refresh de até 141,1 ms,
+e o maior intervalo de leitura foi 160 ms. Procedimento, trajetórias, quadro
+de tempos e limites ópticos em [`panel-autotest.md`](panel-autotest.md).
+
+## Investigação de gelatina — 19/11/2026
+
+O ensaio de TE isolado não melhorou perceptivelmente os menus, segundo o usuário.
+A bancada inicial não foi vista, e sua saída não pode ser atribuída a gesto
+intencional. O ensaio automático posterior separou cena lisa e mostrador e
+localizou os custos das primitivas. O candidato de cache RLE do mostrador
+reduziu render de aproximadamente 117 para 27 ms e refresh de 134 para 42 ms
+na recomposição retangular testada, antes do ajuste final de cobertura opaca.
+Não é medição de FPS geral nem comprovação de ausência de gelatina. Os buffers,
+pool LVGL e transporte foram preservados. Procedimento, candidatos, testes e
+limites estão em [`display-scan.md`](display-scan.md); a versão silenciosa
+`display_scene_quiet` foi usado para avaliação perceptiva antes de adoção no padrão.
+O ajuste final de cobertura opaca baixou o render estável a cerca de 23 ms e
+o refresh a 38 ms no mesmo ensaio, mantendo a equivalência de pixels. A
+versão silenciosa combina esse ajuste e o cache, sem espera TE.
+O usuário confirmou **“Melhorou bastante”** nos menus. Essa configuração foi
+incorporada ao padrão em 19/11/2026; os controles `display_scan*` anteriores
+preservam flags explícitas para não herdar o novo cache indevidamente. A
+confirmação não quantifica gelatina residual nem autonomia.
+
 ## Estado consolidado e última gravação (08/10/2026)
 
 O firmware de uso é `waveshare_esp32_s3_touch_lcd_146`, em release/O2,

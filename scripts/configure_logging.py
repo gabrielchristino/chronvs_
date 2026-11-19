@@ -5,6 +5,12 @@ import re
 # sdkconfig.defaults does not override an existing menuconfig. Apply only the
 # firmware policy, preserving the local hardware and memory choices.
 diagnostics = env.GetProjectOption("custom_serial_diagnostics", "no")
+data_cache_line = env.GetProjectOption("custom_data_cache_line", "reference")
+if data_cache_line not in ("reference", "32", "64"):
+    raise RuntimeError("custom_data_cache_line must be reference, 32 or 64")
+instruction_cache = env.GetProjectOption("custom_instruction_cache", "reference")
+if instruction_cache not in ("reference", "16", "32"):
+    raise RuntimeError("custom_instruction_cache must be reference, 16 or 32")
 if diagnostics not in ("yes", "no", "capture", "usb"):
     raise RuntimeError("custom_serial_diagnostics must be yes, no, capture or usb")
 # Capture keeps stdout but suppresses unrelated task logs inside PCM records.
@@ -17,6 +23,18 @@ if reference and not source.is_file():
     raise RuntimeError("Build the default environment before display diagnostics")
 if source.exists():
     settings = {}
+    # Explicit A/B only: change line width without reserving more internal RAM
+    # for the cache or changing PSRAM/flash clocks, display buffers or DMA.
+    if data_cache_line != "reference":
+        for choice in ("16", "32", "64"):
+            settings["ESP32S3_DATA_CACHE_LINE_" + choice + "B"] = (
+                "y" if choice == data_cache_line else None)
+        settings["ESP32S3_DATA_CACHE_LINE_SIZE"] = data_cache_line
+    if instruction_cache != "reference":
+        for choice in ("16", "32"):
+            settings["ESP32S3_INSTRUCTION_CACHE_" + choice + "KB"] = (
+                "y" if choice == instruction_cache else None)
+        settings["ESP32S3_INSTRUCTION_CACHE_SIZE"] = hex(int(instruction_cache) * 1024)
     for prefix in ("LOG_DEFAULT_LEVEL", "BOOTLOADER_LOG_LEVEL", "LOG_BOOTLOADER_LEVEL"):
         for level in ("NONE", "ERROR", "WARN", "INFO", "DEBUG", "VERBOSE"):
             settings[prefix + "_" + level] = "y" if level == ("INFO" if logs_enabled else "NONE") else None

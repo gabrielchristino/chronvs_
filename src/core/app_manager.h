@@ -33,6 +33,13 @@ void chronvs_app_set_active_x(lv_coord_t x);
 void chronvs_app_set_active_y(lv_coord_t y);
 void chronvs_app_cancel_preview(void);
 
+/* Settle a visible active/preview app, then commit the destination or cancel
+ * the preview. Other navigation cancels this owned animation first. */
+bool chronvs_app_settle_y(const char *moving_id, lv_coord_t target_y,
+                          const char *destination_id, uint32_t duration_ms,
+                          lv_anim_path_cb_t path);
+bool chronvs_app_is_settling(void);
+
 size_t chronvs_app_count(void);
 const chronvs_app_t *chronvs_app_at(size_t index);
 

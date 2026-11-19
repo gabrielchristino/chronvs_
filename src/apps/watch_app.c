@@ -12,6 +12,37 @@
 #include "core/app_manager.h"
 #include "ui/system_ui.h"
 #include "src/draw/sw/lv_draw_sw.h"
+#ifdef CHRONVS_WATCH_SCENE_CACHE
+#include <stdlib.h>
+#include "esp_heap_caps.h"
+#include "ui/row_cache.h"
+#if defined(CHRONVS_WATCH_RINGS_REFERENCE) || defined(CHRONVS_WATCH_FLAT_BACKGROUND)
+#error "Scene cache requires the normal watch and its row scratch"
+#endif
+static chronvs_row_cache_t scene_cache;
+static void *scene_storage;
+#define SCENE_CACHE_BYTES (96U * 1024U)
+static void scene_invalidate(void) { chronvs_row_cache_clear(&scene_cache); }
+static void scene_delete(lv_event_t *event) {
+    (void)event;
+    free(scene_storage); scene_storage = NULL;
+    scene_cache = (chronvs_row_cache_t){0};
+}
+static void scene_cover(lv_event_t *event) {
+    lv_obj_t *object = lv_event_get_target(event);
+    lv_cover_check_info_t *info = lv_event_get_param(event);
+    /* Custom drawing clears every pixel even though the object's style has
+     * no normal background. Let LVGL skip opaque ancestors below this face. */
+    if (info->res == LV_COVER_RES_MASKED || lv_draw_mask_is_any(info->area) ||
+        lv_obj_get_style_opa(object,0) != LV_OPA_COVER ||
+        lv_obj_get_style_opa_layered(object,0) != LV_OPA_COVER ||
+        lv_obj_get_style_transform_angle(object,0) != 0 ||
+        lv_obj_get_style_transform_zoom(object,0) != 256) return;
+    if (_lv_area_is_in(info->area,&object->coords,0)) info->res = LV_COVER_RES_COVER;
+}
+#else
+static void scene_invalidate(void) {}
+#endif
 #if !defined(CHRONVS_WATCH_RINGS_REFERENCE) && !defined(CHRONVS_WATCH_FLAT_BACKGROUND)
 #if LV_COLOR_DEPTH != 16 || LV_COLOR_16_SWAP != 1
 #error "Regenerate the watch ring cache before changing its RGB565 format"
@@ -510,6 +541,25 @@ static void clock_draw_event(lv_event_t *event) {
     const lv_area_t *coords = &object->coords;
     const float cx = (coords->x1 + coords->x2) * 0.5f;
     const float cy = (coords->y1 + coords->y2) * 0.5f;
+#ifdef CHRONVS_WATCH_SCENE_CACHE
+    const bool scene_compatible = cx == 205.5f && cy == 205.5f &&
+        ctx->draw_rect == lv_draw_sw_rect && !lv_draw_mask_is_any(ctx->clip_area);
+    if (scene_compatible && scene_cache.valid && ring_cache_line) {
+        for (int y = LV_MAX(0, visible_clip.y1); y <= LV_MIN(411, visible_clip.y2); ++y) {
+            lv_area_t row = {0,y,411,y};
+            if (covered_by_circle(&row, ctx->clip_area)) continue;
+            const bool decoded = chronvs_row_cache_decode(&scene_cache,(uint16_t)y,(uint16_t *)ring_cache_line);
+            LV_ASSERT(decoded);
+            lv_draw_sw_blend_dsc_t blend = {0};
+            blend.blend_area = &row; blend.src_buf = ring_cache_line; blend.opa = LV_OPA_COVER;
+            lv_draw_sw_blend(ctx,&blend);
+        }
+        /* In this experiment SETUP includes replay of the complete frozen face. */
+        CHRONVS_WATCH_PROFILE_MARK(SETUP);
+        ctx->clip_area = original_clip;
+        return;
+    }
+#endif
 #ifndef CHRONVS_WATCH_FLAT_BACKGROUND
     update_chapter_geometry(cx, cy, displayed_time.day);
 #endif
@@ -570,6 +620,19 @@ static void clock_draw_event(lv_event_t *event) {
     CHRONVS_WATCH_PROFILE_MARK(TEMPERATURE);
     draw_date_marker(ctx, cx, cy);
     CHRONVS_WATCH_PROFILE_MARK(MARKER);
+#ifdef CHRONVS_WATCH_SCENE_CACHE
+    /* Record only unoccluded full-width rows actually produced by this draw.
+     * Never add an extra render, screen-sized pixel buffer or refresh. */
+    if (scene_compatible && scene_storage && !scene_cache.valid && !scene_cache.blocked &&
+        !circle_cover_count && visible_clip.x1 == 0 && visible_clip.x2 == 411 &&
+        visible_clip.y1 == original_clip->y1 && visible_clip.y2 == original_clip->y2 &&
+        ctx->buf_area->x1 == 0 && ctx->buf_area->x2 == 411) {
+        const uint16_t *pixels = (const uint16_t *)ctx->buf +
+            (visible_clip.y1 - ctx->buf_area->y1) * DISPLAY_SIZE;
+        chronvs_row_cache_record(&scene_cache,(uint16_t)visible_clip.y1,
+            (uint16_t)lv_area_get_height(&visible_clip),pixels,DISPLAY_SIZE);
+    }
+#endif
     ctx->clip_area = original_clip;
 }
 
@@ -591,6 +654,12 @@ static lv_obj_t *create_watch_app(lv_obj_t *parent) {
     if (!ring_cache_line) ring_cache_line = lv_mem_alloc(DISPLAY_SIZE * sizeof(lv_color_t));
 #endif
     clock_face = lv_obj_create(parent);
+#ifdef CHRONVS_WATCH_SCENE_CACHE
+    if (!scene_storage) scene_storage = heap_caps_malloc(SCENE_CACHE_BYTES,MALLOC_CAP_SPIRAM|MALLOC_CAP_8BIT);
+    chronvs_row_cache_init(&scene_cache,scene_storage,SCENE_CACHE_BYTES,DISPLAY_SIZE,DISPLAY_SIZE);
+    lv_obj_add_event_cb(clock_face,scene_delete,LV_EVENT_DELETE,NULL);
+    lv_obj_add_event_cb(clock_face,scene_cover,LV_EVENT_COVER_CHECK,NULL);
+#endif
     lv_obj_remove_style_all(clock_face);
     lv_obj_set_size(clock_face, DISPLAY_SIZE, DISPLAY_SIZE);
     lv_obj_center(clock_face);
@@ -605,6 +674,7 @@ static lv_obj_t *create_watch_app(lv_obj_t *parent) {
 
 /* Public hook for the future ambient-temperature sensor. */
 void chronvs_watch_app_set_ambient_temperature(float temperature_c) {
+    scene_invalidate();
     ambient_temperature_c = clampf(temperature_c, -20.0f, 60.0f);
     if (clock_face != NULL && !chronvs_system_ui_display_is_off()) {
         lv_obj_invalidate(clock_face);
@@ -626,6 +696,7 @@ void chronvs_watch_app_set_time(const chronvs_time_t *time) {
     }
 
     displayed_time = *time;
+    scene_invalidate();
     /* Only explicit refresh requests invalidate the snapshot. */
 }
 

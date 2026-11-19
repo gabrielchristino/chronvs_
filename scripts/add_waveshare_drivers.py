@@ -395,9 +395,9 @@ env.BuildSources(
 # example. It provides correct text rasterisation and the vendor's flush/touch
 # callbacks for this QSPI panel.
 lvgl_optimization = env.GetProjectOption("custom_lvgl_optimization", "-O0")
-if lvgl_optimization not in ("-O0", "-O2"):
+if lvgl_optimization not in ("-O0", "-O2", "-Os"):
     raise RuntimeError("Unsupported Chronvs LVGL optimization")
-lvgl_label = "-O2" if lvgl_optimization == "-O2" else "baseline-debug"
+lvgl_label = lvgl_optimization if lvgl_optimization != "-O0" else "baseline-debug"
 env.Append(CPPDEFINES=[("CHRONVS_LVGL_OPT_LABEL", '\\"' + lvgl_label + '\\"')])
 lvgl_env = env if lvgl_optimization == "-O0" else env.Clone()
 if lvgl_env is not env:

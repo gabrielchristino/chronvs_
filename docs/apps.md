@@ -7,6 +7,114 @@ callbacks opcionais de entrada e saída.
 
 ## Estrutura
 
+As linhas do launcher desativam `LV_OBJ_FLAG_SCROLL_ON_FOCUS`: o LVGL não
+deve animar automaticamente o conteúdo para enquadrar o botão ao tocá-lo.
+Esse ajuste podia concorrer com o arraste/inércia e deslocar a listagem mesmo
+com dedo parado. A curva continua atualizada no timer de 20 ms; os gestos da
+bandeja e os callbacks de ciclo de vida não mudaram.
+O launcher mantém o alvo do contato com `LV_OBJ_FLAG_PRESS_LOCK` nas linhas,
+lista e faixa de fechamento. A seleção exige toque na linha original visível,
+sem excursão maior que 8 px em qualquer eixo. Movimento ou scroll invalida o
+clique até soltar; parar a inércia e contatos iniciados até 150 ms após rolagem
+por touch não selecionam app. Não há timer adicional nem alteração global da
+sensibilidade do ponteiro; a atividade continua vinculada por `app_input`.
+O teste com linhas FLOATING e filtro visual Q8 de 50 ms foi retirado após
+desaparecimento dos itens ao soltar no dispositivo. O padrão mantém scroll
+nativo e curva pelo timer de 20 ms, pausado fora do launcher e sem renderização
+com tela apagada. Não há mais duas posições distintas para o mesmo scroll.
+Na segunda versão de teste, `app_list_touch_event` suaviza somente o vetor
+vertical de entrada, com filtro Q8 de 50 ms e atraso limitado a 48 px. O LVGL
+mantém geometria, limites, processamento de soltura e inércia. Os pontos reais
+não são alterados e continuam determinando hit test, limite de toque de 8 px
+e fechamento pelo topo. Sem novo timer ou alteração no driver de touch.
+A implementação depende da ordem de eventos do LVGL **8.3.11 fixado**:
+PRESSING ocorre depois do cálculo de `proc.types.pointer.vect` e antes de
+`_lv_indev_scroll_handler`. Ajusta o vetor Y e os vetores de inércia Y nesse
+intervalo. Uma atualização de LVGL exige rever esse ponto e repetir os testes.
+Ao receber RELEASED/PRESS_LOST de um contato de rolagem do launcher, limita
+os dois vetores Y de inércia a ±16 px, antes de o LVGL iniciar a desaceleração.
+Não limita `vect.y` durante o arraste nem altera o `scroll_throw` compartilhado.
+A verificação de `lv_indev_get_scroll_obj(input)==list` restringe a mudança à lista.
+Na configuração adotada, a lista também limpa SCROLL_MOMENTUM. O LVGL
+zera a velocidade na soltura, portanto não há movimento de inércia, apesar de
+o limitador anterior continuar no código. É a única opção de comportamento
+alterada em relação ao candidato com proteção de bordas; filtro, geometria,
+gestos e driver permanecem iguais. O usuário confirmou no relógio o resultado
+da versão sem inércia em 19/11/2026; essa opção permanece no padrão.
+Nas bordas, `hold_scroll_edge` sincroniza o filtro com o ponto real e zera
+vetor, soma e velocidade Y; também é chamado pelo SCROLL ao atingir o limite.
+Mantém a âncora mais externa do contato e exige retorno maior que 12 px para
+liberar o movimento para dentro. A liberação descarta só esses 12 px, sem
+guardar tensão além da borda. O estado é reiniciado em cada novo contato.
+
+No diagnóstico `panel_autotest`, a inicialização instala um roteiro temporário
+no ponteiro LVGL, e o loop principal consulta seu avanço depois de cada
+`lv_timer_handler`. Os apps e os handlers de gestos são os normais. O probe do
+painel rápido é somente leitura e existe apenas nesse build. No padrão, as
+chamadas do roteiro são no-ops. Ver [`panel-autotest.md`](panel-autotest.md).
+
+As variantes `panel_autotest_clip`, `panel_autotest_cache64`,
+`panel_autotest_icache32` e `panel_autotest_lvgl_os` separam recorte e
+configuração de cache/compilação. O recorte seletivo vincula subárvores
+explicitamente, sem mudar hit test ou criar tarefas; continua experimental.
+`panel_autotest_icache32_weather` acrescenta, após os 42 gestos, uma abertura
+normal do Clima, com seu serviço HTTPS e persistência de cache usuais. A entrada
+fica reservada até resultado ou timeout de 60 s; tela apagada ou modal aborta.
+O roteiro não gera atividade artificial e retorna ao mostrador ao concluir.
+Isso não integra a navegação de uso nem ocorre no firmware padrão.
+O perfil `panel_autotest_parts` mede subárvores de controles no mesmo roteiro,
+com uma tabela de 64 registros em PSRAM e saída acumulada somente no final.
+`panel_autotest_arc_clip` testa um recorte do centro transparente do arco de
+brilho; a função software original continua responsável pelos pixels das bordas.
+Detalhes e limites em `panel-autotest.md`.
+O círculo inferior esquerdo alterna brilho 35%, 50%, 75% e 100%, desativando ECO.
+O círculo da bateria alterna ECO: entrar fixa 35%; sair mantém 35% sem
+restaurar intensidade anterior. A única preferência `light_mode`
+define tanto a intensidade como a política ECO; chaves antigas servem para
+migração quando o modo não existe ou é inválido. Os modos de referência
+`CHRONVS_BRIGHTNESS_ARC_REFERENCE` e `CHRONVS_BRIGHTNESS_SLIDER_REFERENCE`
+conservam os controles anteriores apenas para diagnósticos comparativos.
+`panel_autotest_lighting` exercita o controle novo com os mesmos 42 gestos e
+Clima. O círculo usa `chronvs_ui_style_control`, sem tarefa ou cache adicional,
+ocupando um dos sete slots da grade 2–3–2.
+Sol e bateria são símbolos vetoriais estáticos de 24 px, acima dos valores,
+como no volume. Só a bateria usa `%`; brilho mostra 35/50/75/100. Os símbolos
+não capturam o toque, que continua no botão, sem novos timers ou bitmaps.
+
+As duas bandejas usam `ui/panel_motion.h` para concluir o movimento em 220 ms
+com `ease_out`. O launcher usa `chronvs_app_settle_y`: anima a raiz ativa ou
+de prévia e só ao terminar confirma o destino ou cancela a prévia. O runtime
+atualiza o layout antes de ler a posição inicial e cancela sua animação quando
+há outra navegação, uma nova prévia ou reposicionamento explícito. Abrir outro
+app também oculta a prévia antiga, evitando uma conclusão atrasada sobre o
+destino novo. `on_show`/`on_hide` continuam ocorrendo na troca efetiva de app.
+Novos contatos nas bandejas durante a conclusão são consumidos até soltar, com atividade
+real registrada. `CHRONVS_PANEL_SNAP_REFERENCE` conserva a troca direta somente
+nos controles diagnósticos; não integra o padrão.
+
+Os ambientes isolados `display_scan`/`display_scan_te` de 19/11/2026 instalam
+observação de TE e métricas após inicializar a placa. Após abrir o mostrador,
+criam uma bancada temporária sobre ele; direita remove sua árvore e timer e
+abre o launcher, mantendo a instrumentação dos menus. Não registram app novo.
+No padrão, essas chamadas são no-ops compilados, sem ISR, timer ou objetos
+adicionais. Interação, métricas e restauração em [`display-scan.md`](display-scan.md).
+
+O padrão e o diagnóstico `display_scan_scene` habilitam `CHRONVS_WATCH_SCENE_CACHE`:
+o mostrador registra linhas RGB565 já produzidas pelo redraw normal em um
+cache RLE limitado a 96 KiB em PSRAM, fora do pool LVGL. Redesenhos incidentais
+reutilizam essa imagem congelada. Hora/temperatura invalidam o cache; posição
+deslocada, máscara externa, captura incompleta, falta de reserva ou limite
+excedido conservam o vetor. Não cria renderização adicional, timer ou tarefa.
+Mantém leitura de RTC apenas nos fluxos existentes e não trabalha com tela apagada.
+O padrão usa também `LV_CIRCLE_CACHE_SIZE=16` pelas flags do PlatformIO; o
+fallback de oito entradas em `lv_conf.h` preserva os controles antigos. A suíte
+`run_Relogio_ui.ps1 -System` acompanha o padrão; `-WatchReference` seleciona
+explicitamente o mostrador anterior, sem esse cache e com oito máscaras.
+O padrão usa cache de instruções de 32 KiB e dados de 32 KiB/linha de 32 bytes,
+após comparação física das bandejas e do Clima/HTTPS. Isso consome 16 KiB
+internos adicionais: considerar o maior bloco DMA ao ampliar serviços. Não
+altera o pool LVGL ou acrescenta reservas por aplicativo. Ver `panel-autotest.md`.
+
 O experimento `launcher_icon_cache` gera snapshots dos ícones fixos na criação
 do launcher e os mantém em PSRAM enquanto o app permanece retido. Usa vetor
 durante fade e em falha de reserva/snapshot; não muda `create_icon` dos apps.

@@ -1,5 +1,12 @@
 # App Clima
 
+Em 19/11/2026, o candidato com cache de instruções de 32 KiB passou novamente
+pelo HTTPS real deste app após 42 gestos das bandejas. O fluxo observou mínimo
+de 79.923 bytes internos livres e maior bloco DMA de 31.744 bytes. Essa
+configuração foi incorporada ao padrão; os registros históricos abaixo com
+caches 16/32 KiB descrevem a referência anterior. Procedimento e limites em
+[`panel-autotest.md`](panel-autotest.md#validação-adicional-e-escolha-do-padrão).
+
 Especificação implementada do app `weather`. A primeira versão usa São Paulo
 como localização fixa e a API pública Open-Meteo, sem chave. Build e testes no
 host passaram. Após mover o heap de objetos LVGL para PSRAM, o usuário confirmou

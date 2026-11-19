@@ -61,6 +61,10 @@ com resultados e ponto de retomada documentados.
 
 ## Estado validado
 
+- Lista de apps com rolagem infinita nos dois sentidos e fade conjunto de
+  ícone, disco e nome, aprovada no relógio em 19/11/2026. Comportamento e
+  verificação em [`docs/interface.md`](docs/interface.md#lista-de-apps-em-arco).
+
 - Firmware padrão release compilado e gravado no relógio em 08/10/2026, com hashes de gravação verificados. A proteção do arco de brilho passou no teste integrado LVGL; a interação corrigida ainda aguarda confirmação no dispositivo.
 
 - O padrão usa release/O2, logs/consoles desativados e cache RLE do mostrador congelado. Em 19/11/2026, o usuário confirmou melhora clara da gelatina na versão silenciosa; a configuração foi incorporada ao padrão, com TE desligado. Histórico, limites e builds em [`docs/performance.md`](docs/performance.md).

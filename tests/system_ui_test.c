@@ -258,6 +258,20 @@ static void capture(const char *name) {
     lv_obj_update_layout(lv_scr_act()); lv_tick_inc(100);lv_timer_handler();lv_refr_now(NULL);
     save_current_pixels(name);
 }
+static int icon_peak_contrast(lv_obj_t *icon) {
+    lv_area_t area; lv_obj_get_coords(icon,&area);
+    lv_color32_t bg={.full=lv_color_to32(lv_color_hex(CHRONVS_UI_PANEL))};
+    const int channels[3]={bg.ch.blue,bg.ch.green,bg.ch.red};
+    int peak=0;
+    for (int y=area.y1; y<=area.y2; ++y) for (int x=area.x1; x<=area.x2; ++x) {
+        assert(x>=0 && x<412 && y>=0 && y<412);
+        for (int c=0; c<3; ++c) {
+            int delta=abs((int)pixels[3*((411-y)*412+x)+c]-channels[c]);
+            if (delta>peak) peak=delta;
+        }
+    }
+    return peak;
+}
 static unsigned refresh_count;
 static unsigned transparent_label_draws;
 static void count_transparent_label_draw(lv_event_t *event) {
@@ -495,6 +509,7 @@ int main(void) {
     assert(chronvs_app_open("apps"));
     lv_obj_t *app_list = lv_obj_get_child(launcher, 0);
     assert(lv_obj_get_child_cnt(app_list) == 7);
+    const int launcher_cycle = 7 * 82;
     lv_obj_t *first_row = lv_obj_get_child(app_list, 0);
     lv_obj_t *middle_row = lv_obj_get_child(app_list, 1);
 #ifdef CHRONVS_LAUNCHER_ICON_CACHE
@@ -531,7 +546,7 @@ int main(void) {
     lv_obj_scroll_to_y(app_list, 0, LV_ANIM_OFF); elapse(70);
     lv_obj_t *omitted_icon = lv_obj_get_child(lv_obj_get_child(first_row, 0), 0);
     lv_obj_t *omitted_name = lv_obj_get_child(first_row, 1);
-    assert(lv_obj_get_style_opa(first_row, 0) == LV_OPA_COVER);
+    assert(lv_obj_get_style_opa_layered(first_row, 0) == LV_OPA_COVER);
     lv_obj_add_event_cb(omitted_icon, count_transparent_label_draw, LV_EVENT_DRAW_MAIN_BEGIN, NULL);
     transparent_label_draws = 0;
     lv_obj_invalidate(app_list); lv_refr_now(NULL);
@@ -570,8 +585,25 @@ int main(void) {
         capture(name);
         lv_obj_clear_state(middle_row, LV_STATE_PRESSED);
     }
+#if !defined(CHRONVS_PANEL_NO_CONTENT) && !defined(CHRONVS_PANEL_NO_ICONS)
+    /* Check rendered vector pixels, rather than just style properties: raw
+     * custom drawing must lose contrast at both ends of the circular list. */
+    for (unsigned i=0; i<lv_obj_get_child_cnt(app_list); ++i) {
+        lv_obj_t *badge=lv_obj_get_child(lv_obj_get_child(app_list,i),0);
+        lv_obj_scroll_to_y(app_list,launcher_cycle+(int)i*82,LV_ANIM_OFF); elapse(70);
+        lv_refr_now(NULL);
+        const int full=icon_peak_contrast(badge);
+        for (int side=-1; side<=1; side+=2) {
+            lv_obj_scroll_to_y(app_list,launcher_cycle+(int)i*82+side*154,LV_ANIM_OFF); elapse(70);
+            lv_refr_now(NULL);
+            const int faded=icon_peak_contrast(badge);
+            printf("Launcher icon %u side %d: contrast %d -> %d.\n",i,side,full,faded);
+            assert(faded>full/4 && faded<full*3/4);
+        }
+    }
+#endif
     lv_obj_scroll_to_y(app_list,180,LV_ANIM_OFF); elapse(70);
-    assert(lv_obj_get_style_opa(first_row,0)==LV_OPA_TRANSP);
+    assert(lv_obj_get_style_opa_layered(first_row,0)==LV_OPA_TRANSP);
     assert(first_row->coords.y2 >= app_list->coords.y1);
     lv_obj_t *transparent_name = lv_obj_get_child(first_row,1);
     assert(lv_obj_check_type(transparent_name,&lv_label_class));
@@ -598,7 +630,7 @@ int main(void) {
         lv_obj_scroll_to_y(app_list,246,LV_ANIM_OFF); elapse(600);
         touch(210,206,LV_INDEV_STATE_PR);
         touch(210,206+direction*40,LV_INDEV_STATE_PR);
-        int displacement=lv_obj_get_scroll_y(app_list)-246;
+        int displacement=lv_obj_get_scroll_y(app_list)-launcher_cycle-246;
         assert(direction<0 ? displacement>0 && displacement<40 : displacement<0 && displacement > -40);
         touch(210,206+direction*80,LV_INDEV_STATE_PR);
         touch(210,206+direction*80,LV_INDEV_STATE_REL);
@@ -613,8 +645,8 @@ int main(void) {
                 lv_obj_t *row=lv_obj_get_child(app_list,row_index);
                 lv_area_t bounds; lv_obj_get_coords(row,&bounds);
                 assert(!lv_obj_has_flag(row,LV_OBJ_FLAG_FLOATING));
-                assert(bounds.y1-list_bounds.y1+scroll==174+(int)row_index*82);
-                if (bounds.y2>100 && bounds.y1<312 && lv_obj_get_style_opa(row,0)>0) ++visible;
+                assert((bounds.y1-list_bounds.y1+scroll-174-(int)row_index*82)%launcher_cycle==0);
+                if (bounds.y2>100 && bounds.y1<312 && lv_obj_get_style_opa_layered(row,0)>0) ++visible;
             }
             assert(visible>0);
         }
@@ -641,33 +673,41 @@ int main(void) {
         assert(!strcmp(chronvs_app_active_id(),"apps") && lv_obj_get_y(launcher)==0);
         printf("Launcher fast release %s: %d px coast.\n",direction_index ? "down" : "up",coast);
     }
-    /* Pulling beyond a boundary and relaxing the finger a few pixels must
-     * not launch the list back in the opposite direction. */
+    /* Traverse several complete cycles in both directions. Every row keeps
+     * its app identity and modulo spacing, without hitting an endpoint. */
     for (unsigned boundary=0; boundary<2; ++boundary) {
-        int maximum=lv_obj_get_scroll_top(app_list)+lv_obj_get_scroll_bottom(app_list);
-        const int edge=boundary ? maximum : 0;
-        const int start=boundary ? 340 : 80;
-        const int outward=boundary ? -1 : 1;
-        lv_obj_scroll_to_y(app_list,boundary ? edge-30 : edge+30,LV_ANIM_OFF); elapse(600);
-        touch(210,start,LV_INDEV_STATE_PR);
-        touch(210,start+outward*80,LV_INDEV_STATE_PR);
-        touch(210,start+outward*160,LV_INDEV_STATE_PR);
-        elapse(250);
-        touch(210,start+outward*152,LV_INDEV_STATE_PR);
-        touch(210,start+outward*152,LV_INDEV_STATE_REL);
-        elapse(1000);
-        assert(lv_obj_get_scroll_y(app_list)==edge);
-        assert(!strcmp(chronvs_app_active_id(),"apps") && lv_obj_get_y(launcher)==0);
-        /* A deliberate reversal must still leave the edge during that contact. */
-        touch(210,start,LV_INDEV_STATE_PR);
-        touch(210,start+outward*80,LV_INDEV_STATE_PR);
-        touch(210,start+outward*160,LV_INDEV_STATE_PR);
-        touch(210,start+outward*120,LV_INDEV_STATE_PR); elapse(250);
-        assert(boundary ? lv_obj_get_scroll_y(app_list)<edge : lv_obj_get_scroll_y(app_list)>edge);
-        touch(210,start+outward*120,LV_INDEV_STATE_REL); elapse(600);
-        assert(!strcmp(chronvs_app_active_id(),"apps"));
-        printf("Launcher boundary %s: no rebound, deliberate reverse passed.\n",boundary ? "bottom" : "top");
+        const int direction=boundary ? -1 : 1;
+        lv_obj_scroll_to_y(app_list,0,LV_ANIM_OFF); elapse(600);
+        int travel=0, wraps=0;
+        for (unsigned pass=0; pass<24; ++pass) {
+            const int before=lv_obj_get_scroll_y(app_list);
+            const int start=direction>0 ? 100 : 310;
+            touch(210,start,LV_INDEV_STATE_PR);
+            for (unsigned sample=1; sample<=4; ++sample)
+                touch(210,start+direction*(int)sample*40,LV_INDEV_STATE_PR);
+            touch(210,start+direction*160,LV_INDEV_STATE_REL); elapse(100);
+            const int after=lv_obj_get_scroll_y(app_list);
+            int delta=(before-after)*direction;
+            if (delta<0) { delta+=launcher_cycle; ++wraps; }
+            assert(delta>0 && delta<200);
+            travel+=delta;
+            assert(after>=launcher_cycle && after<2*launcher_cycle);
+            assert(!strcmp(chronvs_app_active_id(),"apps") && lv_obj_get_y(launcher)==0);
+            assert(lv_obj_get_child_cnt(app_list)==7);
+        }
+        assert(wraps>=3 && travel>3*launcher_cycle);
     }
+    /* The last app remains selectable after wrapping; reopening preserves
+     * the circular position rather than jumping to the first app. */
+    const char *last_id = NULL;
+    for (size_t i=0; i<chronvs_app_count(); ++i)
+        if (chronvs_app_at(i)->launcher_visible) last_id=chronvs_app_at(i)->id;
+    assert(last_id);
+    lv_obj_scroll_to_y(app_list,launcher_cycle-82,LV_ANIM_OFF); elapse(600);
+    const int last_position=lv_obj_get_scroll_y(app_list);
+    tap(150,206); assert(!strcmp(chronvs_app_active_id(),last_id));
+    assert(chronvs_app_open("apps")); elapse(100);
+    assert(lv_obj_get_scroll_y(app_list)==last_position);
     /* A slide beginning in a gap must not become a new tap on a row. */
     lv_obj_scroll_to_y(app_list,0,LV_ANIM_OFF); elapse(600);
     touch(210,170,LV_INDEV_STATE_PR);
@@ -730,7 +770,8 @@ int main(void) {
         for (unsigned sample=1; sample<=3; ++sample) {
             touch(210,206+direction*(int)sample*30,LV_INDEV_STATE_PR);
             int current=lv_obj_get_scroll_y(app_list);
-            assert(direction<0 ? current>=previous : current<=previous);
+            int delta=(current-previous+launcher_cycle)%launcher_cycle;
+            assert(direction<0 ? delta<100 : delta==0 || delta>launcher_cycle-100);
             assert(lv_obj_get_y(launcher)==0);
             previous=current;
         }

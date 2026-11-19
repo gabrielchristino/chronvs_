@@ -41,11 +41,25 @@ o limitador anterior continuar no código. É a única opção de comportamento
 alterada em relação ao candidato com proteção de bordas; filtro, geometria,
 gestos e driver permanecem iguais. O usuário confirmou no relógio o resultado
 da versão sem inércia em 19/11/2026; essa opção permanece no padrão.
-Nas bordas, `hold_scroll_edge` sincroniza o filtro com o ponto real e zera
-vetor, soma e velocidade Y; também é chamado pelo SCROLL ao atingir o limite.
-Mantém a âncora mais externa do contato e exige retorno maior que 12 px para
-liberar o movimento para dentro. A liberação descarta só esses 12 px, sem
-guardar tensão além da borda. O estado é reiniciado em cada novo contato.
+O launcher agora recicla as linhas para rolagem circular nos dois sentidos.
+O mesmo timer de 20 ms reposiciona linhas fora da área visível e normaliza
+o scroll para uma volta intermediária, preservando a fase e o espaçamento.
+Padding inferior reserva espaço para o scroll nativo; não há árvore duplicada
+para o catálogo atual. Catálogos pequenos repetem voltas inteiras até cobrir
+a tela e a margem de reciclagem. Não há mais bloqueio de borda nem zona de
+inversão de 12 px. IDs e callbacks continuam vinculados às próprias linhas;
+nenhuma tarefa, leitura de hardware ou timer adicional é criado.
+O fade compõe apenas o disco de 60 × 60 px com `opa_layered`, abrangendo
+callbacks vetoriais que ignoram a opacidade de estilo. Nome e fundo pressionado
+recebem a mesma opacidade separadamente, sem compor a linha inteira. O LVGL
+reserva sua camada temporária no pool em PSRAM apenas durante fades parciais;
+linhas totalmente transparentes são puladas com `opa_layered=0`.
+`LV_COLOR_SCREEN_TRANSP=1` habilita essas camadas alfa no renderizador software;
+o driver continua com tela opaca RGB565 e os mesmos buffers parciais.
+Build padrão, suíte de interface `-System` e gravação com hashes verificados
+passaram em 19/11/2026. O teste de pixels confirmou metade do contraste na
+metade do fade para todos os ícones testados, no topo e na base. O usuário
+aprovou no relógio a rolagem circular e o fade corrigido na mesma data.
 
 No diagnóstico `panel_autotest`, a inicialização instala um roteiro temporário
 no ponteiro LVGL, e o loop principal consulta seu avanço depois de cada

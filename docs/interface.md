@@ -189,11 +189,10 @@ extra após soltar. A proteção contra seleção logo após um deslize continua
 O limite anterior de velocidade permanece no código para comparação, mas não
 produz inércia enquanto essa opção está desligada.
 O usuário confirmou no relógio a melhora com essa versão em 19/11/2026.
-Ao alcançar qualquer extremo, o filtro e a velocidade acumulada são zerados.
-Continuar puxando além do limite não armazena impulso. Uma inversão de até
-12 px é ignorada só nessa borda, para que relaxar o dedo ao soltar não cause
-retorno; mais de 12 px libera a rolagem de volta no mesmo contato. No meio
-da lista não há essa zona adicional. Os limites do gesto de fechar não mudam.
+A lista agora é circular nos dois sentidos: depois do último app aparece o
+primeiro, e antes do primeiro aparece o último. Não há extremos nem zona
+de inversão de 12 px. Permanecem o filtro de arraste, a parada ao soltar,
+a proteção de clique e os limites do gesto de fechar.
 Histórico e limites da validação em `panel-motion-icons.md`.
 
 Todo novo app deve adotar o retorno da esquerda para a direita do Relogio, sem
@@ -824,10 +823,16 @@ As linhas têm 64 px de altura e centros separados por 82 px. O centro dos
 ícones acompanha o lado esquerdo de um arco de raio 166 px, centrado em
 (206, 206): mais à esquerda no meio da tela e mais à direita nas extremidades.
 A opacidade diminui nos últimos 48 px antes do limite vertical de 178 px.
+Ícone, disco e nome recebem o mesmo fade ao sair pelo topo ou pela base,
+inclusive os ícones vetoriais desenhados diretamente. A linha inteira fica
+invisível ao atingir esse limite, antes de ser reciclada na rolagem circular.
+O teste de interface compara o contraste dos pixels de cada ícone no centro
+e a meia opacidade nas duas extremidades, além dos testes físicos descritos abaixo.
 
-Arrastar verticalmente no conteúdo rola a lista com inércia; os deslocamentos
-horizontais são recalculados no máximo a cada 20 ms, apenas quando há mudança
-e a tela está acesa. O primeiro e o último item podem alcançar o centro.
+Arrastar verticalmente no conteúdo rola a lista infinitamente nos dois sentidos,
+sem inércia. As linhas são recicladas fora da área visível; posição em arco e
+opacidade são recalculadas no máximo a cada 20 ms, apenas quando há mudança
+e a tela está acesa. A passagem entre último e primeiro mantém o espaçamento.
 A primeira abertura centraliza o conjunto; reaberturas preservam a rolagem.
 Ícone e nome abrem o mesmo app, e um arraste não gera clique na liberação.
 Os 60 px superiores continuam reservados para puxar o launcher para baixo:
@@ -840,6 +845,11 @@ confirmado/cancelado. Build e gravação passaram. O usuário confirmou no reló
 que a lista em arco ficou correta, aprovando o comportamento visual e a interação.
 As capturas ficam em `.pio/host-tests/19-launcher-arc.bmp`
 e `.pio/host-tests/20-launcher-scrolled.bmp`.
+A suíte também percorre várias voltas nos dois sentidos e verifica continuidade,
+parada ao soltar, seleção após a passagem entre último e primeiro e preservação
+da posição ao reabrir. Em 19/11/2026, build padrão e suíte `-System` passaram;
+o firmware foi gravado com hashes verificados. Após testar no relógio, o usuário
+aprovou a rolagem infinita e a correção do fade dos ícones: "perfeito!".
 
 ## Clima
 

@@ -6,6 +6,9 @@
 
 #define LV_COLOR_DEPTH 16
 #define LV_COLOR_16_SWAP 1
+// Required for temporary alpha layers (launcher badges), while the display
+// itself remains opaque RGB565 with the existing partial draw buffers.
+#define LV_COLOR_SCREEN_TRANSP 1
 #define LV_MEM_CUSTOM 0
 // The stock 48 KiB heap is enough for a few labels, but not for a dial with
 // rings, subdials and persistent tick objects.

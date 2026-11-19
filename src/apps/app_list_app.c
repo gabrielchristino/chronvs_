@@ -43,7 +43,7 @@
 #define SCROLL_INPUT_SMOOTH_MS 50
 #define SCROLL_INPUT_MAX_LAG_PX 48
 #define SCROLL_RELEASE_MAX_STEP 16
-#define SCROLL_EDGE_REVERSE_PX 12
+#define MAX_APP_ROWS 16
 
 typedef struct {
     const char *id;
@@ -119,13 +119,13 @@ static void cache_icon(app_row_context_t *context, lv_obj_t *icon) {
 }
 #endif
 
-static app_row_context_t row_contexts[8];
+static app_row_context_t row_contexts[MAX_APP_ROWS];
 #ifdef CHRONVS_PANEL_SELECTIVE_CLIP
 static chronvs_circle_clip_t circle_clip;
-static chronvs_circle_clip_node_t circle_nodes[8][3];
+static chronvs_circle_clip_node_t circle_nodes[MAX_APP_ROWS][3];
 static chronvs_circle_clip_node_t empty_circle_node;
 #endif
-static lv_obj_t *rows[8];
+static lv_obj_t *rows[MAX_APP_ROWS];
 static lv_obj_t *list;
 static size_t row_count;
 static lv_timer_t *curve_timer;
@@ -144,21 +144,6 @@ static int16_t scroll_input_y;
 static int16_t scroll_throw_y;
 static uint32_t scroll_input_tick;
 static bool scroll_input_active;
-static int8_t scroll_input_edge;
-static int16_t scroll_edge_anchor;
-
-static void hold_scroll_edge(lv_indev_t *input, int16_t raw_y, int8_t edge) {
-    scroll_input_edge=edge;
-    scroll_edge_anchor=raw_y;
-    scroll_input_q8=(int32_t)raw_y*256;
-    scroll_input_y=raw_y;
-    scroll_throw_y=0;
-    scroll_input_tick=lv_tick_get();
-    input->proc.types.pointer.vect.y=0;
-    input->proc.types.pointer.scroll_sum.y=0;
-    input->proc.types.pointer.scroll_throw_vect.y=0;
-    input->proc.types.pointer.scroll_throw_vect_ori.y=0;
-}
 
 static void smooth_scroll_input(lv_indev_t *input) {
     if (!input || !scroll_input_active) return;
@@ -168,20 +153,6 @@ static void smooth_scroll_input(lv_indev_t *input) {
     uint32_t elapsed=now-scroll_input_tick;
     scroll_input_tick=now;
     if (elapsed>100) elapsed=100;
-    if (scroll_input_edge) {
-        int inward=scroll_input_edge>0 ? scroll_edge_anchor-raw.y : raw.y-scroll_edge_anchor;
-        if (inward<=SCROLL_EDGE_REVERSE_PX) {
-            if (inward<0) scroll_edge_anchor=raw.y;
-            const int16_t anchor=scroll_edge_anchor;
-            hold_scroll_edge(input,raw.y,scroll_input_edge);
-            scroll_edge_anchor=anchor;
-            return;
-        }
-        /* Resume only the deliberate movement beyond the edge dead zone. */
-        scroll_input_y=scroll_edge_anchor-scroll_input_edge*SCROLL_EDGE_REVERSE_PX;
-        scroll_input_q8=(int32_t)scroll_input_y*256;
-        scroll_input_edge=0;
-    }
     const int32_t target=(int32_t)raw.y*256;
     const int32_t max_lag=SCROLL_INPUT_MAX_LAG_PX*256;
     int32_t delta=target-scroll_input_q8;
@@ -192,11 +163,6 @@ static void smooth_scroll_input(lv_indev_t *input) {
     else scroll_input_q8 += delta*(int32_t)elapsed/(int32_t)(SCROLL_INPUT_SMOOTH_MS+elapsed);
     const int16_t next=(scroll_input_q8+128)/256;
     const int16_t step=next-scroll_input_y;
-    if ((step>0 && lv_obj_get_scroll_top(list)<=0) ||
-        (step<0 && lv_obj_get_scroll_bottom(list)<=0)) {
-        hold_scroll_edge(input,raw.y,step>0 ? 1 : -1);
-        return;
-    }
     scroll_input_y=next;
     scroll_throw_y=(scroll_throw_y+step)/2;
     /* LVGL 8.3.11 sends PRESSING after computing these fields and before its
@@ -221,9 +187,24 @@ static void update_curve(lv_timer_t *timer) {
     (void)timer;
     if (!curve_dirty || chronvs_system_ui_display_is_off()) return;
     curve_dirty = false;
-    const int scroll = lv_obj_get_scroll_y(list);
+    int scroll = lv_obj_get_scroll_y(list);
+    const int cycle = (int)row_count * ROW_HEIGHT;
+    if (!cycle) return;
+    const int phase = ((scroll % cycle) + cycle) % cycle;
+    const int rebased = cycle + phase;
+    /* Recycle outside the circular viewport, keeping native child geometry
+     * and pointer scrolling. Padding reserves room in both directions; the
+     * existing 20 ms timer bounds coordinates without accumulating distance. */
     for (size_t i = 0; i < row_count; ++i) {
-        int dy = LIST_TOP + ROW_TOP + (int)i * ROW_HEIGHT + 32 - scroll - SCREEN_CENTER;
+        const int offset = ((int)i * ROW_HEIGHT - phase + cycle + cycle / 2) % cycle - cycle / 2;
+        const int y = ROW_TOP + rebased + offset;
+        if (lv_obj_get_y(rows[i]) != y) lv_obj_set_y(rows[i], y);
+    }
+    lv_obj_update_layout(list);
+    if (scroll != rebased) lv_obj_scroll_to_y(list, rebased, LV_ANIM_OFF);
+    scroll = rebased;
+    for (size_t i = 0; i < row_count; ++i) {
+        int dy = LIST_TOP + lv_obj_get_y(rows[i]) + 32 - scroll - SCREEN_CENTER;
         if (dy < 0) dy = -dy;
         const int clamped = dy > ARC_RADIUS ? ARC_RADIUS : dy;
         const int x = SCREEN_CENTER - 32 - (int)sqrtf(ARC_RADIUS * ARC_RADIUS - clamped * clamped);
@@ -244,10 +225,16 @@ static void update_curve(lv_timer_t *timer) {
 #endif
         if (!context->curve_set || context->translate_x != x)
             lv_obj_set_style_translate_x(rows[i], x, 0);
-        if (!context->curve_set || context->opacity != opacity)
-            lv_obj_set_style_opa(rows[i], opacity, 0);
-        /* Skip invisible names before drawing; custom icons retain their own
-         * opacity behavior. Child 1 is the name created below the badge. */
+        if (!context->curve_set || context->opacity != opacity) {
+            lv_obj_set_style_opa_layered(rows[i],
+                opacity == LV_OPA_TRANSP ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
+            /* Composite only the 60 px badge: raw vector callbacks bypass
+             * inherited opacity, and fading each stroke accumulates overlap. */
+            lv_obj_set_style_opa_layered(lv_obj_get_child(rows[i], 0), opacity, 0);
+            lv_obj_set_style_opa(lv_obj_get_child(rows[i], 1), opacity, 0);
+            lv_obj_set_style_bg_opa(rows[i], opacity, LV_STATE_PRESSED);
+        }
+        /* Skip fully invisible subtrees before any custom drawing. */
         if (!context->curve_set ||
             (context->opacity == LV_OPA_TRANSP) != (opacity == LV_OPA_TRANSP))
             lv_obj_set_style_opa_layered(lv_obj_get_child(rows[i], 1),
@@ -269,12 +256,6 @@ static void scroll_event(lv_event_t *event) {
         tap_candidate = false;
         user_scroll_seen = true;
         last_user_scroll_tick = lv_tick_get();
-        if (scroll_input_active) {
-            lv_indev_t *input=lv_indev_get_act();
-            lv_point_t raw; lv_indev_get_point(input,&raw);
-            if (lv_obj_get_scroll_top(list)<=0) hold_scroll_edge(input,raw.y,1);
-            else if (lv_obj_get_scroll_bottom(list)<=0) hold_scroll_edge(input,raw.y,-1);
-        }
     }
 }
 
@@ -328,7 +309,6 @@ static void app_list_touch_event(lv_event_t *event) {
         scroll_throw_y=0;
         scroll_input_tick=lv_tick_get();
         scroll_input_active=gesture_start_y>CLOSE_PULL_START_Y;
-        scroll_input_edge=0;
         close_pull_active = false;
         last_back_drag_tick = 0;
     }
@@ -413,7 +393,6 @@ static lv_obj_t *create_app_list(lv_obj_t *parent) {
     lv_obj_remove_style_all(list);
     lv_obj_set_size(list, SCREEN_SIZE, SCREEN_SIZE - LIST_TOP);
     lv_obj_set_pos(list, 0, LIST_TOP);
-    lv_obj_set_style_pad_bottom(list, 174, 0);
     lv_obj_set_scroll_dir(list, LV_DIR_VER);
     lv_obj_set_scrollbar_mode(list, LV_SCROLLBAR_MODE_OFF);
     /* Isolation trial: keep filtered drag, but stop at release. */
@@ -422,11 +401,21 @@ static lv_obj_t *create_app_list(lv_obj_t *parent) {
     lv_obj_add_flag(list, LV_OBJ_FLAG_EVENT_BUBBLE | LV_OBJ_FLAG_PRESS_LOCK);
     lv_obj_add_event_cb(list, scroll_event, LV_EVENT_SCROLL, NULL);
 
-    size_t visible_index = 0;
+    const chronvs_app_t *visible_apps[8];
+    size_t visible_count = 0;
     const size_t count = chronvs_app_count();
-    for (size_t index = 0; index < count && visible_index < 8; ++index) {
+    for (size_t index = 0; index < count && visible_count < 8; ++index) {
         const chronvs_app_t *app = chronvs_app_at(index);
         if (app == NULL || !app->launcher_visible) continue;
+        visible_apps[visible_count++] = app;
+    }
+    /* A small catalog repeats whole cycles so recycling is always offscreen. */
+    size_t slots = visible_count;
+    while (slots && slots * ROW_HEIGHT < SCREEN_SIZE + ROW_HEIGHT) slots += visible_count;
+    lv_obj_set_style_pad_bottom(list, 3 * slots * ROW_HEIGHT + SCREEN_SIZE, 0);
+    size_t visible_index = 0;
+    for (; visible_index < slots; ) {
+        const chronvs_app_t *app = visible_apps[visible_index % visible_count];
 
         const int16_t y = ROW_TOP + (int16_t)(visible_index * ROW_HEIGHT);
         lv_obj_t *row = lv_btn_create(list);

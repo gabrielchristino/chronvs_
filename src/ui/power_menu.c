@@ -4,6 +4,7 @@
 #include "ui/app_input.h"
 #include "ui/system_ui.h"
 #include "core/app_manager.h"
+#include "services/run_service.h"
 
 enum { NONE, CANCEL, POWER_OFF, RESTART };
 static lv_obj_t *overlay;
@@ -24,6 +25,8 @@ void chronvs_power_menu_poll(void) {
         lv_obj_del(overlay);
         overlay = NULL;
         if (action == POWER_OFF || action == RESTART) {
+            /* Finish background recordings even when another app is visible. */
+            chronvs_run_finish();
             /* Let the current app persist pending edits through on_hide. */
             chronvs_app_open("watch");
             if (action == POWER_OFF) chronvs_board_power_off();

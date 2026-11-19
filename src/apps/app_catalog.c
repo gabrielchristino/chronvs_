@@ -4,7 +4,7 @@
 
 #include "core/app_manager.h"
 
-static const chronvs_app_t *discovered_apps[8];
+static const chronvs_app_t *discovered_apps[10];
 static size_t discovered_count;
 
 void chronvs_apps_add(const chronvs_app_t *app) {

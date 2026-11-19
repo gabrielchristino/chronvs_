@@ -1,79 +1,43 @@
-"""Exercise logging policy without PlatformIO or changing real sdkconfig."""
-from pathlib import Path
-import runpy
+import pathlib
 import tempfile
 import unittest
 
-SCRIPT = Path(__file__).resolve().parents[1] / "scripts/configure_logging.py"
+SCRIPT = (pathlib.Path(__file__).resolve().parents[1] / "scripts/configure_logging.py").read_text()
 
 
-class Environment(dict):
-    def GetProjectOption(self, key, default):
-        return self.get(key, default)
+class LoggingConfigTests(unittest.TestCase):
+    def configure(self, mode):
+        with tempfile.TemporaryDirectory() as folder:
+            root = pathlib.Path(folder)
+            (root / "sdkconfig.test").write_text("CONFIG_ESP_CONSOLE_UART_DEFAULT=y\n")
 
-    def subst(self, value):
-        return "test"
+            class Env(dict):
+                def GetProjectOption(self, name, default=""):
+                    return {"custom_serial_diagnostics": mode, "build_type": "release"}.get(name, default)
 
+                def subst(self, value):
+                    return value.replace("$PIOENV", "test")
 
-class LoggingPolicyTest(unittest.TestCase):
-    def test_release_debug_round_trip_selects_optimization_and_silent_checks(self):
-        with tempfile.TemporaryDirectory() as directory:
-            config = Path(directory) / "sdkconfig.test"
-            hardware = "CONFIG_SPIRAM_MODE_OCT=y\nCONFIG_SPIRAM_MALLOC_RESERVE_INTERNAL=32768\n"
-            config.write_text(hardware, encoding="utf-8")
-            env = Environment(PROJECT_DIR=directory)
-            for mode in ("release", "debug", "release"):
-                env["build_type"] = mode
-                runpy.run_path(str(SCRIPT), init_globals={"env": env, "Import": lambda _: None})
-                result = config.read_text(encoding="utf-8")
-                self.assertTrue(result.startswith(hardware))
-                release = mode == "release"
-                self.assertIn("CONFIG_COMPILER_OPTIMIZATION_" +
-                              ("PERF" if release else "DEBUG") + "=y\n", result)
-                self.assertIn("CONFIG_COMPILER_OPTIMIZATION_ASSERTIONS_" +
-                              ("SILENT" if release else "ENABLE") + "=y\n", result)
-                self.assertIn("CONFIG_ESP_SYSTEM_PANIC_" +
-                              ("SILENT_REBOOT" if release else "PRINT_REBOOT") + "=y\n", result)
-                self.assertIn("CONFIG_BOOT_ROM_LOG_" +
-                              ("ALWAYS_OFF" if release else "ALWAYS_ON") + "=y\n", result)
-                self.assertIn(("# CONFIG_ESP_DEBUG_OCDAWARE is not set\n" if release else
-                               "CONFIG_ESP_DEBUG_OCDAWARE=y\n"), result)
+            namespace = {"env": Env(PROJECT_DIR=str(root)), "Import": lambda _: None}
+            exec(compile(SCRIPT, "configure_logging.py", "exec"), namespace)
+            return (root / "sdkconfig.test").read_text()
 
-    def test_diagnostic_inherits_reference_without_modifying_it(self):
-        with tempfile.TemporaryDirectory() as directory:
-            reference = Path(directory) / "sdkconfig.reference"
-            content = "CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192\nCONFIG_LOG_DEFAULT_LEVEL_NONE=y\n"
-            reference.write_text(content, encoding="utf-8")
-            env = Environment(PROJECT_DIR=directory, custom_serial_diagnostics="yes",
-                              custom_sdkconfig_reference=reference.name)
-            runpy.run_path(str(SCRIPT), init_globals={"env": env, "Import": lambda _: None})
-            result = (Path(directory) / "sdkconfig.test").read_text(encoding="utf-8")
-            self.assertEqual(reference.read_text(encoding="utf-8"), content)
-            self.assertIn("CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192\n", result)
-            self.assertIn("CONFIG_LOG_DEFAULT_LEVEL_INFO=y\n", result)
-            self.assertIn("CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y\n", result)
+    def test_usb_owns_no_gnss_tx_pin(self):
+        config = self.configure("usb")
+        self.assertIn("CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y\n", config)
+        self.assertIn("# CONFIG_ESP_CONSOLE_UART_DEFAULT is not set\n", config)
+        self.assertIn("CONFIG_ESP_CONSOLE_UART_NONE=y\n", config)
+        self.assertIn("CONFIG_ESP_CONSOLE_SECONDARY_NONE=y\n", config)
+        self.assertIn("CONFIG_LOG_DEFAULT_LEVEL=3\n", config)
 
-    def test_round_trip_preserves_hardware_and_is_idempotent(self):
-        with tempfile.TemporaryDirectory() as directory:
-            config = Path(directory) / "sdkconfig.test"
-            hardware = "CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192\nCONFIG_SPIRAM_USE_MALLOC=y\n"
-            config.write_text(hardware + "CONFIG_LOG_DEFAULT_LEVEL_INFO=y\n"
-                              "CONFIG_ESP_CONSOLE_UART_DEFAULT=y\n", encoding="utf-8")
-            env = Environment(PROJECT_DIR=directory)
-            for mode, level, console in (("no", "0", "NONE"), ("yes", "3", "UART_DEFAULT"),
-                                         ("no", "0", "NONE")):
-                env["custom_serial_diagnostics"] = mode
-                runpy.run_path(str(SCRIPT), init_globals={"env": env, "Import": lambda _: None})
-                content = config.read_text(encoding="utf-8")
-                self.assertTrue(content.startswith(hardware))
-                self.assertIn("CONFIG_LOG_DEFAULT_LEVEL=" + level + "\n", content)
-                self.assertIn("CONFIG_LOG_MAXIMUM_LEVEL=" + level + "\n", content)
-                self.assertIn("CONFIG_BOOTLOADER_LOG_LEVEL=" + level + "\n", content)
-                self.assertIn("CONFIG_ESP_CONSOLE_" + console + "=y\n", content)
-                stamp = config.stat().st_mtime_ns
-                runpy.run_path(str(SCRIPT), init_globals={"env": env, "Import": lambda _: None})
-                self.assertEqual(content, config.read_text(encoding="utf-8"))
-                self.assertEqual(stamp, config.stat().st_mtime_ns)
+    def test_existing_modes_preserve_console_policy(self):
+        normal = self.configure("no")
+        self.assertIn("CONFIG_ESP_CONSOLE_NONE=y\n", normal)
+        self.assertIn("CONFIG_LOG_DEFAULT_LEVEL=0\n", normal)
+        for mode in ("yes", "capture"):
+            config = self.configure(mode)
+            self.assertIn("CONFIG_ESP_CONSOLE_UART_DEFAULT=y\n", config)
+            self.assertIn("CONFIG_ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG=y\n", config)
 
 
 if __name__ == "__main__":

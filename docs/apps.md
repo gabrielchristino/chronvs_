@@ -291,7 +291,101 @@ chronvs_app_open("timer");
 `create` é chamado uma única vez e o objeto retornado é preservado ao alternar
 entre apps. `on_show` serve para atualizar dados ou retomar timers; `on_hide`
 serve para pausar trabalho que não deve continuar fora da tela. O gerenciador
-aceita atualmente oito apps e rejeita IDs repetidos.
+aceita atualmente dez apps e rejeita IDs repetidos. O catálogo automático
+também comporta dez registros, incluindo os dois apps internos.
+
+## Corrida e serviços em segundo plano
+
+`apps/run_app.c` registra `run`/Corrida. A UI consome `run_service`, pausa
+seu timer no `on_hide` e libera somente a preparação não iniciada. Atividades
+em gravação/pausa sobrevivem à navegação. `main.c` recebe UART, aplica fallback
+de hora e chama `chronvs_run_poll` antes da decisão de sono. Os pedidos de
+GPS de diagnóstico, corrida e hora são independentes; os dois últimos impedem
+light sleep e continuam com tela apagada, sem ler RTC/bateria nem renderizar.
+
+`sd_service` monta FAT/SDMMC sob demanda, sem formatação. `run_service` salva
+CSV e GPX parcial em fluxo, sincroniza a cada 5 s, na pausa e ao finalizar,
+e publica snapshot sem acessar LVGL. Erros fecham arquivos e liberam seu GPS;
+parciais são preservados para recuperação no PC. O menu Energia tenta finalizar
+a atividade antes de reiniciar/desligar, inclusive com outro app ativo.
+
+`time_sync_service` conserva prioridade NTP e busca UTC do GPS após ausência/
+falha de rede. Janela de 120 s, repetição após 1 h e correção a cada 12 h;
+escrita no RTC usa UTC−3, aguarda tela acesa e repete falha após 60 s. Os filtros,
+formatos, limites de recuperação e procedimentos estão em [`running.md`](running.md).
+
+## GPS
+
+`apps/gps_app.c` registra `gps` e consulta os serviços GPS e A-GNSS.
+`on_show` solicita recepção; `on_hide` libera seu pedido e pausa o timer. Outros
+clientes, incluindo assistência, podem manter o driver UART ativo.
+O loop principal chama `chronvs_gps_poll(display_off)` antes de decidir pelo
+light sleep: recebe no máximo 1.024 bytes por passagem, sem bloquear nem criar
+tarefa, e remove o driver com a tela apagada se nenhum cliente de corrida/hora
+mantiver recepção em segundo plano. Ao despertar com o app aberto,
+reabre a recepção sem reutilizar uma posição anterior. O módulo pode continuar
+alimentado; não há controle elétrico de energia pelo firmware.
+
+UART1 usa RX44 com buffer de 4 KiB e TX43 com buffer de 512 bytes sob demanda.
+O TX envia A-GNSS em pequenos frames, com consulta de conclusão de zero ticks,
+sem aguardar toda a transferência na tarefa LVGL. Nos perfis com console UART0,
+TX permanece intocado e a assistência não é iniciada. A velocidade percorre 9600, 38400, 115200, 4800,
+19200 e 57600 baud, três segundos por tentativa; um NMEA com checksum válido
+fixa a velocidade até a próxima sessão. Perda da serial não inicia nova busca
+enquanto a sessão permanece aberta, para não esconder uma conexão intermitente.
+
+`services/gps_data.c` valida checksum e interpreta RMC/GGA com talkers distintos
+(`GP`, `GN`, `BD` etc.). Status sem fix ou coordenadas inválidas removem a
+posição; posição, velocidade, altitude, HDOP e satélites têm expiração própria
+de cinco segundos. O timer visual de um segundo só muda textos diferentes,
+sem renderizar com tela apagada. Todas as chamadas são da tarefa da interface.
+GSV mantém até quatro talkers independentes, com contagem visível e maior
+C/N0 da sequência atual, inclusive antes do fix. Aceita signal ID opcional,
+rejeita fragmentos fora de sequência e expira em 5 s, sem modificar o fix.
+Não soma sistemas/sinais sobrepostos. O diagnóstico não altera a aquisição
+nem envia configuração ao módulo.
+O app de diagnóstico não grava coordenadas. GPS e a preparação de Corrida
+solicitam `agnss_service` automaticamente, com limite de uma tentativa automática
+a cada 10 minutos; a página de assistência permite repetir manualmente. O worker
+temporário compartilha a sessão Wi-Fi exclusiva com NTP/Clima, valida o download
+HTTPS em PSRAM e publica o resultado antes de terminar. Somente a tarefa UI
+envia UART ou acessa LVGL. A operação mantém recepção e impede light sleep até
+concluir ou falhar, inclusive com tela apagada e após sair do app.
+O worker prioriza previsão orbital no SD/Wi-Fi e recorre a IGS/BKG quando ela
+não serve. Descompacta RINEX e converte para CASIC no relógio, sem computador
+ou servidor de conversão. Persiste a previsão completa e um pequeno cache IGS
+no SD, sem formatar; seleciona no máximo um registro atual por satélite.
+O lote continua após NACK orbital, repetindo o mesmo registro no máximo duas
+vezes, com 200 ms entre tentativas. Registra resultado e tentativas por PRN;
+ao terminar, consulta NAV-STATUS inclusive após rejeições. Um lote de previsão
+com órbitas rejeitadas permite uma única tentativa IGS, nunca durante corrida.
+O envio aguarda ACK correspondente, com timeout de 1,5 s por pacote;
+não bloqueia a UI nem envia o pacote seguinte enquanto a confirmação estiver
+pendente. Sem ACK interrompe o lote, conta o PRN sem confirmação e consulta
+status; não avança nem inicia fallback, pois uma resposta atrasada não contém
+PRN e poderia ser atribuída ao registro seguinte. AID-INI rejeitado também
+interrompe. ACK, NACK e contagem por PRN têm significados separados de fix.
+O snapshot preserva o total de PRNs distintos com ACK entre previsão e IGS
+no mesmo pedido, além das contagens/estados por PRN da fonte atual.
+
+Antes de injetar, exige hora confiável da sincronização do boot e órbitas
+atuais, e não injeta numa corrida iniciada/pausada. Após AID-INI, exige GGA
+novo com fix e ao menos quatro satélites em uso antes de voltar a publicar
+posição. Reabrir a UART não remove essa proteção: o módulo continua alimentado.
+Não grava configuração permanente nem reinicia o receptor. Mensagens binárias
+CASIC e NMEA são separadas, com limite e timeout para pacotes binários. ACK/NACK
+e NAV-STATUS são diagnóstico, sem produzir fix por si mesmos.
+Procedimento, referência regional e limites em [`agnss.md`](agnss.md) e [`gps.md`](gps.md).
+
+O ambiente opcional `gps_standby_test` acrescenta uma terceira página de teste por
+gesto vertical. `chronvs_gps_query_version` envia CAS06 e captura TXT;
+`chronvs_gps_test_standby` envia CAS12/60 s uma única vez. O serviço observa
+NMEA por tempo monotônico, sem bloquear por todo o prazo nem criar tarefas.
+As operações exigem serial recente e não podem se sobrepor ao teste ativo.
+Ao sair/apagar, marca teste interrompido e libera UART, preservando o resultado
+na próxima sessão. Não automatiza standby nem grava configuração no módulo.
+Estado de silêncio não é tratado como confirmação de economia; consumo exige
+medição. A variante padrão tem dados e assistência, sem o comando de standby.
 
 ## Calendario — Calendário
 

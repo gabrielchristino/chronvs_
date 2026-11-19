@@ -1,11 +1,14 @@
 #include "services/time_sync_service.h"
 #include "services/wifi_session_service.h"
+#include "services/gps_service.h"
+#include "services/Relogio_service.h"
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <sys/time.h>
 
 #include "driver/i2c.h"
 #include "esp_err.h"
@@ -29,6 +32,11 @@ static chronvs_time_t synchronized_time;
 static bool update_pending;
 static bool scheduler_started, worker_active;
 static int64_t next_sync_us;
+static int64_t last_ntp_us = -1;
+static int64_t gps_retry_us, gps_window_us, gps_last_sync_us = -1;
+static bool gps_searching, gps_rtc_pending;
+static int64_t gps_anchor_utc, gps_anchor_us;
+static int64_t gps_rtc_retry_us;
 
 bool chronvs_time_sync_take_update(chronvs_time_t *time) {
     portENTER_CRITICAL(&update_lock);
@@ -114,6 +122,7 @@ static bool synchronize_once(void) {
                     .minute = local_time.tm_min, .second = local_time.tm_sec, .valid = true,
                 };
                 update_pending = true;
+                last_ntp_us = esp_timer_get_time();
                 portEXIT_CRITICAL(&update_lock);
             }
             else {
@@ -143,7 +152,7 @@ static void time_sync_task(void *argument) {
 void chronvs_time_sync_start(void) {
     if (scheduler_started) return;
     if (!chronvs_wifi_session_configured()) {
-        ESP_LOGI(TAG, "No Wi-Fi credentials; using PCF85063 only");
+        ESP_LOGI(TAG, "No Wi-Fi credentials; using RTC with GPS time fallback");
         return;
     }
     scheduler_started = true;
@@ -175,6 +184,19 @@ bool chronvs_time_sync_active(void) {
     return active;
 }
 
+bool chronvs_time_sync_utc(int64_t *utc) {
+    int64_t now=esp_timer_get_time();
+    portENTER_CRITICAL(&update_lock);
+    int64_t ntp=last_ntp_us;
+    bool busy=worker_active;
+    portEXIT_CRITICAL(&update_lock);
+    bool recent_ntp=ntp>=0 && now-ntp<(int64_t)SYNC_PERIOD_MS*1000;
+    bool recent_gps=gps_last_sync_us>=0 && now-gps_last_sync_us<(int64_t)SYNC_PERIOD_MS*1000;
+    if (!utc || busy || (!recent_ntp && !recent_gps)) return false;
+    *utc=(int64_t)time(NULL);
+    return *utc>=1483228800LL;
+}
+
 uint32_t chronvs_time_sync_next_wake_ms(uint32_t max_ms) {
     if (!scheduler_started || !max_ms) return max_ms;
     portENTER_CRITICAL(&update_lock);
@@ -185,4 +207,53 @@ uint32_t chronvs_time_sync_next_wake_ms(uint32_t max_ms) {
     if (remaining_us <= 0) return 1;
     int64_t remaining_ms = (remaining_us + 999) / 1000;
     return remaining_ms < max_ms ? (uint32_t)remaining_ms : max_ms;
+}
+
+void chronvs_time_sync_gps_poll(bool display_off) {
+    const int64_t now = esp_timer_get_time();
+    portENTER_CRITICAL(&update_lock);
+    bool ntp_busy = worker_active;
+    bool ntp_recent = last_ntp_us >= 0 && now-last_ntp_us < (int64_t)SYNC_PERIOD_MS*1000;
+    portEXIT_CRITICAL(&update_lock);
+    if (ntp_busy || ntp_recent) {
+        chronvs_gps_clock_request(false); gps_searching = false;
+        if (ntp_recent) gps_rtc_pending = false;
+        return;
+    }
+    bool gps_due = gps_last_sync_us < 0 || now-gps_last_sync_us >= (int64_t)SYNC_PERIOD_MS*1000;
+    if (gps_due) {
+        if (!gps_searching && now >= gps_retry_us) {
+            chronvs_gps_clock_request(true); gps_searching = true;
+            gps_window_us = now + 120000000LL;
+        }
+        chronvs_gps_snapshot_t gps; chronvs_gps_snapshot(&gps);
+        if (gps.running && gps.data.fix && gps.data.utc_valid &&
+            (uint64_t)(now/1000)-gps.data.utc_ms < 2000) {
+            gps_anchor_utc = gps.data.utc; gps_anchor_us = (int64_t)gps.data.utc_ms*1000;
+            struct timeval tv = {.tv_sec = (time_t)(gps_anchor_utc + (now-gps_anchor_us)/1000000),
+                .tv_usec = (long)((now-gps_anchor_us)%1000000)};
+            if (settimeofday(&tv, NULL) == 0) {
+                gps_last_sync_us = now; gps_rtc_pending = true; gps_rtc_retry_us = 0;
+                chronvs_gps_clock_request(false); gps_searching = false;
+            }
+        }
+        if (gps_searching && now >= gps_window_us) {
+            chronvs_gps_clock_request(false); gps_searching = false;
+            gps_retry_us = now + 3600000000LL;
+        }
+    }
+    /* Never touch RTC/I2C or render with backlight off. Keep the elapsed UTC
+     * anchor so a delayed write uses current time, including midnight rollover. */
+    if (gps_rtc_pending && !display_off && now >= gps_rtc_retry_us) {
+        time_t local = (time_t)(gps_anchor_utc + (now-gps_anchor_us)/1000000 - 3*3600);
+        struct tm tm;
+        if (gmtime_r(&local, &tm) && write_rtc(&tm) == ESP_OK) {
+            chronvs_time_t sample = {.year = tm.tm_year-100, .month = tm.tm_mon+1,
+                .day = tm.tm_mday, .weekday = tm.tm_wday, .hour = tm.tm_hour,
+                .minute = tm.tm_min, .second = tm.tm_sec, .valid = true};
+            chronvs_Relogio_observe_time(&sample);
+            gps_rtc_pending = false;
+        }
+        else gps_rtc_retry_us = now + 60000000LL;
+    }
 }

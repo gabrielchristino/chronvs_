@@ -19,6 +19,27 @@ Calendario oferece calendário mensal offline, destaque de hoje e consulta do di
 da semana e da distância até uma data. Veja os detalhes em
 [`docs/interface.md`](docs/interface.md#calendario--calendário).
 
+GPS recebe o módulo GNSS UART também usado no pda-os, pelo RXD/GPIO44,
+e mostra posição, satélites, velocidade e altitude sem Wi-Fi. A recepção
+de diagnóstico funciona com o app aberto e a tela acesa. Recepção, posição e resposta da
+velocidade ao caminhar foram confirmadas no relógio. Ligação e validação em
+[`docs/gps.md`](docs/gps.md).
+
+GPS e Corrida agora compartilham assistência A-GNSS por Wi-Fi, com dados
+orbitais validados, hora confiável e referência aproximada da região de teste.
+Usam previsões guardadas no SD e, quando necessário, convertem dados IGS no
+próprio relógio, sem depender de um computador para a conversão.
+Download, conversão e cache SD foram confirmados no relógio. O envio do lote
+completo confirmou registros para 21 satélites diferentes, com aceitação
+parcial; ainda falta validar a posição e o ganho de aquisição ao ar livre.
+Funcionamento e limites em [`docs/agnss.md`](docs/agnss.md).
+
+Corrida registra percurso, velocidade, distância e ritmo no cartão SD, com
+pausas e exportação GPX/CSV. Continua com a tela apagada e fora do app; GPS
+também fornece hora quando NTP não está disponível. A implementação ainda
+exige validação do SD, autonomia e percurso no dispositivo. Uso e recuperação
+em [`docs/running.md`](docs/running.md).
+
 Clima mostra as condições de São Paulo pela Open-Meteo, com atualização ao ser
 aberto, cache persistente e fallback para a última leitura. Compartilha sessões
 Wi-Fi exclusivas com o NTP. Consulte [`docs/weather.md`](docs/weather.md) para

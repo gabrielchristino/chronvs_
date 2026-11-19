@@ -1,5 +1,6 @@
-param([switch]$System, [switch]$FlatWatch, [switch]$MotherCache, [switch]$Panels, [switch]$KeepCloseRedraw, [switch]$PanelCodeO2, [switch]$PanelNoContent, [switch]$PanelNoIcons, [switch]$LauncherIconCache)
+param([switch]$System, [switch]$FlatWatch, [switch]$MotherCache, [switch]$Panels, [switch]$KeepCloseRedraw, [switch]$PanelCodeO2, [switch]$PanelNoContent, [switch]$PanelNoIcons, [switch]$LauncherIconCache, [switch]$GPSStandby)
 $ErrorActionPreference = 'Stop'
+if ($GPSStandby -and -not $System) { throw 'GPSStandby requires System' }
 if ($LauncherIconCache -and (-not $System -or $PanelNoContent -or $PanelNoIcons)) { throw 'LauncherIconCache requires System with full icons' }
 if ($MotherCache -and (-not $System -or $FlatWatch)) { throw 'MotherCache requires System with the orbital watch' }
 if (($Panels -or $KeepCloseRedraw) -and -not $System) { throw 'Panel diagnostics require System' }
@@ -16,6 +17,7 @@ try {
         'tests/Relogio_ui_test.c', 'src/services/Relogio_service.c', 'src/core/calendar.c', 'src/core/Notas_text.c', 'src/ui/Notas_font.c', 'src/ui/Relogio_widgets.c', 'src/ui/control_style.c') + $sources + @('-o', '.pio/host-tests/Relogio_ui_test.exe')
     $executable = '.pio/host-tests/Relogio_ui_test.exe'
     if ($System) {
+        if ($GPSStandby) { $arguments += '-DCHRONVS_GPS_STANDBY_TEST' }
         if ($LauncherIconCache) { $arguments += '-DCHRONVS_LAUNCHER_ICON_CACHE' }
         if ($PanelCodeO2) { $arguments += '-DCHRONVS_PANEL_CODE_O2' }
         if ($PanelNoContent) { $arguments += '-DCHRONVS_PANEL_NO_CONTENT' }
@@ -41,6 +43,7 @@ try {
         $jsonRoot = Join-Path $env:USERPROFILE '.platformio/packages/framework-espidf/components/json/cJSON'
         $arguments += @('src/apps/weather_app.c','src/ui/weather_icon.c','src/services/weather_data.c',"$jsonRoot/cJSON.c",'-I',$jsonRoot)
         $arguments += @('src/apps/Calendario_app.c','src/apps/Calendario_reminders.c','src/ui/Relogio_alert.c','src/ui/power_menu.c')
+        $arguments += @('src/apps/gps_app.c','src/apps/run_app.c','tests/run_ui_service.c')
         $arguments += @('src/platform/lvgl_memory.c','-DLV_MEM_POOL_ALLOC=chronvs_lvgl_pool_alloc',
             '-include','src/platform/lvgl_memory.h')
     }

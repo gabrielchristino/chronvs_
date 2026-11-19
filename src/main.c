@@ -10,7 +10,12 @@
 #include "core/app_manager.h"
 #include "platform/board.h"
 #include "platform/display_profile.h"
+#ifdef CHRONVS_GPS_ASSIST_DIAGNOSTIC
+#include "platform/gps_diagnostics.h"
+#endif
 #include "services/battery_service.h"
+#include "services/gps_service.h"
+#include "services/run_service.h"
 #include "services/rtc_service.h"
 #include "services/time_sync_service.h"
 #include "services/wifi_session_service.h"
@@ -38,6 +43,9 @@ void app_main(void) {
     chronvs_Relogio_init();
     chronvs_wifi_session_init();
     chronvs_time_sync_start();
+#ifdef CHRONVS_GPS_ASSIST_DIAGNOSTIC
+    chronvs_gps_diagnostics_start();
+#endif
 
     TickType_t next_battery_update = 0;
     bool display_was_off = false;
@@ -53,6 +61,12 @@ void app_main(void) {
             chronvs_Relogio_observe_time(&synchronized_time);
         TickType_t now = xTaskGetTickCount();
         const bool display_is_off = chronvs_system_ui_display_is_off();
+        chronvs_gps_poll(display_is_off);
+        chronvs_time_sync_gps_poll(display_is_off);
+        chronvs_run_poll();
+#ifdef CHRONVS_GPS_ASSIST_DIAGNOSTIC
+        chronvs_gps_diagnostics_poll(display_is_off);
+#endif
         chronvs_rtc_refresh(display_is_off);
         if (!display_is_off && !watch_time_initialized) {
             chronvs_time_t initial_time;
@@ -63,12 +77,12 @@ void app_main(void) {
         }
         if (display_is_off) {
             if (!display_was_off)
-                ESP_LOGI(TAG, "Display off: light sleep enabled");
+                ESP_LOGI(TAG, "Display off: sleep subject to active service requests");
             display_was_off = true;
             /* AUTO/ECO stops capture; let the worker release I2S/model before sleep. */
             if (chronvs_voice_lab_active()) chronvs_voice_lab_stop();
             if (!chronvs_wifi_session_active() && !chronvs_voice_lab_active() &&
-                !chronvs_time_sync_active()) {
+                !chronvs_time_sync_active() && !chronvs_gps_background_active()) {
                 chronvs_board_light_sleep(
                     chronvs_time_sync_next_wake_ms(
                         chronvs_Relogio_next_wake_ms(DISPLAY_OFF_MAX_SLEEP_MS)));

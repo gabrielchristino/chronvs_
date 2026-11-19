@@ -5,11 +5,11 @@ import re
 # sdkconfig.defaults does not override an existing menuconfig. Apply only the
 # firmware policy, preserving the local hardware and memory choices.
 diagnostics = env.GetProjectOption("custom_serial_diagnostics", "no")
-if diagnostics not in ("yes", "no", "capture"):
-    raise RuntimeError("custom_serial_diagnostics must be yes, no or capture")
+if diagnostics not in ("yes", "no", "capture", "usb"):
+    raise RuntimeError("custom_serial_diagnostics must be yes, no, capture or usb")
 # Capture keeps stdout but suppresses unrelated task logs inside PCM records.
 enabled = diagnostics != "no"
-logs_enabled = diagnostics == "yes"
+logs_enabled = diagnostics in ("yes", "usb")
 config = Path(env["PROJECT_DIR"]) / ("sdkconfig." + env.subst("$PIOENV"))
 reference = env.GetProjectOption("custom_sdkconfig_reference", "")
 source = Path(env["PROJECT_DIR"]) / reference if reference else config
@@ -25,11 +25,13 @@ if source.exists():
     for level in ("ERROR", "WARN", "INFO", "DEBUG", "VERBOSE"):
         settings["LOG_MAXIMUM_LEVEL_" + level] = None
     settings["LOG_MAXIMUM_LEVEL"] = "3" if logs_enabled else "0"
+    console = "USB_SERIAL_JTAG" if diagnostics == "usb" else "UART_DEFAULT" if enabled else "NONE"
     for choice in ("UART_DEFAULT", "USB_CDC", "USB_SERIAL_JTAG", "UART_CUSTOM", "NONE"):
-        settings["ESP_CONSOLE_" + choice] = "y" if choice == ("UART_DEFAULT" if enabled else "NONE") else None
-    settings["ESP_CONSOLE_UART_NONE"] = None if enabled else "y"
-    settings["ESP_CONSOLE_SECONDARY_NONE"] = None if enabled else "y"
-    settings["ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG"] = "y" if enabled else None
+        settings["ESP_CONSOLE_" + choice] = "y" if choice == console else None
+    uart_console = enabled and diagnostics != "usb"
+    settings["ESP_CONSOLE_UART_NONE"] = None if uart_console else "y"
+    settings["ESP_CONSOLE_SECONDARY_NONE"] = None if uart_console else "y"
+    settings["ESP_CONSOLE_SECONDARY_USB_SERIAL_JTAG"] = "y" if uart_console else None
 
     # Select IDF's own optimization too: build_flags alone do not replace
     # the -Og selected by an existing sdkconfig for framework components.

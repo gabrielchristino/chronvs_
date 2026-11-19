@@ -14,6 +14,8 @@ lv_scr_act()
 │   ├── Notas                     notas, editor e teclado multi-tap
 │   ├── calculator                calculadora
 │   ├── weather                   clima de São Paulo
+│   ├── gps                       posição e diagnóstico GNSS
+│   ├── run                       corrida e registros no SD
 │   └── Calendario                calendário mensal e detalhe da data
 └── settings_panel                painel global de acessos rápidos
 
@@ -113,6 +115,9 @@ os limites de validação estão em [`voice-training.md`](voice-training.md).
 | Notas: editor / leitura | Arrastar para a direita | Salva e volta à lista de notas, inclusive sobre texto e teclado. Falha de gravação mantém o editor aberto. |
 | Notas: confirmação de exclusão | Arrastar para a direita | Cancela a confirmação. |
 | Clima | Arrastar para a direita | Volta ao launcher, inclusive começando no ícone ou nos textos. |
+| GPS | Arrastar para a direita | Volta ao launcher e encerra a recepção, inclusive sobre os valores. |
+| Corrida: dados | Arrastar para a direita / para cima | Volta ao launcher mantendo atividade iniciada / mostra os cinco registros mais recentes. |
+| Corrida: registros / confirmação | Arrastar para a direita | Retorna aos dados / cancela a finalização. Nos registros, descer também retorna. |
 | Calendario: mês / detalhe | Arrastar para a direita | Volta ao launcher / ao mês consultado, inclusive sobre grade e controles. |
 | Calendario: mês | Arrastar para cima / para baixo | Avança / retorna um mês, inclusive sobre a grade e Hoje. |
 
@@ -816,6 +821,122 @@ No relógio, validar toque nos dias das extremidades e sexta linha, retorno
 sobre grade e Hoje, troca de mês por gestos, legibilidade e apagar/acordar.
 Esses testes físicos permanecem pendentes; buffers, QSPI e pool LVGL mantêm
 os parâmetros validados.
+
+## Corrida
+
+Tela inicial sem título duplicado: estado amarelo a y=58 (290 px), tempo
+ativo Montserrat 48 a y=105 (330 px), distância Montserrat 24 a y=172,
+velocidade a y=211 e ritmo a y=242. Tempo total/pontos ou nome do arquivo
+ficam a y=278 em Montserrat 12. Durante a atividade, Pausar/Retomar e Finalizar
+usam pílulas de 120 × 54 px, centros x=140/272, topo y=308; Iniciar/Nova/Tentar
+isolados usam 140 × 54 px centralizados. Estilos e construtores compartilhados.
+O ícone vetorial representa uma pessoa correndo dentro de 44 × 44 px.
+
+Finalizar abre confirmação com Salvar de 140 × 54 px a y=280. Direita cancela;
+Salvar fecha os arquivos e mostra distância, tempo ativo e médias. Subir nos
+dados abre uma página com os nomes dos cinco CSV mais recentes no SD; descer
+ou direita retorna. Não há setas, botão Voltar no topo ou exclusão automática.
+Direita na tela inicial volta ao launcher e mantém corrida/pausa em andamento;
+se estava somente preparando, libera o pedido de GPS. Gestos usam os limiares
+globais (>80 px, horizontal > |vertical|+20), inclusive sobre os controles,
+consumindo o contato. A árvore é vinculada uma única vez a `app_input`.
+
+O timer de 1 s atualiza somente textos diferentes, pausa ao sair e não
+renderiza com tela apagada. Toques prolongados contam como interação; timers,
+UART e gravação não mantêm o backlight aceso. AUTO/ECO e primeiro toque de
+despertar são preservados. Durante preparação/corrida/pausa a UART continua
+com tela apagada e light sleep fica impedido. NTP indisponível também pode
+abrir uma janela limitada de GPS para acertar a hora. Não há leitura de RTC ou
+bateria com backlight apagado. Fluxo e limites em [`running.md`](running.md).
+
+Verificação inicial: testes de gravação/parser/NTP e integração LVGL com UART
+e SD simulados, capturas de preparação, gravação, pausa, confirmação, resumo
+e registros. Ainda exige montagem do SD de 16 GB, latência de escrita, memória
+interna/DMA, autonomia, precisão e importação do GPX do relógio no Strava.
+
+## GPS
+
+Corrida e fallback de hora podem manter a UART recebendo ao sair do app GPS
+ou apagar a tela. O diagnóstico sozinho mantém a política abaixo. A nova
+sincronização UTC/UTC−3 e seus limites estão em [`running.md`](running.md).
+
+Uma tela sem título repetido mostra estado a y=58 em amarelo, latitude a
+y=121 e longitude a y=184 em Montserrat 24, com seis casas decimais e sinais.
+As legendas em Montserrat 12 ficam a y=102/165. Satélites em uso (y=234),
+velocidade em km/h e altitude em metros (y=260) usam a fonte compartilhada com
+acentos. A linha GSV a y=290 (310 px, Montserrat 12) mostra satélites listados
+por talker, sem somar sistemas. HDOP e maior C/N0 recebido ficam a y=309
+(300 px, Montserrat 12). O rodapé a y=335 tem RX44, baud e contadores NMEA/erros.
+Larguras de 230–330 px mantêm o conteúdo dentro do recorte circular.
+O ícone é uma seta de localização vetorial amarela, dentro dos 44 × 44 px.
+
+O estado distingue `Procurando módulo`, `Buscando satélites`, `Posição encontrada`,
+`Serial sem sinal` e `Falha na UART`. Sem fix atual, coordenadas, velocidade
+e altitude mostram traços; a serial válida sozinha não indica localização.
+As casas decimais não representam garantia de precisão; HDOP não é erro em metros.
+GSV e C/N0 são diagnósticos de aquisição, independentes de fix e UTC. Valores
+ausentes/expirados mostram `--`, sem inventar zero. O relatório de satélites
+em uso zerados, a interpretação e os limites estão em [`gps.md`](gps.md#diagnóstico-de-aquisição--11112026).
+
+Arrastar mais de 80 px para a direita, com predominância horizontal de 20 px,
+retorna ao launcher em qualquer parte do conteúdo e consome o contato. A árvore
+é vinculada uma vez a `ui/app_input.h`. Toque prolongado registra atividade;
+recepção e timer não mantêm a tela acordada. AUTO/ECO e o primeiro toque
+reservado ao despertar continuam valendo. Apagar a tela encerra a recepção
+antes do light sleep; acordar retoma se o app ainda estiver aberto.
+Para aguardar a aquisição inicial, pode-se usar ON com ECO desativado.
+Não há mapa. A hora compartilhada pode ser ajustada pelo fallback GPS descrito
+em `running.md`; receber NMEA não garante UTC válido.
+Em 07/11/2026, fotos do usuário confirmaram a tela antes e depois da aquisição,
+com RX44/9600 baud, 11 satélites em uso, HDOP 1,1 e zero erros registrados após
+o fix. O usuário confirmou resposta da velocidade ao caminhar em ritmos
+diferentes. Perda/retorno de fix, apagar/acordar e consumo continuam pendentes;
+consulte [`gps.md`](gps.md).
+
+Subir nos dados abre **Assistência GPS**. O topo em y=58 mostra a fonte quando
+conhecida: previsão/IGS, SD/Wi-Fi e eventual falha ao persistir. Mostra fase a y=102,
+referência `CEP 04686-001 / raio 5 km` a y=164, contagens de GPS confirmados,
+recusados, sem ACK e repetições a y=208. Em y=267 mostra o PRN/tentativa durante
+o envio ou a quantidade de órbitas válidas informada pelo GPS a y=267 e RAM interna/maior
+bloco DMA amostrados na operação a y=293. A pílula Atualizar tem 140 × 54 px,
+centralizada em x=206, topo y=310. Descer ou direita retorna aos dados; direita
+nos dados volta ao launcher. Gestos sobre Atualizar também consomem o contato.
+Para preservar a reserva do heap LVGL, os seis campos de leitura são desenhados
+no próprio objeto da página; a pílula usa o controle compartilhado. Só invalida
+quando o conteúdo muda e a página está visível, no timer de 1 s.
+
+GPS e Corrida solicitam assistência automaticamente. A página permite repetir
+quando não houver operação nem corrida iniciada. Ausência de Wi-Fi, hora
+confiável ou dados válidos é mostrada sem impedir aquisição independente.
+Enviada não significa aceitação nem posição. A consulta NAV-STATUS pode não
+ser respondida pelo firmware: nesse caso mostra o total de PRNs distintos
+confirmados entre fontes em `ACK GPS no pedido`, ou `Status GPS: sem resposta`.
+Um NACK orbital não encerra o lote: há no máximo duas repetições por registro,
+seguidas dos demais satélites e da consulta de estado. Os contadores de GPS
+são por registros únicos da fonte atual; ACK/NACK brutos podem incluir
+repetições e AID-INI. `Envio parcial` não indica posição nem órbitas utilizáveis
+confirmadas pelo receptor.
+AUTO/ECO e primeiro toque reservado ao despertar são preservados; uma operação
+de assistência ativa mantém o receptor e impede light sleep temporariamente,
+sem manter backlight ou renderizar com tela apagada.
+
+Somente no perfil temporário `gps_assist_diagnostic`, o boot abre GPS uma vez
+para captura pelo USB, sem precisar de toque. O padrão continua abrindo o
+mostrador. O perfil não acrescenta controles nem atividade artificial ao timer
+de inatividade; conserva os gestos e AUTO/ECO, e não inclui comandos de standby.
+
+Somente no ambiente `gps_standby_test`, subir na página de assistência abre um teste
+de standby com resposta TXT a y=104 (280 × 100 px), estado a y=222 e contagem
+regressiva a y=262. Versão e Testar 60 s usam pílulas de 120 × 54 px, centros
+x=140/272, topo y=314, pelos construtores compartilhados. Durante o teste,
+ambas ficam desabilitadas durante teste/assistência; o serviço recusa ações
+concorrentes. Descer ou arrastar para a direita nessa página retorna à
+assistência; direita nos dados volta ao launcher. O gesto consome o
+contato inclusive sobre as ações. Sair/apagar interrompe a observação;
+o comando temporário já enviado ao módulo segue seu próprio prazo. AUTO/ECO
+e o primeiro toque reservado ao despertar são preservados. Estados de silêncio
+e retorno são observações da serial, sem afirmar consumo reduzido. O teste
+físico desse experimento está pendente; procedimento em `gps.md`.
 
 ## Calculadora
 

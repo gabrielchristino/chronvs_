@@ -13,6 +13,9 @@
 #include "services/Notas_service.h"
 #include "services/sound_service.h"
 #include "services/weather_service.h"
+#include "services/gps_service.h"
+#include "services/agnss_service.h"
+#include "services/run_service.h"
 #include "platform/lvgl_memory.h"
 #include "ui/Relogio_alert.h"
 #include "ui/power_menu.h"
@@ -35,6 +38,31 @@ int nvs_set_blob(nvs_handle_t h, const char *k, const void *in, size_t size) {
 }
 
 static lv_indev_state_t contact;
+static bool gps_requested;
+static bool gps_recording_requested;
+static bool gps_workout;
+static unsigned assist_requests;
+static chronvs_agnss_snapshot_t assisted={.message="Aguardando hora por NTP"};
+bool chronvs_gps_assist_request(bool force) { (void)force; if(gps_workout)return false; ++assist_requests;return true; }
+void chronvs_gps_workout_active(bool enabled) { gps_workout=enabled; }
+bool chronvs_gps_workout_is_active(void) { return gps_workout; }
+void chronvs_agnss_snapshot(chronvs_agnss_snapshot_t *out) { *out=assisted; }
+bool chronvs_agnss_active(void) { return assisted.state==AGNSS_DOWNLOAD || assisted.state==AGNSS_SENDING; }
+const char *chronvs_agnss_reference_name(void) { return "CEP 04686-001 / raio 5 km"; }
+static chronvs_gps_snapshot_t gps_snapshot;
+void chronvs_gps_request(bool enabled) { gps_requested = enabled; }
+void chronvs_gps_recording_request(bool enabled) { gps_recording_requested = enabled; }
+void chronvs_gps_poll(bool off) { gps_snapshot.running = gps_recording_requested || (gps_requested && !off); }
+void chronvs_gps_snapshot(chronvs_gps_snapshot_t *out) { *out = gps_snapshot; }
+#ifdef CHRONVS_GPS_STANDBY_TEST
+static unsigned gps_queries, gps_tests;
+bool chronvs_gps_query_version(void) {
+    ++gps_queries; snprintf(gps_snapshot.reply, sizeof(gps_snapshot.reply), "SW=TEST-5N31"); return true;
+}
+bool chronvs_gps_test_standby(void) {
+    ++gps_tests; gps_snapshot.test = GPS_TEST_OBSERVING; gps_snapshot.remaining_s = 60; return true;
+}
+#endif
 static bool power_request;
 static unsigned power_off_calls, restart_calls;
 bool chronvs_board_take_power_menu_request(void) {
@@ -362,7 +390,7 @@ int main(void) {
     chronvs_app_cancel_preview();
     assert(chronvs_app_open("apps"));
     lv_obj_t *app_list = lv_obj_get_child(launcher, 0);
-    assert(lv_obj_get_child_cnt(app_list) == 5);
+    assert(lv_obj_get_child_cnt(app_list) == 7);
     lv_obj_t *first_row = lv_obj_get_child(app_list, 0);
     lv_obj_t *middle_row = lv_obj_get_child(app_list, 1);
 #ifdef CHRONVS_LAUNCHER_ICON_CACHE
@@ -569,6 +597,119 @@ int main(void) {
         assert(lv_obj_has_flag(panel,LV_OBJ_FLAG_HIDDEN));
         assert(weather_queries==queries_before+1); /* Only on_show requests data. */
     }
+    assert(chronvs_app_open("gps"));
+    assert(gps_requested && gps_snapshot.running);
+    assert(find_label_text(chronvs_app_content_layer(), "Procurando módulo"));
+    capture("gps-searching");
+    gps_snapshot = (chronvs_gps_snapshot_t){.running=true,.serial_fresh=true,.baud=9600,
+        .data={.fix=true,.latitude=-23.55052,.longitude=-46.633308,.satellites=8,
+            .satellites_valid=true,.speed_valid=true,.speed_kmh=3.2,
+            .altitude_valid=true,.altitude_m=760,.hdop_valid=true,.hdop=0.9,.sentences=123,
+            .sky={{.talker="GP",.visible=8,.cno=34,.valid=true,.cno_valid=true},
+                  {.talker="BD",.visible=4,.cno=36,.valid=true,.cno_valid=true}}}};
+    elapse(1100);
+    assert(find_label_text(chronvs_app_content_layer(), "-23.550520°"));
+    assert(find_label_text(chronvs_app_content_layer(), "GSV GP:8 BD:4"));
+    assert(find_label_text(chronvs_app_content_layer(), "HDOP 0.9 / C/N0 36 dBHz"));
+    capture("gps-position");
+    touch(206,250,LV_INDEV_STATE_PR); touch(206,150,LV_INDEV_STATE_PR);
+    touch(206,150,LV_INDEV_STATE_REL); elapse(70);
+    assert(find_label_text(chronvs_app_content_layer(),"Atualizar"));
+    capture("gps-assisted-ready");
+    unsigned assists=assist_requests; tap(206,337); assert(assist_requests==assists+1);
+    assisted=(chronvs_agnss_snapshot_t){.state=AGNSS_SENDING,.message="Enviando ao GPS",.sent=12,.total=34,
+        .source="Previsão do SD",.gps_accepted=8,.gps_rejected=2,.retries=4,.current_satellite=12,.current_attempt=3};
+    elapse(1100); capture("gps-assisted-sending");
+    tap(206,337); assert(assist_requests==assists+1);
+    assisted=(chronvs_agnss_snapshot_t){.state=AGNSS_ERROR,.message="GPS rejeitou todas as órbitas",.source="IGS do SD",.gps_rejected=32,.retries=64};
+    elapse(1100);capture("gps-assisted-rejected");
+    assisted=(chronvs_agnss_snapshot_t){.state=AGNSS_SENT,.message="Envio parcial; aguardando GPS",.source="IGS do SD",
+        .gps_accepted=1,.gps_rejected=31,.retries=62,.gps_confirmed_total=21};
+    elapse(1100);capture("gps-assisted-partial");
+    assisted=(chronvs_agnss_snapshot_t){.state=AGNSS_SENT,.message="Enviada; aguardando satélites",.sent=34,.total=34,
+        .source="IGS do SD",.gps_accepted=32,.receiver_status=true,.receiver_ephemerides=32};
+    elapse(1100); capture("gps-assisted-sent");
+#ifdef CHRONVS_GPS_STANDBY_TEST
+    touch(206,250,LV_INDEV_STATE_PR); touch(206,150,LV_INDEV_STATE_PR);
+    touch(206,150,LV_INDEV_STATE_REL); elapse(70);
+    capture("gps-standby-ready");
+    tap(140,341); assert(gps_queries == 1 && gps_tests == 0);
+    tap(272,341); assert(gps_tests == 1);
+    assert(find_label_text(chronvs_app_content_layer(), "Observando resposta..."));
+    capture("gps-standby-observing");
+    tap(272,341); assert(gps_tests == 1); /* Busy control is disabled. */
+    gps_snapshot.test = GPS_TEST_SILENT; gps_snapshot.remaining_s = 40;
+    elapse(1100); capture("gps-standby-silent");
+    gps_snapshot.test = GPS_TEST_RETURNED;
+    elapse(1100); capture("gps-standby-returned");
+    touch(100,180,LV_INDEV_STATE_PR); touch(200,180,LV_INDEV_STATE_PR);
+    touch(200,180,LV_INDEV_STATE_REL); elapse(70);
+    assert(!strcmp(chronvs_app_active_id(), "gps") && gps_tests == 1);
+#endif
+    unsigned requests_before_back=assist_requests;
+    touch(100,337,LV_INDEV_STATE_PR); touch(200,337,LV_INDEV_STATE_PR);
+    touch(200,337,LV_INDEV_STATE_REL); elapse(70); /* Back crossing Atualizar never requests assistance. */
+    assert(assist_requests==requests_before_back);
+    unsigned gps_refreshes = refresh_count;
+    elapse(2100); assert(refresh_count == gps_refreshes);
+    touch(206,206,LV_INDEV_STATE_PR); elapse(20000);
+    assert(!chronvs_system_ui_display_is_off());
+    touch(206,206,LV_INDEV_STATE_REL);
+    elapse(16000); assert(chronvs_system_ui_display_is_off());
+    unsigned gps_off_refreshes = refresh_count;
+    gps_snapshot.data.latitude = 10;
+    elapse(2100); assert(refresh_count == gps_off_refreshes);
+    tap(206,206); elapse(1100);
+    assert(!chronvs_system_ui_display_is_off() && !strcmp(chronvs_app_active_id(), "gps"));
+    touch(100,180,LV_INDEV_STATE_PR); touch(200,180,LV_INDEV_STATE_PR);
+    touch(200,180,LV_INDEV_STATE_REL); elapse(70);
+    assert(!strcmp(chronvs_app_active_id(), "apps") && !gps_requested);
+    assert(chronvs_app_open("run"));
+    assert(gps_recording_requested);
+    capture("run-ready");
+    gps_snapshot.running = true; gps_snapshot.data.fix = true;
+    gps_snapshot.data.utc_valid = true; gps_snapshot.data.utc = 1794054920LL;
+    gps_snapshot.data.utc_ms = (uint64_t)now_us/1000;
+    chronvs_run_poll(); elapse(1100);
+    tap(206,335);
+    chronvs_run_snapshot_t run; chronvs_run_snapshot(&run);
+    assert(run.state == RUN_RECORDING && run.points == 1);
+    now_us += 1000000; ++gps_snapshot.data.utc;
+    gps_snapshot.data.utc_ms = (uint64_t)now_us/1000;
+    gps_snapshot.data.latitude += 0.000025;
+    chronvs_run_poll(); elapse(1100);
+    chronvs_run_snapshot(&run); assert(run.points == 2 && run.distance_m > 2);
+    capture("run-recording");
+    /* Back swipe over the pause action must not activate it or stop recording. */
+    touch(100,335,LV_INDEV_STATE_PR); touch(200,335,LV_INDEV_STATE_PR);
+    touch(200,335,LV_INDEV_STATE_REL); elapse(70);
+    chronvs_run_snapshot(&run);
+    assert(!strcmp(chronvs_app_active_id(), "apps") && run.state == RUN_RECORDING && gps_recording_requested);
+    assert(chronvs_app_open("gps"));
+    assert(chronvs_app_open("run")); assert(gps_recording_requested);
+    tap(140,335); chronvs_run_snapshot(&run); assert(run.state == RUN_PAUSED);
+    capture("run-paused");
+    tap(272,335); capture("run-finish-confirm");
+    touch(100,180,LV_INDEV_STATE_PR); touch(200,180,LV_INDEV_STATE_PR);
+    touch(200,180,LV_INDEV_STATE_REL); elapse(70);
+    chronvs_run_snapshot(&run); assert(run.state == RUN_PAUSED);
+    tap(140,335); chronvs_run_snapshot(&run); assert(run.state == RUN_RECORDING);
+    elapse(20000); assert(chronvs_system_ui_display_is_off());
+    chronvs_gps_poll(true); assert(gps_snapshot.running && gps_recording_requested);
+    unsigned run_off_refreshes = refresh_count;
+    elapse(2100); assert(refresh_count == run_off_refreshes);
+    tap(140,335); chronvs_run_snapshot(&run);
+    assert(!chronvs_system_ui_display_is_off() && run.state == RUN_RECORDING);
+    tap(272,335); tap(206,307);
+    chronvs_run_snapshot(&run); assert(run.state == RUN_SAVED && !gps_recording_requested);
+    capture("run-saved");
+    touch(206,250,LV_INDEV_STATE_PR); touch(206,150,LV_INDEV_STATE_PR);
+    touch(206,150,LV_INDEV_STATE_REL); elapse(70); capture("run-history");
+    touch(100,180,LV_INDEV_STATE_PR); touch(200,180,LV_INDEV_STATE_PR);
+    touch(200,180,LV_INDEV_STATE_REL); elapse(70);
+    touch(100,180,LV_INDEV_STATE_PR); touch(200,180,LV_INDEV_STATE_PR);
+    touch(200,180,LV_INDEV_STATE_REL); elapse(70);
+    assert(!strcmp(chronvs_app_active_id(), "apps"));
     assert(chronvs_app_open("Calendario")); capture("25-Calendario-integrated");
     assert(find_label_text(chronvs_app_content_layer(),"Setembro"));
     lv_mem_monitor(&memory); assert(memory.free_biggest_size > 16384);

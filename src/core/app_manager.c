@@ -5,7 +5,7 @@
 
 #include "esp_log.h"
 
-#define CHRONVS_MAX_APPS 8
+#define CHRONVS_MAX_APPS 10
 #define COLOR_VOID 0x050706
 
 typedef struct {

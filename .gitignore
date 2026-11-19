@@ -18,6 +18,8 @@ sdkconfig.panels_no_content
 sdkconfig.panels_no_icons
 sdkconfig.launcher_icon_cache
 sdkconfig.vox_capture
+sdkconfig.gps_standby_test
+sdkconfig.gps_assist_diagnostic
 /.venv-voice/
 /data/voice-local/
 /data/voice-phonetic-local/

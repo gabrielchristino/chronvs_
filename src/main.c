@@ -31,14 +31,20 @@
 #define BATTERY_UPDATE_PERIOD_MS 60000
 #define DISPLAY_OFF_MAX_SLEEP_MS 300000
 
-#ifndef CHRONVS_TAILTINY
+#if !defined(CHRONVS_HARDWARE_DIAGNOSTIC) && !defined(CHRONVS_BLUETOOTH_DIAGNOSTIC) && !defined(CHRONVS_TAILTINY)
 static const char *TAG = "chronvs";
 #endif
 
 void app_main(void) {
-#ifdef CHRONVS_TAILTINY
+#if defined(CHRONVS_TAILTINY)
     extern void chronvs_tailtiny_run(void);
     chronvs_tailtiny_run();
+#elif defined(CHRONVS_BLUETOOTH_DIAGNOSTIC)
+    extern void chronvs_bluetooth_diagnostic_run(void);
+    chronvs_bluetooth_diagnostic_run();
+#elif defined(CHRONVS_HARDWARE_DIAGNOSTIC)
+    extern void chronvs_hardware_diagnostic_run(void);
+    chronvs_hardware_diagnostic_run();
 #else
     ESP_LOGI(TAG, "Chronvs application runtime starting");
     chronvs_board_init();

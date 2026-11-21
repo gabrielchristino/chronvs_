@@ -7,6 +7,18 @@ callbacks opcionais de entrada e saída.
 
 ## Estrutura
 
+O perfil isolado `hardware_diagnostic` substitui a entrada do runtime por uma
+bancada USB sem inicializar display, LVGL ou apps. Não altera o fluxo padrão.
+Testes, restauração e limites em [`hardware-diagnostic.md`](hardware-diagnostic.md).
+O perfil `bluetooth_diagnostic` usa a mesma substituição de entrada apenas para
+varredura/anúncios BLE. Controlador e Bluedroid são habilitados somente nesse
+perfil; o padrão conserva o Bluetooth desligado.
+Esses perfis são escolhidos com `pio run -e <ambiente>`; seus corpos de código
+ficam excluídos do firmware principal por compilação condicional. Acrescentar
+`-t upload` grava o perfil escolhido. Compilar sozinho não troca o firmware
+instalado. A tabela de ambientes está em
+[`hardware-diagnostic.md`](hardware-diagnostic.md#seleção-de-firmware-e-isolamento).
+
 O perfil opt-in `tailtiny` substitui a entrada por um runtime de rede sem
 LCD/touch/LVGL ou apps, para a montagem atual sem tela. Mantém uma sessão
 Wi-Fi exclusiva, cadastra `chronvs` no Tailscale e oferece eco UDP na porta

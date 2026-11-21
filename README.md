@@ -61,6 +61,9 @@ com resultados e ponto de retomada documentados.
 
 ## Estado validado
 
+Para verificar conexões e sensores com a tela desconectada, há um
+[diagnóstico temporário pela serial USB](docs/hardware-diagnostic.md).
+
 O perfil opcional [`tailtiny`](docs/tailtiny.md) conecta a montagem sem tela
 ao Tailscale como `chronvs`, com identidade persistente e eco UDP pelo túnel.
 É separado do firmware normal com interface.

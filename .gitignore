@@ -44,6 +44,8 @@ sdkconfig.panel_autotest_icons_opaque
 sdkconfig.panel_autotest_motion
 sdkconfig.panel_autotest_lighting
 sdkconfig.launcher_scroll_autotest
+sdkconfig.hardware_diagnostic
+sdkconfig.bluetooth_diagnostic
 /.venv-voice/
 /data/voice-local/
 /data/voice-phonetic-local/

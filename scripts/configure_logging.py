@@ -23,6 +23,12 @@ if reference and not source.is_file():
     raise RuntimeError("Build the default environment before display diagnostics")
 if source.exists():
     settings = {}
+    # Enable the BLE stack only in the explicit headless radio bench.
+    if env.GetProjectOption("custom_bluetooth_diagnostic", "no") == "yes":
+        settings.update(BT_ENABLED="y", BT_CONTROLLER_ENABLED="y",
+                        BT_BLUEDROID_ENABLED="y", BT_NIMBLE_ENABLED=None,
+                        BT_BLE_ENABLED="y", BT_BLE_42_FEATURES_SUPPORTED="y",
+                        BT_CLASSIC_ENABLED=None)
     # Explicit A/B only: change line width without reserving more internal RAM
     # for the cache or changing PSRAM/flash clocks, display buffers or DMA.
     if data_cache_line != "reference":

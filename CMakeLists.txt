@@ -1,5 +1,13 @@
 cmake_minimum_required(VERSION 3.16.0)
 
+option(CHRONVS_TAILTINY "Build the dedicated headless TailTiny runtime" OFF)
+if(CHRONVS_TAILTINY)
+    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/.vendor-tailtiny/components/tailtiny/CMakeLists.txt")
+        message(FATAL_ERROR "Download TailTiny v3.3.0 into .vendor-tailtiny; see docs/tailtiny.md")
+    endif()
+    list(APPEND EXTRA_COMPONENT_DIRS "${CMAKE_SOURCE_DIR}/.vendor-tailtiny/components/tailtiny")
+endif()
+
 # Reuse the ESP-SR release shipped with the required Waveshare reference.
 # Keeping it as an ESP-IDF component is important: its CMake file packs and
 # flashes the selected speech model into the dedicated `model` partition.

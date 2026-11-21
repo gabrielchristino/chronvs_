@@ -7,6 +7,13 @@ callbacks opcionais de entrada e saída.
 
 ## Estrutura
 
+O perfil opt-in `tailtiny` substitui a entrada por um runtime de rede sem
+LCD/touch/LVGL ou apps, para a montagem atual sem tela. Mantém uma sessão
+Wi-Fi exclusiva, cadastra `chronvs` no Tailscale e oferece eco UDP na porta
+9000 do túnel. Não inicia NTP/Clima do runtime normal; sincroniza somente
+o relógio de sistema para validar certificados. O padrão não inclui TailTiny.
+Configuração, persistência, restauração e validação em [`tailtiny.md`](tailtiny.md).
+
 As linhas do launcher desativam `LV_OBJ_FLAG_SCROLL_ON_FOCUS`: o LVGL não
 deve animar automaticamente o conteúdo para enquadrar o botão ao tocá-lo.
 Esse ajuste podia concorrer com o arraste/inércia e deslocar a listagem mesmo

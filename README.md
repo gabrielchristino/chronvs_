@@ -61,6 +61,10 @@ com resultados e ponto de retomada documentados.
 
 ## Estado validado
 
+O perfil opcional [`tailtiny`](docs/tailtiny.md) conecta a montagem sem tela
+ao Tailscale como `chronvs`, com identidade persistente e eco UDP pelo túnel.
+É separado do firmware normal com interface.
+
 - Lista de apps com rolagem infinita nos dois sentidos e fade conjunto de
   ícone, disco e nome, aprovada no relógio em 19/11/2026. Comportamento e
   verificação em [`docs/interface.md`](docs/interface.md#lista-de-apps-em-arco).

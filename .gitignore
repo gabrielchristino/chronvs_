@@ -4,6 +4,9 @@ __pycache__/
 /logs/
 managed_components/
 .vendor-reference/
+.vendor-tailtiny/
+sdkconfig.tailtiny
+src/chronvs_tailtiny_secrets.h
 sdkconfig.waveshare_esp32_s3_touch_lcd_146
 sdkconfig.display_profile
 sdkconfig.display_profile_o2

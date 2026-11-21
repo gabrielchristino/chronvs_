@@ -31,9 +31,15 @@
 #define BATTERY_UPDATE_PERIOD_MS 60000
 #define DISPLAY_OFF_MAX_SLEEP_MS 300000
 
+#ifndef CHRONVS_TAILTINY
 static const char *TAG = "chronvs";
+#endif
 
 void app_main(void) {
+#ifdef CHRONVS_TAILTINY
+    extern void chronvs_tailtiny_run(void);
+    chronvs_tailtiny_run();
+#else
     ESP_LOGI(TAG, "Chronvs application runtime starting");
     chronvs_board_init();
     chronvs_display_profile_init();
@@ -116,4 +122,5 @@ void app_main(void) {
         chronvs_display_scan_poll(chronvs_system_ui_display_is_off());
         vTaskDelay(ui_delay);
     }
+#endif
 }

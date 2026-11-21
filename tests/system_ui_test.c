@@ -22,6 +22,7 @@
 #include "apps/watch_app.h"
 #include "ui/system_ui.h"
 #include "ui/control_style.h"
+#include "ui/circle_fill.h"
 #include "esp_heap_caps.h"
 #include "services/Notas_service.h"
 #include "services/sound_service.h"
@@ -144,6 +145,7 @@ static lv_obj_t *find_label_text(lv_obj_t *tree, const char *text) {
 
 void *heap_caps_calloc(size_t count, size_t size, unsigned caps) {
     assert(caps == (MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (size==16U*1024U && getenv("CHRONVS_TEST_BACKGROUND_CACHE_FAIL")) return NULL;
 #ifdef CHRONVS_LAUNCHER_ICON_CACHE
     if (size == 44U * 44U * sizeof(lv_color_t) &&
         getenv("CHRONVS_TEST_ICON_CACHE_FAIL") != NULL) return NULL;
@@ -282,6 +284,181 @@ static void count_render_start(lv_disp_drv_t *drv) { (void)drv; ++render_start_c
 static void count_refresh(lv_disp_drv_t *drv,uint32_t ms,uint32_t px) {
     (void)drv; (void)ms; (void)px; ++refresh_count;
 }
+
+typedef struct { bool enabled; int16_t id; lv_draw_mask_radius_param_t mask; } cache_mask_test_t;
+static void cache_external_mask(lv_event_t *event) {
+    cache_mask_test_t *state=lv_event_get_user_data(event);
+    if (lv_event_get_code(event)==LV_EVENT_DRAW_MAIN_BEGIN && state->enabled) {
+        lv_area_t area={25,25,386,386};
+        lv_draw_mask_radius_init(&state->mask,&area,80,false);
+        state->id=lv_draw_mask_add(&state->mask,state);
+    } else if (lv_event_get_code(event)==LV_EVENT_DRAW_POST_END && state->id>=0) {
+        lv_draw_mask_remove_id(state->id); lv_draw_mask_free_param(&state->mask); state->id=-1;
+    }
+}
+
+static void test_launcher_background_cache(void) {
+    lv_obj_t *previous=lv_scr_act();
+    lv_obj_t *screen=lv_obj_create(NULL); lv_obj_remove_style_all(screen);
+    lv_obj_set_style_bg_color(screen,lv_color_hex(0x050706),0);
+    lv_obj_set_style_bg_opa(screen,LV_OPA_COVER,0); lv_scr_load(screen);
+    lv_obj_t *underlay=lv_obj_create(screen); lv_obj_remove_style_all(underlay);
+    lv_obj_set_size(underlay,412,412);
+    lv_obj_set_style_bg_color(underlay,lv_color_hex(0xA0B0C0),0);
+    lv_obj_set_style_bg_opa(underlay,LV_OPA_COVER,0);
+    lv_obj_add_flag(underlay,LV_OBJ_FLAG_HIDDEN);
+    lv_obj_t *circle=lv_obj_create(screen); lv_obj_remove_style_all(circle);
+    lv_obj_set_size(circle,412,412);
+    lv_obj_set_style_bg_color(circle,lv_color_hex(CHRONVS_UI_PANEL),0);
+    lv_obj_set_style_bg_opa(circle,LV_OPA_COVER,0);
+    lv_obj_set_style_radius(circle,LV_RADIUS_CIRCLE,0);
+    lv_obj_set_style_clip_corner(circle,true,0);
+    bool reference=true;
+    cache_mask_test_t mask={.id=-1};
+    lv_obj_add_event_cb(circle,cache_external_mask,LV_EVENT_DRAW_MAIN_BEGIN,&mask);
+    lv_obj_add_event_cb(circle,cache_external_mask,LV_EVENT_DRAW_POST_END,&mask);
+    chronvs_circle_fill_bind(circle,&reference);
+    unsigned char *expected=malloc(sizeof(pixels)); assert(expected);
+    for (unsigned scenario=0;scenario<12;++scenario) {
+        switch (scenario) {
+            case 1: lv_obj_set_style_bg_color(circle,lv_color_hex(0x604020),0); break;
+            case 2: lv_obj_set_style_bg_color(screen,lv_color_hex(0x104060),0); break;
+            case 3: lv_obj_set_pos(circle,0,72); break;
+            case 4: lv_obj_set_pos(circle,-63,0); break;
+            case 5: lv_obj_set_pos(circle,0,0); lv_obj_set_style_radius(circle,70,0); break;
+            case 6: lv_obj_set_style_radius(circle,LV_RADIUS_CIRCLE,0); lv_obj_set_style_bg_opa(circle,140,0); break;
+            case 7: lv_obj_set_style_bg_opa(circle,LV_OPA_COVER,0); lv_obj_clear_flag(underlay,LV_OBJ_FLAG_HIDDEN); break;
+            case 8: lv_obj_add_flag(underlay,LV_OBJ_FLAG_HIDDEN); lv_obj_set_size(circle,300,300); break;
+            case 9: lv_obj_set_size(circle,412,412); lv_obj_set_style_outline_width(circle,4,0); break;
+            case 10: lv_obj_set_style_outline_width(circle,0,0); mask.enabled=true; break;
+            case 11:
+                mask.enabled=false;
+                lv_obj_set_style_bg_color(circle,lv_color_hex(CHRONVS_UI_PANEL),0);
+                lv_obj_set_style_bg_color(screen,lv_color_hex(0x050706),0); break;
+        }
+        reference=true; lv_obj_invalidate(screen); lv_refr_now(NULL);
+        memcpy(expected,pixels,sizeof(pixels));
+        reference=false;
+        for (unsigned render=0;render<2;++render) {
+            lv_obj_invalidate(screen); lv_refr_now(NULL);
+            assert(!memcmp(expected,pixels,sizeof(pixels)));
+        }
+        lv_area_t partial={117,43,288,233};
+        lv_obj_invalidate_area(circle,&partial); lv_refr_now(NULL);
+        assert(!memcmp(expected,pixels,sizeof(pixels)));
+    }
+    free(expected); lv_scr_load(previous); lv_obj_del(screen); lv_refr_now(NULL);
+    puts("Launcher background: reference pixels match after color/backdrop invalidation, motion, partial redraw, preview, size, opacity, outline and external mask; deletion passed.");
+}
+
+/* Run the actual pointer pipeline at different sampling intervals, including
+ * stalls longer than the launcher's 100 ms filter clamp. No hardware timing
+ * claims: the host flush is immediate and has no QSPI transport. */
+static void launcher_sample(int y, lv_indev_state_t state, unsigned ms) {
+    point=(lv_point_t){210,y}; contact=state;
+    lv_tick_inc(ms); lv_timer_handler(); chronvs_panel_autotest_poll();
+}
+
+static void check_launcher_rows(lv_obj_t *launcher, lv_obj_t *list, int cycle) {
+    lv_obj_update_layout(list);
+    const int scroll=lv_obj_get_scroll_y(list);
+    /* Input can run after the curve timer in the same handler. Rebasing is
+     * deferred to its next 20 ms tick, so inspect native bounds here. */
+    assert(scroll>=0 && lv_obj_get_scroll_bottom(list)>=0);
+    assert(!strcmp(chronvs_app_active_id(),"apps") && lv_obj_get_y(launcher)==0);
+    unsigned visible=0;
+    for (unsigned i=0;i<lv_obj_get_child_cnt(list);++i) {
+        lv_obj_t *row=lv_obj_get_child(list,i);
+        lv_area_t bounds; lv_obj_get_coords(row,&bounds);
+        assert((lv_obj_get_y(row)-174-(int)i*82)%cycle==0);
+        if (bounds.y1<312 && bounds.y2>100 && lv_obj_get_style_opa_layered(row,0)) ++visible;
+    }
+    assert(visible>=2);
+}
+
+static void test_launcher_stress(lv_obj_t *launcher, lv_obj_t *list, int cycle) {
+    const unsigned cadences[]={20,35,70,140};
+    lv_indev_t *input=lv_indev_get_next(NULL); assert(input);
+    lv_timer_t *reader=input->driver->read_timer;
+    const uint32_t original_period=reader->period;
+    const unsigned row_count=lv_obj_get_child_cnt(list);
+    unsigned char *incremental=malloc(sizeof(pixels)); assert(incremental);
+    lv_mem_monitor_t baseline={0}, memory;
+    unsigned minimum_free=LV_MEM_SIZE, minimum_biggest=LV_MEM_SIZE;
+    uint64_t total_pixels=0;
+    unsigned total_refreshes=0;
+    for (unsigned round=0;round<5;++round) {
+        for (unsigned cadence=0;cadence<sizeof(cadences)/sizeof(cadences[0]);++cadence) {
+            const unsigned ms=cadences[cadence];
+            lv_timer_set_period(reader,ms);
+            for (int direction=-1;direction<=1;direction+=2) {
+                lv_obj_scroll_to_y(list,cycle-40,LV_ANIM_OFF); elapse(600);
+                const unsigned frames_before=refresh_count;
+                const uint64_t pixels_before=flushed_pixels;
+                launcher_sample(206,LV_INDEV_STATE_PR,ms);
+                /* Fast move, then reverse without lifting, far from the
+                 * reserved close strip. */
+                for (unsigned leg=0;leg<2;++leg) {
+                    const int sign=leg ? -direction : direction;
+                    const int start=leg ? 206+direction*120 : 206;
+                    const int before=lv_obj_get_scroll_y(list);
+                    for (int step=1;step<=4;++step) {
+                        launcher_sample(start+sign*step*30,LV_INDEV_STATE_PR,ms);
+                        check_launcher_rows(launcher,list,cycle);
+                    }
+                    /* The input filter may catch up while the finger is held.
+                     * Once caught up, holding must cause no scroll/redraw. */
+                    for (unsigned hold=0;hold<30;++hold)
+                        launcher_sample(start+sign*120,LV_INDEV_STATE_PR,ms);
+                    int delta=(lv_obj_get_scroll_y(list)-before+cycle)%cycle;
+                    assert(sign<0 ? delta>0 && delta<160 : delta>cycle-160);
+                    const int stationary=lv_obj_get_scroll_y(list);
+                    const unsigned idle_frames=refresh_count;
+                    for (unsigned hold=0;hold<8;++hold)
+                        launcher_sample(start+sign*120,LV_INDEV_STATE_PR,ms);
+                    assert(lv_obj_get_scroll_y(list)==stationary);
+                    assert(refresh_count==idle_frames);
+                }
+                const int release=lv_obj_get_scroll_y(list);
+                launcher_sample(206,LV_INDEV_STATE_REL,ms);
+                elapse(600);
+                assert(lv_obj_get_scroll_y(list)==release && !lv_obj_is_scrolling(list));
+                check_launcher_rows(launcher,list,cycle);
+                assert(lv_obj_get_child_cnt(list)==row_count);
+                const unsigned frames=refresh_count-frames_before;
+                const uint64_t drawn=flushed_pixels-pixels_before;
+                total_refreshes+=frames;
+                total_pixels+=drawn;
+                if (!round)
+                    printf("Launcher cadence %u ms, initial direction %+d: %u refreshes, "
+                           "%llu pixels/refresh.\n",ms,direction,frames,
+                           (unsigned long long)(frames ? drawn/frames : 0));
+                memcpy(incremental,pixels,sizeof(pixels));
+                lv_obj_invalidate(lv_scr_act()); lv_refr_now(NULL);
+                assert(!memcmp(incremental,pixels,sizeof(pixels)));
+                lv_mem_monitor(&memory);
+                if (memory.free_size<minimum_free) minimum_free=memory.free_size;
+                if (memory.free_biggest_size<minimum_biggest) minimum_biggest=memory.free_biggest_size;
+            }
+        }
+        lv_mem_monitor(&memory);
+        if (!round) baseline=memory; /* Warm transient drawing/style caches. */
+        else {
+            assert(memory.free_size==baseline.free_size);
+            assert(memory.free_biggest_size==baseline.free_biggest_size);
+        }
+    }
+    lv_timer_set_period(reader,original_period);
+    free(incremental);
+    elapse(600); refresh_count=0; elapse(2000);
+    assert(refresh_count==0);
+    printf("Launcher stress: 40 contacts, 20/35/70/140 ms, reversal/hold/release, "
+           "incremental pixels equal full redraw; %u refreshes, %llu flushed pixels.\n",
+           total_refreshes,(unsigned long long)total_pixels);
+    printf("Launcher stress LVGL after gestures: min free %u, min largest block %u; "
+           "stable after warmup, idle 0 refreshes/2 s.\n",minimum_free,minimum_biggest);
+}
+
 int main(void) {
     setvbuf(stdout, NULL, _IONBF, 0);
     lv_init();
@@ -778,6 +955,7 @@ int main(void) {
         touch(210,206+direction*90,LV_INDEV_STATE_REL); elapse(70);
         assert(!strcmp(chronvs_app_active_id(),"apps"));
     }
+    test_launcher_stress(launcher,app_list,launcher_cycle);
     elapse(600);
     lv_obj_scroll_to_y(app_list, 0, LV_ANIM_OFF); elapse(100);
     const char *first_id = NULL;
@@ -1333,5 +1511,6 @@ int main(void) {
     puts("Display bench: background switch, inactivity, off-screen pause, wake-only tap and consumed exit swipe passed.");
 #endif
 #endif
+    test_launcher_background_cache();
     return 0;
 }

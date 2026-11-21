@@ -11,6 +11,7 @@
 #include "ui/app_input.h"
 #include "ui/system_ui.h"
 #include "ui/circle_clip.h"
+#include "ui/circle_fill.h"
 #include "ui/panel_motion.h"
 #include "platform/display_profile.h"
 #ifdef CHRONVS_LAUNCHER_ICON_CACHE
@@ -144,6 +145,10 @@ static int16_t scroll_input_y;
 static int16_t scroll_throw_y;
 static uint32_t scroll_input_tick;
 static bool scroll_input_active;
+#ifdef CHRONVS_LAUNCHER_SCROLL_AUTOTEST
+static unsigned cost_mode;
+static bool reference_fill;
+#endif
 
 static void smooth_scroll_input(lv_indev_t *input) {
     if (!input || !scroll_input_active) return;
@@ -208,8 +213,11 @@ static void update_curve(lv_timer_t *timer) {
         if (dy < 0) dy = -dy;
         const int clamped = dy > ARC_RADIUS ? ARC_RADIUS : dy;
         const int x = SCREEN_CENTER - 32 - (int)sqrtf(ARC_RADIUS * ARC_RADIUS - clamped * clamped);
-        const lv_opa_t opacity = dy >= 178 ? LV_OPA_TRANSP :
+        lv_opa_t opacity = dy >= 178 ? LV_OPA_TRANSP :
             dy <= 130 ? LV_OPA_COVER : (178 - dy) * LV_OPA_COVER / 48;
+#ifdef CHRONVS_LAUNCHER_SCROLL_AUTOTEST
+        if ((cost_mode & CHRONVS_SCROLL_NO_FADE) && opacity) opacity=LV_OPA_COVER;
+#endif
         app_row_context_t *context = &row_contexts[i];
 #ifdef CHRONVS_LAUNCHER_ICON_CACHE
         if (context->cached_icon != NULL && (!context->curve_set ||
@@ -230,7 +238,11 @@ static void update_curve(lv_timer_t *timer) {
                 opacity == LV_OPA_TRANSP ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
             /* Composite only the 60 px badge: raw vector callbacks bypass
              * inherited opacity, and fading each stroke accumulates overlap. */
-            lv_obj_set_style_opa_layered(lv_obj_get_child(rows[i], 0), opacity, 0);
+            lv_obj_set_style_opa_layered(lv_obj_get_child(rows[i], 0),
+#ifdef CHRONVS_LAUNCHER_SCROLL_AUTOTEST
+                cost_mode & CHRONVS_SCROLL_NO_BADGES ? LV_OPA_TRANSP :
+#endif
+                opacity, 0);
             lv_obj_set_style_opa(lv_obj_get_child(rows[i], 1), opacity, 0);
             lv_obj_set_style_bg_opa(rows[i], opacity, LV_STATE_PRESSED);
         }
@@ -241,13 +253,39 @@ static void update_curve(lv_timer_t *timer) {
 #ifdef CHRONVS_PANEL_NO_CONTENT
                 LV_OPA_TRANSP, 0);
 #else
-                opacity == LV_OPA_TRANSP ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
+                opacity == LV_OPA_TRANSP
+#ifdef CHRONVS_LAUNCHER_SCROLL_AUTOTEST
+                || (cost_mode & CHRONVS_SCROLL_NO_LABELS)
+#endif
+                ? LV_OPA_TRANSP : LV_OPA_COVER, 0);
 #endif
         context->translate_x = x;
         context->opacity = opacity;
         context->curve_set = true;
     }
 }
+
+#ifdef CHRONVS_LAUNCHER_SCROLL_AUTOTEST
+void chronvs_app_list_cost_frame(unsigned mode, int phase) {
+    if (!list || !row_count) return;
+    if (cost_mode!=mode) {
+        cost_mode=mode;
+        reference_fill=(mode & CHRONVS_SCROLL_REFERENCE_FILL)!=0;
+        lv_obj_t *root=lv_obj_get_parent(list);
+        lv_obj_set_style_clip_corner(root, !(mode & CHRONVS_SCROLL_NO_CLIP), 0);
+        lv_obj_set_style_radius(root, mode & CHRONVS_SCROLL_SQUARE ? 0 : LV_RADIUS_CIRCLE, 0);
+        for (size_t i=0;i<row_count;++i) {
+            row_contexts[i].curve_set=false;
+            lv_obj_t *icon=lv_obj_get_child(lv_obj_get_child(rows[i],0),0);
+            lv_obj_set_style_opa_layered(icon,mode & CHRONVS_SCROLL_NO_ICONS ? LV_OPA_TRANSP : LV_OPA_COVER,0);
+        }
+    }
+    lv_obj_scroll_to_y(list,(int)row_count*ROW_HEIGHT+phase,LV_ANIM_OFF);
+    curve_dirty=true;
+    update_curve(NULL);
+    lv_obj_update_layout(list);
+}
+#endif
 
 static void scroll_event(lv_event_t *event) {
     (void)event;
@@ -382,6 +420,13 @@ static lv_obj_t *create_app_list(lv_obj_t *parent) {
     lv_obj_set_style_border_width(root, 0, 0);
     lv_obj_set_style_radius(root, LV_RADIUS_CIRCLE, 0);
     lv_obj_set_style_clip_corner(root, true, 0);
+    chronvs_circle_fill_bind(root,
+#ifdef CHRONVS_LAUNCHER_SCROLL_AUTOTEST
+        &reference_fill
+#else
+        NULL
+#endif
+    );
 #ifdef CHRONVS_PANEL_SELECTIVE_CLIP
     chronvs_circle_clip_init(&circle_clip, root);
 #endif

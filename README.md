@@ -64,6 +64,8 @@ com resultados e ponto de retomada documentados.
 - Lista de apps com rolagem infinita nos dois sentidos e fade conjunto de
   ícone, disco e nome, aprovada no relógio em 19/11/2026. Comportamento e
   verificação em [`docs/interface.md`](docs/interface.md#lista-de-apps-em-arco).
+  A revisão de custo e a otimização do fundo, com comparação e regressões no
+  hardware, estão em [`docs/launcher-scroll.md`](docs/launcher-scroll.md).
 
 - Firmware padrão release compilado e gravado no relógio em 08/10/2026, com hashes de gravação verificados. A proteção do arco de brilho passou no teste integrado LVGL; a interação corrigida ainda aguarda confirmação no dispositivo.
 

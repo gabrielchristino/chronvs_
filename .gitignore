@@ -40,6 +40,7 @@ sdkconfig.panel_autotest_icons
 sdkconfig.panel_autotest_icons_opaque
 sdkconfig.panel_autotest_motion
 sdkconfig.panel_autotest_lighting
+sdkconfig.launcher_scroll_autotest
 /.venv-voice/
 /data/voice-local/
 /data/voice-phonetic-local/

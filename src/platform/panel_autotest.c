@@ -1,5 +1,5 @@
 #include "platform/panel_autotest.h"
-#ifdef CHRONVS_PANEL_AUTOTEST
+#if defined(CHRONVS_PANEL_AUTOTEST) && !defined(CHRONVS_LAUNCHER_SCROLL_AUTOTEST)
 #include <inttypes.h>
 #include <string.h>
 #include "lvgl.h"

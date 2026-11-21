@@ -1,5 +1,49 @@
 # Diagnóstico de fluidez
 
+## Otimização adotada do scroll — 19/11/2026
+
+O launcher reutiliza o fundo já composto em RLE, limitado a 16 KiB em PSRAM,
+apenas quando totalmente aberto. Durante as transições conserva o vetor.
+No hardware, com a mesma geometria e área enviada, o desenho caiu de
+**43,238 para 34,160 ms** por quadro (**21,0%**); desenho + QSPI caiu de
+56,901 para 47,874 ms (**15,86%**). O maior refresh da comparação caiu de
+63,698 para 55,007 ms. Isso ainda não atinge o período configurado de 20 ms.
+
+Passaram 24 gestos de scroll, 960 quadros de comparação e 42 transições das
+bandejas no relógio, além do HTTPS real do Clima. As 110 capturas refeitas
+foram idênticas à referência; falha de reserva, invalidação e fallback também
+passaram no teste integrado. Aparência, ícones, nomes, fade e gestos foram
+preservados. O custo adicional é a reserva PSRAM e seus metadados; o fundo
+medido codificado usa 9.724 bytes. Não mudou pool, buffers, QSPI ou refresh.
+Tentativa descartada, medidas e limites em [`launcher-scroll.md`](launcher-scroll.md).
+
+## Scroll da lista — revisão no hardware em 19/11/2026
+
+O roteiro dedicado ao catálogo atual de oito apps passou **24/24** no relógio:
+scroll lento/rápido, inversões no mesmo contato, pausas e três passagens
+circulares por sentido. Zero deslocamento após soltar e zero refresh em dois
+segundos de repouso. Desenho médio de **36,1–42,0 ms** por refresh e envio QSPI
+de **11,0–13,0 ms**; maior refresh de **65,1 ms** e intervalo de leitura de
+até **72 ms**. São medições do scroll, distintas das transições das bandejas.
+
+O desenho concentra cerca de três quartos do custo medido e o volume enviado
+ainda corresponde a 80–95% da área lógica da tela por refresh. Não foi medida
+a participação individual de fade, máscaras, textos e ícones, nem adotada
+nova otimização de produção. As amostras de memória entre passagens do loop
+permaneceram estáveis; não medem necessariamente o pico das camadas alfa.
+Roteiro, tabela completa, limites e artefatos em [`launcher-scroll.md`](launcher-scroll.md).
+
+O isolamento posterior no mesmo hardware comparou 864 quadros nas mesmas
+fases e com a mesma área enviada. Desenho completo: **43,283 ms**; sem discos
+e ícones: **28,699 ms**; sem nomes: **35,594 ms**; sem fade: **38,736 ms**.
+O controle só com fundo redondo ficou em **22,765 ms**, contra **9,545 ms**
+com fundo retangular. Remover somente o recorte dos filhos reduziu apenas
+**1,084 ms**. As diferenças se sobrepõem: não são parcelas para somar.
+As três rodadas foram estáveis e a referência reaplicada ficou em 43,300 ms.
+O teste localiza custos de fundo/geometria circular, discos/ícones e textos;
+não justifica atribuir todo o problema ao fade. Nenhuma variante visual foi
+adotada no padrão. Detalhes no mesmo relatório.
+
 A barra de brilho foi posteriormente movida para o topo dos acessos rápidos,
 por pedido do usuário. Build, testes de interação e captura visual passaram;
 as medições históricas da barra no rodapé não foram repetidas para essa posição.

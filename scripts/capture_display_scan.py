@@ -12,6 +12,8 @@ def main():
     parser.add_argument("--port", default="COM3")
     parser.add_argument("--seconds", type=float, default=20)
     parser.add_argument("--output", type=Path)
+    parser.add_argument("--stop-on-done", action="store_true",
+                        help="Finish after a scroll_test or panel_test DONE marker")
     args = parser.parse_args()
     if not 0 < args.seconds <= 300:
         parser.error("--seconds must be between 0 and 300")
@@ -30,8 +32,11 @@ def main():
                 if line:
                     log.write(line)
                     log.flush()
-                    if "display_scan:" in line or "display_bench:" in line or "display_perf:" in line or "panel_test:" in line or "panel_part:" in line:
+                    if any(tag in line for tag in ("display_scan:", "display_bench:", "display_perf:", "panel_test:", "panel_part:", "scroll_test:")):
                         print(line.rstrip(), flush=True)
+                    if args.stop_on_done and any(tag in line and line.split(tag, 1)[1].lstrip().startswith("DONE ")
+                                                 for tag in ("scroll_test:", "panel_test:")):
+                        break
     except (OSError, serial.SerialException) as error:
         parser.exit(1, f"Capture stopped: {error}; partial log: {output}\n")
     print(f"Local log: {output}")

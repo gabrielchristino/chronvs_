@@ -839,6 +839,22 @@ Os 60 px superiores continuam reservados para puxar o launcher para baixo:
 120 px confirmam o retorno ao relógio; movimentos menores cancelam.
 Contatos reiniciam a inatividade; a animação de rolagem não conta como atividade.
 
+O diagnóstico `launcher_scroll_autotest` exercita scroll lento/rápido, inversões,
+pausas e passagens circulares no display físico, com entrada programada e
+medição de desenho, QSPI e memória. Não integra o firmware padrão. Procedimento
+e limites em [`launcher-scroll.md`](launcher-scroll.md).
+O mesmo diagnóstico inclui variantes visuais temporárias para isolar ícones,
+nomes, discos, fade e recorte, comparando as mesmas posições e área enviada.
+Ao concluir, restaura o visual completo; essas variantes não são opções de uso.
+
+O padrão reutiliza o fundo do launcher em um cache RLE limitado a 16 KiB na
+PSRAM, gravado das faixas normais antes dos filhos. A aparência, o fade e os
+gestos são preservados. O cache atua somente com a lista totalmente aberta
+e sem outro app visível por baixo; durante as transições o desenho vetorial
+original permanece. Mudança de fundo/cor, captura incompleta e falha de reserva
+também conservam o vetor. Não há novo timer, framebuffer ou mudança de driver.
+Comparação física, orçamento de memória e regressões no mesmo relatório.
+
 Verificação: `tests/run_Relogio_ui.ps1 -System` cobre deslocamento pelo arco,
 rolagem por toque sem abertura acidental, abertura por ícone/nome e fechamento
 confirmado/cancelado. Build e gravação passaram. O usuário confirmou no relógio

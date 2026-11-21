@@ -29,6 +29,7 @@ try {
         'tests/Relogio_ui_test.c', 'src/services/Relogio_service.c', 'src/core/calendar.c', 'src/core/Notas_text.c', 'src/ui/Notas_font.c', 'src/ui/Relogio_widgets.c', 'src/ui/control_style.c') + $sources + @('-o', '.pio/host-tests/Relogio_ui_test.exe')
     $executable = '.pio/host-tests/Relogio_ui_test.exe'
     if ($System) {
+        $arguments += @('src/ui/circle_fill.c','src/ui/row_cache.c')
         $arguments += 'src/ui/arc_clip.c'
         if ($ArcClip) { $arguments += '-DCHRONVS_ARC_INNER_CLIP' }
         if ($ArcReference -or $ArcClip) { $arguments += '-DCHRONVS_BRIGHTNESS_ARC_REFERENCE' }
@@ -38,7 +39,7 @@ try {
         if ($DisplayBench) { $arguments += @('-DCHRONVS_DISPLAY_BENCH','src/platform/display_bench.c') }
         if ($BenchAuto) { $arguments += '-DCHRONVS_DISPLAY_BENCH_AUTORUN' }
         if ($CircleCache16 -or $standardWatch) { $arguments += '-DLV_CIRCLE_CACHE_SIZE=16' }
-        if ($SceneCache -or $standardWatch) { $arguments += @('-DCHRONVS_WATCH_SCENE_CACHE','src/ui/row_cache.c') }
+        if ($SceneCache -or $standardWatch) { $arguments += '-DCHRONVS_WATCH_SCENE_CACHE' }
         if ($GPSStandby) { $arguments += '-DCHRONVS_GPS_STANDBY_TEST' }
         if ($LauncherIconCache) { $arguments += '-DCHRONVS_LAUNCHER_ICON_CACHE' }
         if ($OpaqueIconCache) { $arguments += '-DCHRONVS_LAUNCHER_ICON_OPAQUE' }

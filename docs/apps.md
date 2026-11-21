@@ -66,6 +66,26 @@ no ponteiro LVGL, e o loop principal consulta seu avanço depois de cada
 `lv_timer_handler`. Os apps e os handlers de gestos são os normais. O probe do
 painel rápido é somente leitura e existe apenas nesse build. No padrão, as
 chamadas do roteiro são no-ops. Ver [`panel-autotest.md`](panel-autotest.md).
+O perfil separado `launcher_scroll_autotest` reutiliza esses pontos de entrada
+para testar apenas o scroll no display físico, com o catálogo completo e
+handlers normais. Substitui temporariamente os callbacks de entrada e medição;
+restaura todos ao concluir e retorna ao mostrador. Não altera a política de
+atividade no padrão. Casos, métricas e limites em [`launcher-scroll.md`](launcher-scroll.md).
+Após os gestos, o diagnóstico compara desenhos omitindo uma parte por vez em
+fases e área de refresh fixas. `chronvs_app_list_cost_frame` e seus seletores
+existem somente com `CHRONVS_LAUNCHER_SCROLL_AUTOTEST`; o padrão não compila
+esse caminho nem recebe setters ou timers adicionais.
+
+No padrão, a criação do launcher vincula `ui/circle_fill.c` à raiz. O módulo
+grava apenas o fundo em RLE, antes dos filhos, usando as faixas já renderizadas.
+Reserva até 16 KiB em PSRAM fora do pool LVGL e libera os dados ao excluir a
+raiz. Reutiliza-os apenas quando a lista está totalmente aberta, sozinha na
+camada de apps, com composição compatível e mesmo fundo dos ancestrais.
+Prévia do mostrador, deslocamento, máscara externa, transparência, estilo
+incompatível e falha de reserva mantêm o desenho original. Cor/fundo alterado
+invalida o cache. Mantém o `clip_corner` e a máscara dos filhos no LVGL.
+O contrato depende de `DRAW_PART_END` preceder os filhos no LVGL 8.3.11;
+atualizar LVGL exige repetir a equivalência de pixels e os testes físicos.
 
 As variantes `panel_autotest_clip`, `panel_autotest_cache64`,
 `panel_autotest_icache32` e `panel_autotest_lvgl_os` separam recorte e
